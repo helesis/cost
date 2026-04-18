@@ -262,7 +262,7 @@ app.post('/api/upload', upload.single('csv'), async (req, res) => {
 // ── API: Özet KPI'lar ─────────────────────────────────────────────────────────
 app.get('/api/ozet', async (req, res) => {
   try {
-    const { data } = await pool.query(`
+    const { rows } = await pool.query(`
       SELECT
         tarih_str, yil, ay_no, tip,
         MAX(cost_pax) AS cost_pax,
@@ -278,7 +278,7 @@ app.get('/api/ozet', async (req, res) => {
       GROUP BY tarih_str, yil, ay_no, tip
       ORDER BY yil, ay_no, tip
     `);
-    res.json(data.rows);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
