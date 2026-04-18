@@ -65,6 +65,15 @@
   .tab-content { display:none; }
   .tab-content.active { display:block; }
   #page-yillik [data-urun-metric].active { background: var(--gold-bg); color: var(--gold); border-color: var(--gold); font-weight: 600; }
+  .currency-toggle { display:flex; gap:6px; padding:0 16px 14px; }
+  .currency-toggle button {
+    flex:1; padding:7px 0; font-size:12px; font-weight:600;
+    border-radius:6px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); cursor:pointer;
+    font-family:inherit; transition: all .15s;
+  }
+  .currency-toggle button:hover { background: var(--border); }
+  .currency-toggle button.active { background: var(--gold-bg); color: var(--gold); border-color: var(--gold); }
   #alarm-badge { display:none; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; align-items:center; justify-content:center; margin-left:auto; }
   #alarm-badge.show { display:flex; }
 </style>
@@ -78,6 +87,11 @@
       <div class="brand-name">Cost <span>Analysis</span></div>
       <div class="brand-sub">F&B Maliyet Analizi</div>
     </div>
+  </div>
+
+  <div class="currency-toggle">
+    <button data-currency="TL"  onclick="vcSetCurrency('TL')">₺ TL</button>
+    <button data-currency="EUR" onclick="vcSetCurrency('EUR')">€ EUR</button>
   </div>
 
   <nav class="sidebar-nav">
@@ -168,10 +182,8 @@
           <option value="icenek">İçecek</option>
         </select>
         <select class="form-select" id="trend-metrik" style="width:180px">
-          <option value="toplam_tl">Toplam TL</option>
-          <option value="toplam_eur">Toplam EUR</option>
-          <option value="toplam_pp_tl">P.P. TL</option>
-          <option value="toplam_pp_eur">P.P. EUR</option>
+          <option value="toplam">Toplam Maliyet</option>
+          <option value="toplam_pp">Pax Başına</option>
           <option value="toplam_pp_gr">P.P. GR (Yiyecek)</option>
           <option value="toplam_pp_cl">P.P. CL (İçecek)</option>
         </select>
@@ -214,7 +226,7 @@
           <div class="card-title">Kategori Detay</div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Kategori</th><th style="text-align:right">TL</th><th style="text-align:right">EUR</th><th style="text-align:right">Pay %</th></tr></thead>
+              <thead><tr><th>Kategori</th><th style="text-align:right" id="kat-tablo-th-deger">Tutar</th><th style="text-align:right">Pay %</th></tr></thead>
               <tbody id="kat-tablo"></tbody>
             </table>
           </div>
@@ -254,10 +266,9 @@
               <tr>
                 <th>Dönem</th><th>Tip</th><th>Kategori</th>
                 <th style="text-align:right">Miktar</th><th>Birim</th>
-                <th style="text-align:right">Birim Fyt</th>
-                <th style="text-align:right">Tutar TL</th>
-                <th style="text-align:right">P.P. TL</th>
-                <th style="text-align:right">P.P. €</th>
+                <th style="text-align:right" id="urun-th-bf">Birim Fyt</th>
+                <th style="text-align:right" id="urun-th-tutar">Tutar</th>
+                <th style="text-align:right" id="urun-th-pp">P.P.</th>
                 <th style="text-align:right">Kur</th>
               </tr>
             </thead>
@@ -301,11 +312,9 @@
               <tr>
                 <th>Dönem</th>
                 <th>Kategori</th>
-                <th style="text-align:right">Birim Fiyat TL</th>
-                <th style="text-align:right">Birim Fiyat €</th>
+                <th style="text-align:right" id="fiyat-th-bf">Birim Fiyat</th>
                 <th style="text-align:right">Kur</th>
-                <th style="text-align:right">Δ TL %</th>
-                <th style="text-align:right">Δ € %</th>
+                <th style="text-align:right" id="fiyat-th-d">Δ %</th>
               </tr>
             </thead>
             <tbody id="fiyat-tablo"></tbody>
@@ -337,13 +346,12 @@
               <tr>
                 <th>Kategori</th>
                 <th>Aralık</th>
-                <th style="text-align:right">İlk Dönem TL</th>
-                <th style="text-align:right">Son Dönem TL</th>
-                <th style="text-align:right">Δ TL %</th>
-                <th style="text-align:right">Δ € %</th>
+                <th style="text-align:right" id="kat-fiyat-th-ilk">İlk Dönem</th>
+                <th style="text-align:right" id="kat-fiyat-th-son">Son Dönem</th>
+                <th style="text-align:right">Δ %</th>
               </tr>
             </thead>
-            <tbody id="kat-fiyat-tablo"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Yükleniyor...</td></tr></tbody>
+            <tbody id="kat-fiyat-tablo"><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Yükleniyor...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -376,17 +384,17 @@
       <!-- B: AYLIK SEYİR (5, 6, 11) -->
       <div class="grid-2 mb-20" style="gap:20px">
         <div class="card">
-          <div class="card-title">Aylık Toplam Maliyet (TL & €)</div>
+          <div class="card-title" id="yil-aylik-baslik">Aylık Toplam Maliyet</div>
           <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-aylik"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-title">Yiyecek vs İçecek — Aylık Yığınlı</div>
+          <div class="card-title" id="yil-mix-baslik">Yiyecek vs İçecek — Aylık Yığınlı</div>
           <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-mix"></canvas></div>
         </div>
       </div>
 
       <div class="card mb-20">
-        <div class="card-title">Yıl-Yıl Karşılaştırma — Aylık Toplam TL</div>
+        <div class="card-title" id="yil-yoy-baslik">Yıl-Yıl Karşılaştırma — Aylık Toplam</div>
         <div class="chart-wrap" style="height:320px"><canvas id="yil-chart-yoy"></canvas></div>
       </div>
 
@@ -415,8 +423,8 @@
               <tr>
                 <th>Kategori</th>
                 <th>Aralık</th>
-                <th style="text-align:right">İlk Ay TL</th>
-                <th style="text-align:right">Son Ay TL</th>
+                <th style="text-align:right" id="yil-kat-th-ilk">İlk Ay</th>
+                <th style="text-align:right" id="yil-kat-th-son">Son Ay</th>
                 <th style="text-align:right">Δ %</th>
               </tr>
             </thead>
@@ -460,10 +468,9 @@
             <thead>
               <tr>
                 <th>Kategori</th>
-                <th style="text-align:right" id="yil-karsilastirma-th-onceki">Önceki Yıl TL</th>
-                <th style="text-align:right" id="yil-karsilastirma-th-buyil">Bu Yıl TL</th>
-                <th style="text-align:right">Δ TL %</th>
-                <th style="text-align:right">Δ € %</th>
+                <th style="text-align:right" id="yil-karsilastirma-th-onceki">Önceki Yıl</th>
+                <th style="text-align:right" id="yil-karsilastirma-th-buyil">Bu Yıl</th>
+                <th style="text-align:right" id="yil-karsilastirma-th-delta">Δ %</th>
               </tr>
             </thead>
             <tbody id="yil-karsilastirma-tablo"></tbody>
@@ -585,6 +592,38 @@
 let ozetData = [], donemler = [];
 let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
 
+// ── Para Birimi (Global) ──────────────────────────────────────────────────────
+let vcCurrency = (localStorage.getItem('vc_currency') === 'EUR') ? 'EUR' : 'TL';
+function vcIsEUR() { return vcCurrency === 'EUR'; }
+function curSym()  { return vcIsEUR() ? '€' : '₺'; }
+function curLabel(){ return vcIsEUR() ? 'EUR' : 'TL'; }
+function fmtCur(n) { return vcIsEUR() ? fmtEUR(n) : fmtTL(n); }
+// Bir kayıttan TL veya EUR alanını seç (örn pickCur(r, 'tutar'))
+function pickCur(row, base) {
+  const f = vcIsEUR() ? `${base}_eur` : `${base}_tl`;
+  return parseFloat(row?.[f]) || 0;
+}
+function vcSetCurrency(cur) {
+  if (cur !== 'TL' && cur !== 'EUR') return;
+  vcCurrency = cur;
+  localStorage.setItem('vc_currency', cur);
+  document.querySelectorAll('[data-currency]').forEach(b => {
+    b.classList.toggle('active', b.dataset.currency === cur);
+  });
+  vcRerenderActive();
+}
+function vcRerenderActive() {
+  const id = document.querySelector('.tab-content.active')?.id;
+  try {
+    if (id === 'page-ozet')          renderOzet();
+    else if (id === 'page-trend')    renderTrend();
+    else if (id === 'page-kategori') renderKategori();
+    else if (id === 'page-urun')     { if (document.getElementById('urun-q').value.trim()) urunAra(); }
+    else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyat(); }
+    else if (id === 'page-yillik')   yillikAnalizYenile();
+  } catch (e) { /* sessiz */ }
+}
+
 const COLORS = [
   '#8a6c2e','#2d6a4f','#2a4d7a','#7a2d2d','#92672a',
   '#c4a45a','#5a9e7a','#6a8dc4','#c47a7a','#d4a45a',
@@ -654,34 +693,30 @@ function renderOzet() {
   const ice = rows.find(r => r.tip === 'icenek')  || {};
   const don = donemler.find(d => d.tarih_str === tarih) || {};
 
-  const toplamTL  = (+yiy.toplam_tl || 0) + (+ice.toplam_tl || 0);
-  const toplamEUR = (+yiy.toplam_eur || 0) + (+ice.toplam_eur || 0);
-  const ppTL      = (+yiy.toplam_pp_tl || 0) + (+ice.toplam_pp_tl || 0);
-  const ppEUR     = (+yiy.toplam_pp_eur || 0) + (+ice.toplam_pp_eur || 0);
+  const toplam   = pickCur(yiy, 'toplam') + pickCur(ice, 'toplam');
+  const ppTop    = pickCur(yiy, 'toplam_pp') + pickCur(ice, 'toplam_pp');
+  const ppYiy    = pickCur(yiy, 'toplam_pp');
+  const ppIce    = pickCur(ice, 'toplam_pp');
 
   document.getElementById('ozet-subtitle').textContent =
     `${don.ay || ''} ${don.yil || ''} · ${fmtN(don.cost_pax || 0, 0)} pax · Kur: ${fmtN(don.kur || 0, 4)} TL/€`;
 
   document.getElementById('ozet-stats').innerHTML = `
     <div class="stat-card gold">
-      <div class="stat-value">${fmtEUR(toplamEUR)}</div>
-      <div class="stat-label">Toplam F&B Maliyet (€)</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="stat-value">${fmtTL(toplamTL)}</div>
-      <div class="stat-label">Toplam F&B Maliyet (TL)</div>
+      <div class="stat-value">${fmtCur(toplam)}</div>
+      <div class="stat-label">Toplam F&B Maliyet (${curLabel()})</div>
     </div>
     <div class="stat-card green">
-      <div class="stat-value">${fmtEUR(ppEUR)}</div>
-      <div class="stat-label">Pax Başına Toplam (€)</div>
+      <div class="stat-value">${fmtCur(ppTop)}</div>
+      <div class="stat-label">Pax Başına Toplam (${curLabel()})</div>
     </div>
     <div class="stat-card yellow">
-      <div class="stat-value">${fmtEUR(+yiy.toplam_pp_eur || 0)}</div>
-      <div class="stat-label">Pax Başına Yiyecek (€)</div>
+      <div class="stat-value">${fmtCur(ppYiy)}</div>
+      <div class="stat-label">Pax Başına Yiyecek (${curLabel()})</div>
     </div>
-    <div class="stat-card">
-      <div class="stat-value">${fmtEUR(+ice.toplam_pp_eur || 0)}</div>
-      <div class="stat-label">Pax Başına İçecek (€)</div>
+    <div class="stat-card blue">
+      <div class="stat-value">${fmtCur(ppIce)}</div>
+      <div class="stat-label">Pax Başına İçecek (${curLabel()})</div>
     </div>
     <div class="stat-card">
       <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)}g</div>
@@ -703,15 +738,23 @@ function renderOzet() {
     type: 'doughnut',
     data: {
       labels: ['Yiyecek', 'İçecek'],
-      datasets: [{ data: [+yiy.toplam_eur || 0, +ice.toplam_eur || 0], backgroundColor: ['#8a6c2e','#2a4d7a'], borderWidth:0 }]
+      datasets: [{ data: [pickCur(yiy, 'toplam'), pickCur(ice, 'toplam')], backgroundColor: ['#8a6c2e','#2a4d7a'], borderWidth:0 }]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ position:'bottom' },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtCur(ctx.parsed)}` } }
+      }
+    }
   });
 
-  // PP EUR trend (tüm dönemler, sadece bu tip)
+  // P.P. trend (tüm dönemler)
   const donemSirali = [...new Set(ozetData.map(r => r.tarih_str))].sort();
-  const yiyPP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='yiyecek'); return r ? +r.toplam_pp_eur : null; });
-  const icePP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='icenek'); return r ? +r.toplam_pp_eur : null; });
+  const yiyPP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='yiyecek'); return r ? pickCur(r, 'toplam_pp') : null; });
+  const icePP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='icenek');  return r ? pickCur(r, 'toplam_pp') : null; });
+
+  document.querySelector('#page-ozet .grid-2 .card:nth-child(2) .card-title').textContent = `Pax Başına Maliyet (${curLabel()})`;
 
   if (chartPpEur) chartPpEur.destroy();
   chartPpEur = new Chart(document.getElementById('chart-pp-eur'), {
@@ -719,12 +762,18 @@ function renderOzet() {
     data: {
       labels: donemSirali,
       datasets: [
-        { label:'Yiyecek P.P. €', data: yiyPP, borderColor:'#8a6c2e', backgroundColor:'rgba(138,108,46,.1)', tension:.3, fill:true },
-        { label:'İçecek P.P. €',  data: icePP, borderColor:'#2a4d7a', backgroundColor:'rgba(42,77,122,.1)', tension:.3, fill:true }
+        { label:`Yiyecek P.P. ${curSym()}`, data: yiyPP, borderColor:'#8a6c2e', backgroundColor:'rgba(138,108,46,.1)', tension:.3, fill:true },
+        { label:`İçecek P.P. ${curSym()}`,  data: icePP, borderColor:'#2a4d7a', backgroundColor:'rgba(42,77,122,.1)', tension:.3, fill:true }
       ]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
-      scales:{ y:{ beginAtZero:false } } }
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{position:'bottom'},
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
+      },
+      scales:{ y:{ beginAtZero:false } }
+    }
   });
 }
 
@@ -736,18 +785,34 @@ function renderTrend() {
   const metrik = document.getElementById('trend-metrik').value;
   const filtered = ozetData.filter(r => r.tip === tip).sort((a,b) => a.yil-b.yil || a.ay_no-b.ay_no);
 
+  // metrik 'toplam' veya 'toplam_pp' ise para birimini global toggle'dan al
+  const isCur = (metrik === 'toplam' || metrik === 'toplam_pp');
+  const field = isCur ? `${metrik}_${vcIsEUR() ? 'eur' : 'tl'}` : metrik;
+
   const labels  = filtered.map(r => r.tarih_str);
-  const values  = filtered.map(r => +r[metrik] || 0);
+  const values  = filtered.map(r => +r[field] || 0);
+
+  let labelText = metrik;
+  if (metrik === 'toplam')        labelText = `Toplam Maliyet (${curLabel()})`;
+  else if (metrik === 'toplam_pp') labelText = `Pax Başına (${curLabel()})`;
+  else if (metrik === 'toplam_pp_gr') labelText = 'P.P. GR (Yiyecek)';
+  else if (metrik === 'toplam_pp_cl') labelText = 'P.P. CL (İçecek)';
 
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(document.getElementById('chart-trend'), {
     type: 'bar',
     data: {
       labels,
-      datasets: [{ label: metrik, data: values, backgroundColor: COLORS[0], borderRadius:4 }]
+      datasets: [{ label: labelText, data: values, backgroundColor: COLORS[0], borderRadius:4 }]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ y:{ beginAtZero:false } } }
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{display:false},
+        tooltip: { callbacks: { label: ctx => `${labelText}: ${isCur ? fmtCur(ctx.parsed.y) : fmtN(ctx.parsed.y, 2)}` } }
+      },
+      scales:{ y:{ beginAtZero:false, ticks:{ callback: v => isCur ? new Intl.NumberFormat('tr-TR').format(v) : v } } }
+    }
   });
 
   // Kur grafiği
@@ -775,24 +840,30 @@ async function renderKategori() {
   if (!tarih) return;
 
   const rows = await fetch(`/api/kategoriler?tarih=${tarih}&tip=${tip}`).then(r => r.json());
-  const toplam = rows.reduce((s,r) => s + +r.tutar_eur, 0);
+  const toplam = rows.reduce((s,r) => s + pickCur(r, 'tutar'), 0);
 
   if (chartKatPasta) chartKatPasta.destroy();
   chartKatPasta = new Chart(document.getElementById('chart-kat-pasta'), {
     type: 'doughnut',
     data: {
       labels: rows.slice(0,10).map(r => r.kategori?.split(' - ')[1] || r.kategori),
-      datasets: [{ data: rows.slice(0,10).map(r => +r.tutar_eur), backgroundColor: COLORS, borderWidth:0 }]
+      datasets: [{ data: rows.slice(0,10).map(r => pickCur(r, 'tutar')), backgroundColor: COLORS, borderWidth:0 }]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right',labels:{font:{size:11}}}} }
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'right',labels:{font:{size:11}}},
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtCur(ctx.parsed)}` } }
+      }
+    }
   });
 
+  document.getElementById('kat-tablo-th-deger').textContent = `Tutar (${curLabel()})`;
   document.getElementById('kat-tablo').innerHTML = rows.map(r => `
     <tr>
       <td>${r.kategori?.split(' - ').slice(1).join(' ') || r.kategori}</td>
-      <td style="text-align:right">${fmtTL(r.tutar_tl)}</td>
-      <td style="text-align:right">${fmtEUR(r.tutar_eur)}</td>
-      <td style="text-align:right">${fmtN((+r.tutar_eur/toplam)*100, 1)}%</td>
+      <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
+      <td style="text-align:right">${toplam > 0 ? fmtN((pickCur(r, 'tutar')/toplam)*100, 1) : '0'}%</td>
     </tr>
   `).join('');
 }
@@ -824,16 +895,34 @@ async function urunAra() {
         labels: donemSet,
         datasets: urunSet.map((u, i) => ({
           label: u.length > 40 ? u.substring(0,40)+'...' : u,
-          data: donemSet.map(d => { const r = rows.find(x => x.tarih_str===d && x.stok_mali===u); return r ? +r.pp_tl : null; }),
+          data: donemSet.map(d => {
+            const r = rows.find(x => x.tarih_str===d && x.stok_mali===u);
+            return r ? pickCur(r, 'pp') : null;
+          }),
           borderColor: COLORS[i], tension:.3, spanGaps:true
         }))
       },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
-        scales:{ y:{ beginAtZero:false } } }
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{position:'bottom'},
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
+        },
+        scales:{ y:{ beginAtZero:false } }
+      }
     });
   } else {
     wrap.style.display = 'none';
   }
+
+  document.getElementById('urun-th-bf').textContent    = `Birim Fyt (${curLabel()})`;
+  document.getElementById('urun-th-tutar').textContent = `Tutar (${curLabel()})`;
+  document.getElementById('urun-th-pp').textContent    = `P.P. (${curLabel()})`;
+
+  // birim_fiyat sadece TL — EUR seçiliyse kura bölelim
+  const bf = r => vcIsEUR()
+    ? (r.kur > 0 ? (+r.birim_fiyat || 0) / +r.kur : 0)
+    : (+r.birim_fiyat || 0);
 
   document.getElementById('urun-tablo').innerHTML = rows.map(r => `
     <tr>
@@ -842,10 +931,9 @@ async function urunAra() {
       <td style="font-size:11px">${r.kategori?.split(' - ').slice(1).join(' ') || '-'}</td>
       <td style="text-align:right">${fmtN(r.tuk_miktar, 2)}</td>
       <td>${r.birim}</td>
-      <td style="text-align:right">${fmtTL(r.birim_fiyat)}</td>
-      <td style="text-align:right">${fmtTL(r.tutar_tl)}</td>
-      <td style="text-align:right">${fmtTL(r.pp_tl)}</td>
-      <td style="text-align:right">${fmtEUR(r.pp_eur)}</td>
+      <td style="text-align:right">${fmtCur(bf(r))}</td>
+      <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
+      <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
       <td style="text-align:right">${fmtN(r.kur, 2)}</td>
     </tr>
   `).join('');
@@ -1056,35 +1144,26 @@ function renderFiyatChart(seri) {
   const ctx = document.getElementById('chart-fiyat').getContext('2d');
   if (chartFiyat) chartFiyat.destroy();
 
+  const eur = vcIsEUR();
+  const color = eur ? '#2a4d7a' : '#8a6c2e';
+  const bg    = eur ? 'rgba(42,77,122,0.12)' : 'rgba(138,108,46,0.12)';
+  const data  = seri.map(d => eur ? d.birim_fiyat_eur : d.birim_fiyat);
+
   chartFiyat = new Chart(ctx, {
     type: 'line',
     data: {
       labels: seri.map(d => d.tarih_str),
-      datasets: [
-        {
-          label: 'Birim Fiyat (TL)',
-          data: seri.map(d => d.birim_fiyat),
-          borderColor: '#8a6c2e',
-          backgroundColor: 'rgba(138,108,46,0.1)',
-          borderWidth: 2,
-          tension: 0.3,
-          yAxisID: 'yTL',
-          pointRadius: 4,
-          pointBackgroundColor: '#8a6c2e'
-        },
-        {
-          label: 'Birim Fiyat (€)',
-          data: seri.map(d => d.birim_fiyat_eur),
-          borderColor: '#2a4d7a',
-          backgroundColor: 'rgba(42,77,122,0.1)',
-          borderWidth: 2,
-          borderDash: [5, 4],
-          tension: 0.3,
-          yAxisID: 'yEUR',
-          pointRadius: 4,
-          pointBackgroundColor: '#2a4d7a'
-        }
-      ]
+      datasets: [{
+        label: `Birim Fiyat (${curLabel()})`,
+        data,
+        borderColor: color,
+        backgroundColor: bg,
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: color,
+        fill: true
+      }]
     },
     options: {
       responsive: true,
@@ -1092,28 +1171,14 @@ function renderFiyatChart(seri) {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const v = ctx.parsed.y;
-              if (ctx.dataset.yAxisID === 'yTL') return `TL: ${fmtTL(v)}`;
-              return `€: ${fmtEUR(v)}`;
-            }
-          }
-        }
+        tooltip: { callbacks: { label: ctx => `${curLabel()}: ${fmtCur(ctx.parsed.y)}` } }
       },
       scales: {
-        yTL: {
-          type: 'linear', position: 'left',
-          title: { display: true, text: 'TL', color: '#8a6c2e' },
-          ticks: { color: '#8a6c2e', callback: v => new Intl.NumberFormat('tr-TR').format(v) },
+        y: {
+          beginAtZero: false,
+          title: { display: true, text: curLabel(), color },
+          ticks: { color, callback: v => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(v) },
           grid: { color: 'rgba(0,0,0,0.05)' }
-        },
-        yEUR: {
-          type: 'linear', position: 'right',
-          title: { display: true, text: '€', color: '#2a4d7a' },
-          ticks: { color: '#2a4d7a', callback: v => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(v) },
-          grid: { drawOnChartArea: false }
         },
         x: { grid: { color: 'rgba(0,0,0,0.05)' } }
       }
@@ -1122,18 +1187,21 @@ function renderFiyatChart(seri) {
 }
 
 function renderFiyatTablo(seri, tbody) {
+  document.getElementById('fiyat-th-bf').textContent = `Birim Fiyat (${curLabel()})`;
+  document.getElementById('fiyat-th-d').textContent  = `Δ ${curLabel()} %`;
+
+  const fld = vcIsEUR() ? 'birim_fiyat_eur' : 'birim_fiyat';
   tbody.innerHTML = seri.map((d, i) => {
     const prev = i > 0 ? seri[i - 1] : null;
-    const dTL  = prev && prev.birim_fiyat     > 0 ? ((d.birim_fiyat     - prev.birim_fiyat)     / prev.birim_fiyat     * 100) : null;
-    const dEUR = prev && prev.birim_fiyat_eur > 0 ? ((d.birim_fiyat_eur - prev.birim_fiyat_eur) / prev.birim_fiyat_eur * 100) : null;
+    const cur  = +d[fld]    || 0;
+    const pv   = prev ? (+prev[fld] || 0) : 0;
+    const delta = pv > 0 ? ((cur - pv) / pv * 100) : null;
     return `<tr>
       <td><strong>${d.tarih_str}</strong></td>
       <td style="color:var(--text-dim);font-size:12px">${d.kategori}</td>
-      <td style="text-align:right">${fmtTL(d.birim_fiyat)}</td>
-      <td style="text-align:right">${fmtEUR(d.birim_fiyat_eur)}</td>
+      <td style="text-align:right">${fmtCur(cur)}</td>
       <td style="text-align:right;color:var(--text-dim)">${d.kur ? fmtN(d.kur, 4) : '—'}</td>
-      <td style="text-align:right">${renderDelta(dTL)}</td>
-      <td style="text-align:right">${renderDelta(dEUR)}</td>
+      <td style="text-align:right">${renderDelta(delta)}</td>
     </tr>`;
   }).join('');
 }
@@ -1161,22 +1229,28 @@ async function loadKategoriFiyat() {
     const rows = await fetch('/api/fiyat-analizi/kategoriler?' + params).then(r => r.json());
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
       return;
     }
 
-    tbody.innerHTML = rows.map(r => `
-      <tr>
+    document.getElementById('kat-fiyat-th-ilk').textContent = `İlk Dönem (${curLabel()})`;
+    document.getElementById('kat-fiyat-th-son').textContent = `Son Dönem (${curLabel()})`;
+
+    const eur = vcIsEUR();
+    tbody.innerHTML = rows.map(r => {
+      const ilk = eur ? +r.ilk_donem_fiyat_eur || 0 : +r.ilk_donem_fiyat || 0;
+      const son = eur ? +r.son_donem_fiyat_eur || 0 : +r.son_donem_fiyat || 0;
+      const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
+      return `<tr>
         <td><strong>${r.kategori}</strong></td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} → ${r.son_donem}</td>
-        <td style="text-align:right">${fmtTL(r.ilk_donem_fiyat)}</td>
-        <td style="text-align:right">${fmtTL(r.son_donem_fiyat)}</td>
-        <td style="text-align:right">${renderDelta(parseFloat(r.degisim_yuzde))}</td>
-        <td style="text-align:right">${renderDelta(parseFloat(r.degisim_eur_yuzde))}</td>
-      </tr>
-    `).join('');
+        <td style="text-align:right">${fmtCur(ilk)}</td>
+        <td style="text-align:right">${fmtCur(son)}</td>
+        <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+      </tr>`;
+    }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:20px">Hata: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px">Hata: ${err.message}</td></tr>`;
   }
 }
 
@@ -1263,13 +1337,16 @@ function renderYilKpi(ozet) {
     return `<span style="font-size:11px;font-weight:600;color:${col};margin-left:6px">${sign} ${fmtN(Math.abs(v), 1)}%</span>`;
   };
 
+  const toplam = pickCur(by, 'toplam');
+  const ortPP  = pickCur(by, 'ort_pp');
+  const yoyToplam = vcIsEUR() ? yoy.toplam_eur : yoy.toplam_tl;
+  const yoyPP     = vcIsEUR() ? yoy.ort_pp_eur : yoy.ort_pp_tl;
+
   const cards = [
-    { label: 'Toplam Maliyet (TL)',   val: fmtTL(by.toplam_tl || 0),   yoy: yoy.toplam_tl },
-    { label: 'Toplam Maliyet (€)',    val: fmtEUR(by.toplam_eur || 0), yoy: yoy.toplam_eur },
-    { label: 'Aylık Ort. P.P. (TL)',  val: fmtTL(by.ort_pp_tl || 0),   yoy: yoy.ort_pp_tl },
-    { label: 'Aylık Ort. P.P. (€)',   val: fmtEUR(by.ort_pp_eur || 0), yoy: yoy.ort_pp_eur },
-    { label: 'Toplam Misafir',        val: new Intl.NumberFormat('tr-TR').format(by.toplam_misafir || 0), yoy: yoy.toplam_misafir, ters: true },
-    { label: 'Ortalama Kur (TL/€)',   val: fmtN(by.ort_kur || 0, 2),   yoy: yoy.ort_kur },
+    { label: `Toplam Maliyet (${curLabel()})`,  val: fmtCur(toplam),  yoy: yoyToplam },
+    { label: `Aylık Ort. P.P. (${curLabel()})`, val: fmtCur(ortPP),   yoy: yoyPP },
+    { label: 'Toplam Misafir',                  val: new Intl.NumberFormat('tr-TR').format(by.toplam_misafir || 0), yoy: yoy.toplam_misafir, ters: true },
+    { label: 'Ortalama Kur (TL/€)',             val: fmtN(by.ort_kur || 0, 2), yoy: yoy.ort_kur },
   ];
 
   document.getElementById('yil-stats').innerHTML = cards.map(c => `
@@ -1285,42 +1362,45 @@ function renderYilKpi(ozet) {
 function renderYilAylik(data) {
   const rows = data.bu_yil || [];
   const labels = rows.map(r => AY_KISA[(+r.ay_no) - 1] || ('Ay ' + r.ay_no));
-  const tl  = rows.map(r => +r.toplam_tl  || 0);
-  const eur = rows.map(r => +r.toplam_eur || 0);
+  const tutar  = rows.map(r => pickCur(r, 'toplam'));
+  const color  = vcIsEUR() ? '#2a4d7a' : '#8a6c2e';
+  const bg     = vcIsEUR() ? 'rgba(42,77,122,0.12)' : 'rgba(138,108,46,0.12)';
+
+  document.getElementById('yil-aylik-baslik').textContent = `Aylık Toplam Maliyet (${curLabel()})`;
+  document.getElementById('yil-mix-baslik').textContent   = `Yiyecek vs İçecek — Aylık Yığınlı (${curLabel()})`;
 
   if (chartYilAylik) chartYilAylik.destroy();
   chartYilAylik = new Chart(document.getElementById('yil-chart-aylik'), {
     type: 'line',
     data: {
       labels,
-      datasets: [
-        { label: 'TL', data: tl, borderColor: '#8a6c2e', backgroundColor: 'rgba(138,108,46,0.12)', yAxisID: 'yTL', tension: 0.3, fill: true },
-        { label: '€',  data: eur, borderColor: '#2a4d7a', backgroundColor: 'rgba(42,77,122,0.08)', yAxisID: 'yEUR', tension: 0.3, borderDash: [5, 4] }
-      ]
+      datasets: [{
+        label: curLabel(), data: tutar,
+        borderColor: color, backgroundColor: bg,
+        tension: 0.3, fill: true, pointRadius: 4
+      }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'top', labels: { boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => ctx.dataset.yAxisID === 'yTL' ? `TL: ${fmtTL(ctx.parsed.y)}` : `€: ${fmtEUR(ctx.parsed.y)}` } }
+        tooltip: { callbacks: { label: ctx => `${curLabel()}: ${fmtCur(ctx.parsed.y)}` } }
       },
       scales: {
-        yTL:  { type: 'linear', position: 'left',  ticks: { color: '#8a6c2e', callback: v => new Intl.NumberFormat('tr-TR').format(v) }, title: { display: true, text: 'TL', color: '#8a6c2e' } },
-        yEUR: { type: 'linear', position: 'right', ticks: { color: '#2a4d7a' }, grid: { drawOnChartArea: false }, title: { display: true, text: '€', color: '#2a4d7a' } },
+        y: { ticks: { color, callback: v => new Intl.NumberFormat('tr-TR').format(v) }, title: { display: true, text: curLabel(), color } }
       }
     }
   });
 
-  const labels2 = rows.map(r => AY_KISA[(+r.ay_no) - 1] || ('Ay ' + r.ay_no));
-  const yiy = rows.map(r => +r.yiyecek_tl || 0);
-  const ice = rows.map(r => +r.icenek_tl || 0);
+  const yiy = rows.map(r => vcIsEUR() ? (+r.yiyecek_eur || 0) : (+r.yiyecek_tl || 0));
+  const ice = rows.map(r => vcIsEUR() ? (+r.icenek_eur  || 0) : (+r.icenek_tl  || 0));
 
   if (chartYilMix) chartYilMix.destroy();
   chartYilMix = new Chart(document.getElementById('yil-chart-mix'), {
     type: 'bar',
     data: {
-      labels: labels2,
+      labels,
       datasets: [
         { label: 'Yiyecek', data: yiy, backgroundColor: '#8a6c2e' },
         { label: 'İçecek',  data: ice, backgroundColor: '#2a4d7a' }
@@ -1328,7 +1408,10 @@ function renderYilAylik(data) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } } },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
+      },
       scales: {
         x: { stacked: true },
         y: { stacked: true, ticks: { callback: v => new Intl.NumberFormat('tr-TR').format(v) } }
@@ -1341,10 +1424,12 @@ function renderYilAylik(data) {
 function renderYilYoy(data) {
   const aylar = Array.from({ length: 12 }, (_, i) => i + 1);
   const labels = aylar.map(a => AY_KISA[a - 1]);
-  const byMap = new Map((data.bu_yil || []).map(r => [+r.ay_no, +r.toplam_tl || 0]));
-  const onMap = new Map((data.onceki_yil_veri || []).map(r => [+r.ay_no, +r.toplam_tl || 0]));
+  const byMap = new Map((data.bu_yil || []).map(r => [+r.ay_no, pickCur(r, 'toplam')]));
+  const onMap = new Map((data.onceki_yil_veri || []).map(r => [+r.ay_no, pickCur(r, 'toplam')]));
   const by = aylar.map(a => byMap.get(a) || 0);
   const on = aylar.map(a => onMap.get(a) || 0);
+
+  document.getElementById('yil-yoy-baslik').textContent = `Yıl-Yıl Karşılaştırma — Aylık Toplam (${curLabel()})`;
 
   if (chartYilYoy) chartYilYoy.destroy();
   chartYilYoy = new Chart(document.getElementById('yil-chart-yoy'), {
@@ -1360,7 +1445,7 @@ function renderYilYoy(data) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { position: 'top' },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } }
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
       },
       scales: { y: { ticks: { callback: v => new Intl.NumberFormat('tr-TR').format(v) } } }
     }
@@ -1380,7 +1465,7 @@ function renderYilKategoriler(data) {
     data: {
       labels: toplamlar.map(k => k.kategori),
       datasets: [{
-        data: toplamlar.map(k => +k.toplam_tl || 0),
+        data: toplamlar.map(k => pickCur(k, 'toplam')),
         backgroundColor: toplamlar.map((_, i) => COLORS[i % COLORS.length]),
         borderWidth: 2, borderColor: '#fff'
       }]
@@ -1389,7 +1474,7 @@ function renderYilKategoriler(data) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtTL(ctx.parsed)}` } }
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtCur(ctx.parsed)}` } }
       }
     }
   });
@@ -1400,7 +1485,7 @@ function renderYilKategoriler(data) {
   const labels = aylar.map(a => AY_KISA[a - 1]);
   const datasets = topKat.map((kat, idx) => {
     const rowsKat = matris.filter(m => m.kategori === kat);
-    const m = new Map(rowsKat.map(r => [+r.ay_no, +r.tutar_tl || 0]));
+    const m = new Map(rowsKat.map(r => [+r.ay_no, pickCur(r, 'tutar')]));
     return {
       label: kat,
       data: aylar.map(a => m.get(a) || 0),
@@ -1416,7 +1501,7 @@ function renderYilKategoriler(data) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } }
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
       },
       scales: {
         x: { stacked: true },
@@ -1426,19 +1511,26 @@ function renderYilKategoriler(data) {
   });
 
   // Kategori değişim tablosu
+  document.getElementById('yil-kat-th-ilk').textContent = `İlk Ay (${curLabel()})`;
+  document.getElementById('yil-kat-th-son').textContent = `Son Ay (${curLabel()})`;
+
+  const eur = vcIsEUR();
   const tbody = document.getElementById('yil-kat-degisim-tablo');
   if (!degisim.length) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
   } else {
-    tbody.innerHTML = degisim.map(r => `
-      <tr>
+    tbody.innerHTML = degisim.map(r => {
+      const ilk = eur ? +r.ilk_eur || 0 : +r.ilk_tl || 0;
+      const son = eur ? +r.son_eur || 0 : +r.son_tl || 0;
+      const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
+      return `<tr>
         <td><strong>${r.kategori}</strong></td>
         <td style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} → ${AY_KISA[(+r.son_ay) - 1]}</td>
-        <td style="text-align:right">${fmtTL(+r.ilk_tl || 0)}</td>
-        <td style="text-align:right">${fmtTL(+r.son_tl || 0)}</td>
-        <td style="text-align:right">${renderDelta(r.degisim_yuzde !== null ? parseFloat(r.degisim_yuzde) : null)}</td>
-      </tr>
-    `).join('');
+        <td style="text-align:right">${fmtCur(ilk)}</td>
+        <td style="text-align:right">${fmtCur(son)}</td>
+        <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+      </tr>`;
+    }).join('');
   }
 }
 
@@ -1452,6 +1544,7 @@ async function yilUrunYukle(metric) {
   const p = new URLSearchParams(qs);
   p.set('metric', metric);
   p.set('limit', '20');
+  p.set('currency', vcIsEUR() ? 'EUR' : 'TL');
 
   try {
     const res = await fetch('/api/yillik/urunler?' + p.toString()).then(r => r.json());
@@ -1465,23 +1558,24 @@ function renderYilUrun(res, metric) {
   const list = res.urunler || [];
   const kisa = s => (s && s.length > 36) ? s.slice(0, 34) + '…' : (s || '');
   const labels = list.map(u => kisa(u.stok_mali));
+  const eur = vcIsEUR();
 
   let values, bgColor, valFmt, valHeader;
   if (metric === 'harcama') {
-    values = list.map(u => +u.toplam_tl || 0);
-    bgColor = '#8a6c2e';
-    valFmt = v => fmtTL(v);
-    valHeader = 'Toplam TL';
+    values    = list.map(u => pickCur(u, 'toplam'));
+    bgColor   = eur ? '#2a4d7a' : '#8a6c2e';
+    valFmt    = v => fmtCur(v);
+    valHeader = `Toplam (${curLabel()})`;
   } else if (metric === 'artis') {
-    values = list.map(u => parseFloat(u.degisim_yuzde) || 0);
-    bgColor = '#c44a4a';
-    valFmt = v => fmtN(v, 2) + ' %';
-    valHeader = 'Δ %';
+    values    = list.map(u => parseFloat(eur ? u.degisim_eur_yuzde : u.degisim_yuzde) || 0);
+    bgColor   = '#c44a4a';
+    valFmt    = v => fmtN(v, 2) + ' %';
+    valHeader = `Δ ${curLabel()} %`;
   } else {
-    values = list.map(u => parseFloat(u.degisim_yuzde) || 0);
-    bgColor = '#2d6a4f';
-    valFmt = v => fmtN(v, 2) + ' %';
-    valHeader = 'Δ %';
+    values    = list.map(u => parseFloat(eur ? u.degisim_eur_yuzde : u.degisim_yuzde) || 0);
+    bgColor   = '#2d6a4f';
+    valFmt    = v => fmtN(v, 2) + ' %';
+    valHeader = `Δ ${curLabel()} %`;
   }
 
   if (chartYilUrun) chartYilUrun.destroy();
@@ -1508,8 +1602,13 @@ function renderYilUrun(res, metric) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
   } else {
     tbody.innerHTML = list.map((u, i) => {
-      const v = metric === 'harcama' ? (+u.toplam_tl || 0) : (parseFloat(u.degisim_yuzde) || 0);
-      const cell = metric === 'harcama' ? fmtTL(v) : renderDelta(v);
+      let cell;
+      if (metric === 'harcama') {
+        cell = fmtCur(pickCur(u, 'toplam'));
+      } else {
+        const v = parseFloat(eur ? u.degisim_eur_yuzde : u.degisim_yuzde) || 0;
+        cell = renderDelta(v);
+      }
       return `<tr>
         <td style="color:var(--text-dim)">${i + 1}</td>
         <td><strong>${u.stok_mali}</strong></td>
@@ -1524,26 +1623,33 @@ function renderYilUrun(res, metric) {
 // ── E: YIL × YIL KARŞILAŞTIRMA ──────────────────────────────────────────────
 function renderYilKarsilastirma(data) {
   const rows = data.kategoriler || [];
-  document.getElementById('yil-karsilastirma-th-onceki').textContent = data.onceki_yil + ' TL';
-  document.getElementById('yil-karsilastirma-th-buyil').textContent  = data.yil + ' TL';
+  const eur = vcIsEUR();
+  document.getElementById('yil-karsilastirma-th-onceki').textContent = `${data.onceki_yil} ${curLabel()}`;
+  document.getElementById('yil-karsilastirma-th-buyil').textContent  = `${data.yil} ${curLabel()}`;
+  document.getElementById('yil-karsilastirma-th-delta').textContent  = `Δ ${curLabel()} %`;
 
   const tbody = document.getElementById('yil-karsilastirma-tablo');
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
     return;
   }
-  tbody.innerHTML = rows.map(r => `
-    <tr>
+  tbody.innerHTML = rows.map(r => {
+    const onceki = eur ? +r.onceki_eur || 0 : +r.onceki_tl || 0;
+    const buYil  = eur ? +r.bu_yil_eur || 0 : +r.bu_yil_tl || 0;
+    const dlt    = eur ? r.degisim_eur_yuzde : r.degisim_tl_yuzde;
+    return `<tr>
       <td><strong>${r.kategori}</strong></td>
-      <td style="text-align:right">${fmtTL(+r.onceki_tl || 0)}</td>
-      <td style="text-align:right">${fmtTL(+r.bu_yil_tl || 0)}</td>
-      <td style="text-align:right">${renderDelta(r.degisim_tl_yuzde !== null ? parseFloat(r.degisim_tl_yuzde) : null)}</td>
-      <td style="text-align:right">${renderDelta(r.degisim_eur_yuzde !== null ? parseFloat(r.degisim_eur_yuzde) : null)}</td>
-    </tr>
-  `).join('');
+      <td style="text-align:right">${fmtCur(onceki)}</td>
+      <td style="text-align:right">${fmtCur(buYil)}</td>
+      <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('[data-currency]').forEach(b => {
+  b.classList.toggle('active', b.dataset.currency === vcCurrency);
+});
 setupUpload();
 init();
 </script>

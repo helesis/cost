@@ -693,24 +693,30 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
     const { rows: degisim } = await pool.query(`
       WITH aylik AS (
         SELECT kategori, ay_no,
-               SUM(tutar_tl) AS tl
+               SUM(tutar_tl)  AS tl,
+               SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
         WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori, ay_no
       ),
       siralanmis AS (
-        SELECT kategori, ay_no, tl,
+        SELECT kategori, ay_no, tl, eur,
                ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY ay_no)      AS rn_ilk,
                ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY ay_no DESC) AS rn_son,
                COUNT(*)    OVER (PARTITION BY kategori)                      AS n
         FROM aylik
       ),
-      ilk AS (SELECT kategori, ay_no AS ilk_ay, tl AS ilk_tl FROM siralanmis WHERE rn_ilk = 1),
-      son AS (SELECT kategori, ay_no AS son_ay, tl AS son_tl, n FROM siralanmis WHERE rn_son = 1)
-      SELECT i.kategori, i.ilk_ay, s.son_ay, i.ilk_tl, s.son_tl, s.n AS ay_sayisi,
+      ilk AS (SELECT kategori, ay_no AS ilk_ay, tl AS ilk_tl, eur AS ilk_eur FROM siralanmis WHERE rn_ilk = 1),
+      son AS (SELECT kategori, ay_no AS son_ay, tl AS son_tl, eur AS son_eur, n FROM siralanmis WHERE rn_son = 1)
+      SELECT i.kategori, i.ilk_ay, s.son_ay,
+             i.ilk_tl, s.son_tl, i.ilk_eur, s.son_eur,
+             s.n AS ay_sayisi,
              CASE WHEN i.ilk_tl > 0
                   THEN ((s.son_tl - i.ilk_tl) / i.ilk_tl * 100)::NUMERIC
-                  ELSE NULL END AS degisim_yuzde
+                  ELSE NULL END AS degisim_yuzde,
+             CASE WHEN i.ilk_eur > 0
+                  THEN ((s.son_eur - i.ilk_eur) / i.ilk_eur * 100)::NUMERIC
+                  ELSE NULL END AS degisim_eur_yuzde
       FROM ilk i JOIN son s USING (kategori)
       WHERE s.n >= 2
       ORDER BY ABS(COALESCE(((s.son_tl - i.ilk_tl) / NULLIF(i.ilk_tl, 0) * 100), 0)) DESC
@@ -731,6 +737,7 @@ app.get('/api/yillik/urunler', async (req, res) => {
   const yil = parseInt(req.query.yil);
   const tip = req.query.tip || null;
   const metric = (req.query.metric || 'harcama').toLowerCase();
+  const currency = (req.query.currency || 'TL').toUpperCase() === 'EUR' ? 'EUR' : 'TL';
   const limit = Math.min(parseInt(req.query.limit) || 20, 100);
   if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
 
@@ -739,6 +746,7 @@ app.get('/api/yillik/urunler', async (req, res) => {
       const params = [yil];
       const tipFilter = tipWhere(params, tip);
       params.push(limit);
+      const sortField = currency === 'EUR' ? 'toplam_eur' : 'toplam_tl';
       const { rows } = await pool.query(`
         SELECT stok_mali, kategori, tip,
                SUM(tutar_tl)  AS toplam_tl,
@@ -747,10 +755,10 @@ app.get('/api/yillik/urunler', async (req, res) => {
         FROM fb_cost.tuketim
         WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
         GROUP BY stok_mali, kategori, tip
-        ORDER BY toplam_tl DESC
+        ORDER BY ${sortField} DESC
         LIMIT $${params.length}
       `, params);
-      return res.json({ yil, metric, urunler: rows });
+      return res.json({ yil, metric, currency, urunler: rows });
     }
 
     // Fiyat değişimi (artış / düşüş)
@@ -758,34 +766,55 @@ app.get('/api/yillik/urunler', async (req, res) => {
     const params = [yil];
     const tipFilter = tipWhere(params, tip);
     params.push(limit);
+    const sortField = currency === 'EUR' ? 'degisim_eur_yuzde' : 'degisim_yuzde';
+    const minIlkField = currency === 'EUR' ? 'ilk_fiyat_eur' : 'ilk_fiyat';
 
     const { rows } = await pool.query(`
       WITH aylik AS (
         SELECT stok_mali, kategori, tip, ay_no,
-               AVG(birim_fiyat) AS ort_fiyat
+               AVG(birim_fiyat) AS ort_fiyat,
+               CASE WHEN AVG(NULLIF(kur, 0)) > 0
+                    THEN AVG(birim_fiyat) / AVG(NULLIF(kur, 0))
+                    ELSE NULL END AS ort_fiyat_eur
         FROM fb_cost.tuketim
         WHERE yil = $1 AND birim_fiyat > 0 ${tipFilter}
         GROUP BY stok_mali, kategori, tip, ay_no
       ),
       siralanmis AS (
-        SELECT stok_mali, kategori, tip, ay_no, ort_fiyat,
+        SELECT stok_mali, kategori, tip, ay_no, ort_fiyat, ort_fiyat_eur,
                ROW_NUMBER() OVER (PARTITION BY stok_mali, kategori, tip ORDER BY ay_no)      AS rn_ilk,
                ROW_NUMBER() OVER (PARTITION BY stok_mali, kategori, tip ORDER BY ay_no DESC) AS rn_son,
                COUNT(*)    OVER (PARTITION BY stok_mali, kategori, tip)                      AS n
         FROM aylik
       ),
-      ilk AS (SELECT stok_mali, kategori, tip, ay_no AS ilk_ay, ort_fiyat AS ilk_fiyat FROM siralanmis WHERE rn_ilk = 1),
-      son AS (SELECT stok_mali, kategori, tip, ay_no AS son_ay, ort_fiyat AS son_fiyat, n FROM siralanmis WHERE rn_son = 1)
+      ilk AS (
+        SELECT stok_mali, kategori, tip, ay_no AS ilk_ay,
+               ort_fiyat AS ilk_fiyat, ort_fiyat_eur AS ilk_fiyat_eur
+        FROM siralanmis WHERE rn_ilk = 1
+      ),
+      son AS (
+        SELECT stok_mali, kategori, tip, ay_no AS son_ay,
+               ort_fiyat AS son_fiyat, ort_fiyat_eur AS son_fiyat_eur, n
+        FROM siralanmis WHERE rn_son = 1
+      )
       SELECT i.stok_mali, i.kategori, i.tip,
-             i.ilk_ay, s.son_ay, i.ilk_fiyat, s.son_fiyat, s.n AS ay_sayisi,
-             ((s.son_fiyat - i.ilk_fiyat) / i.ilk_fiyat * 100)::NUMERIC AS degisim_yuzde
+             i.ilk_ay, s.son_ay,
+             i.ilk_fiyat,     s.son_fiyat,
+             i.ilk_fiyat_eur, s.son_fiyat_eur,
+             s.n AS ay_sayisi,
+             CASE WHEN i.ilk_fiyat > 0
+                  THEN ((s.son_fiyat - i.ilk_fiyat) / i.ilk_fiyat * 100)::NUMERIC
+                  ELSE NULL END AS degisim_yuzde,
+             CASE WHEN i.ilk_fiyat_eur > 0
+                  THEN ((s.son_fiyat_eur - i.ilk_fiyat_eur) / i.ilk_fiyat_eur * 100)::NUMERIC
+                  ELSE NULL END AS degisim_eur_yuzde
       FROM ilk i JOIN son s USING (stok_mali, kategori, tip)
-      WHERE s.n >= 2 AND i.ilk_fiyat > 0
-      ORDER BY degisim_yuzde ${yon}
+      WHERE s.n >= 2 AND i.${minIlkField} > 0
+      ORDER BY ${sortField} ${yon} NULLS LAST
       LIMIT $${params.length}
     `, params);
 
-    res.json({ yil, metric, urunler: rows });
+    res.json({ yil, metric, currency, urunler: rows });
   } catch (err) {
     console.error('yillik/urunler hatası:', err);
     res.status(500).json({ error: err.message });
