@@ -87,10 +87,10 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const { error } = await resend.emails.send({
       from: RESEND_FROM,
       to: email,
-      subject: 'Voyage Cost — Giriş Kodunuz',
+      subject: 'Cost Analysis — Giriş Kodunuz',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#faf9f6;border-radius:12px;">
-          <h2 style="color:#1a2847;margin:0 0 16px;font-family:Georgia,serif;">Voyage Cost</h2>
+          <h2 style="color:#1a1814;margin:0 0 16px;font-family:Georgia,serif;">Cost Analysis</h2>
           <p style="color:#1a1814;font-size:15px;margin:0 0 8px;">Giriş kodunuz:</p>
           <div style="font-size:36px;font-weight:700;color:#8a6c2e;letter-spacing:8px;padding:20px;text-align:center;background:#f7f1e6;border-radius:8px;margin:16px 0;">${kod}</div>
           <p style="color:#7a7369;font-size:13px;margin:16px 0 0;">Bu kod 10 dakika geçerlidir. Eğer bu girişi siz talep etmediyseniz bu e-postayı yok sayabilirsiniz.</p>
