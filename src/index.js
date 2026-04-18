@@ -30,7 +30,7 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
   .split(',')
   .map(e => e.trim().toLowerCase())
   .filter(Boolean);
-const RESEND_FROM = process.env.RESEND_FROM || 'Voyage Cost <onboarding@resend.dev>';
+const RESEND_FROM = process.env.RESEND_FROM || 'Cost Analysis <noreply@voyagestars.com>';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
