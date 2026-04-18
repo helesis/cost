@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cost Analysis — Giriş</title>
 <link rel="stylesheet" href="/voyage-design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  [data-lucide], .lucide { stroke-width: 2; flex-shrink: 0; }
+  .btn [data-lucide], .btn .lucide { width: 14px; height: 14px; vertical-align: -3px; margin-right: 6px; }
+</style>
 </head>
 <body class="no-sidebar">
 
@@ -57,7 +62,7 @@
             Giriş Yap
           </button>
           <button type="button" class="btn btn-ghost" id="btn-back" style="width:100%;justify-content:center;margin-top:10px">
-            ← Farklı e-posta kullan
+            <i data-lucide="arrow-left"></i>Farklı e-posta kullan
           </button>
         </form>
       </div>
@@ -77,6 +82,9 @@
   if (localStorage.getItem('vc_token')) {
     window.location.href = '/';
   }
+
+  function vcLucide() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
+  vcLucide();
 
   const stepEmail = $('step-email');
   const stepOtp   = $('step-otp');

@@ -38,7 +38,22 @@
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
+  /* Lucide icons */
+  [data-lucide], .lucide { stroke-width: 2; flex-shrink: 0; }
+  .nav-icon[data-lucide], .nav-icon.lucide { width: 16px; height: 16px; vertical-align: -3px; color: var(--gold); }
+  .btn [data-lucide], .btn .lucide { width: 14px; height: 14px; vertical-align: -3px; margin-right: 6px; }
+  .modal-close [data-lucide], .modal-close .lucide { width: 18px; height: 18px; }
+  .delta-icon { width: 12px; height: 12px; vertical-align: -2px; stroke-width: 2.5; }
+  .currency-toggle [data-lucide], .currency-toggle .lucide { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+  .alarm-title-icon { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; color: var(--red); }
+  .ok-icon { width: 16px; height: 16px; vertical-align: -3px; margin-right: 6px; color: var(--green); }
+  .date-arrow { width: 12px; height: 12px; vertical-align: -2px; opacity: .6; margin: 0 4px; }
+  .upload-zone .upload-icon[data-lucide], .upload-zone .upload-icon.lucide {
+    width: 40px; height: 40px; margin: 0 auto 12px; display: block; color: var(--gold); stroke-width: 1.6;
+  }
+
   .upload-zone {
     border: 2px dashed var(--border2);
     border-radius: var(--radius-lg);
@@ -90,37 +105,37 @@
   </div>
 
   <div class="currency-toggle">
-    <button data-currency="TL"  onclick="vcSetCurrency('TL')">₺ TL</button>
-    <button data-currency="EUR" onclick="vcSetCurrency('EUR')">€ EUR</button>
+    <button data-currency="TL"  onclick="vcSetCurrency('TL')"><i data-lucide="turkish-lira-sign"></i>TL</button>
+    <button data-currency="EUR" onclick="vcSetCurrency('EUR')"><i data-lucide="euro"></i>EUR</button>
   </div>
 
   <nav class="sidebar-nav">
     <div class="nav-section">Analiz</div>
     <a class="nav-item active" data-page="ozet" href="#">
-      <span class="nav-icon">📊</span> Genel Özet
+      <i class="nav-icon" data-lucide="layout-dashboard"></i> Genel Özet
     </a>
     <a class="nav-item" data-page="trend" href="#">
-      <span class="nav-icon">📈</span> Trend
+      <i class="nav-icon" data-lucide="trending-up"></i> Trend
     </a>
     <a class="nav-item" data-page="kategori" href="#">
-      <span class="nav-icon">🗂️</span> Kategoriler
+      <i class="nav-icon" data-lucide="layers"></i> Kategoriler
     </a>
     <a class="nav-item" data-page="urun" href="#">
-      <span class="nav-icon">🔍</span> Ürün Ara
+      <i class="nav-icon" data-lucide="search"></i> Ürün Ara
     </a>
     <a class="nav-item" data-page="fiyat" href="#">
-      <span class="nav-icon">💹</span> Fiyat Analizi
+      <i class="nav-icon" data-lucide="line-chart"></i> Fiyat Analizi
     </a>
     <a class="nav-item" data-page="yillik" href="#">
-      <span class="nav-icon">📅</span> Yıllık Analiz
+      <i class="nav-icon" data-lucide="calendar-days"></i> Yıllık Analiz
     </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
-      <span class="nav-icon">🔔</span> Alarmlar
+      <i class="nav-icon" data-lucide="bell"></i> Alarmlar
       <span id="alarm-badge">0</span>
     </a>
     <a class="nav-item" data-page="yukle" href="#">
-      <span class="nav-icon">⬆️</span> Veri Yükle
+      <i class="nav-icon" data-lucide="upload-cloud"></i> Veri Yükle
     </a>
   </nav>
 
@@ -330,7 +345,7 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="form-select" id="kat-fiyat-baslangic" style="width:130px"></select>
-            <span style="color:var(--text-dim)">→</span>
+            <i data-lucide="arrow-right" class="date-arrow" style="opacity:.5"></i>
             <select class="form-select" id="kat-fiyat-bitis" style="width:130px"></select>
             <select class="form-select" id="kat-fiyat-tip" style="width:120px">
               <option value="">Hepsi</option>
@@ -381,6 +396,18 @@
       <!-- A: KPI KARTLARI (1, 2, 3) -->
       <div class="stats-grid mb-20" id="yil-stats"></div>
 
+      <!-- A2: P.P. YILLIK KARŞILAŞTIRMA (Yiyecek / İçecek) -->
+      <div class="grid-2 mb-20" style="gap:20px">
+        <div class="card">
+          <div class="card-title" id="yil-pp-yiy-baslik">Pax Başına Yiyecek — Yıllık Karşılaştırma</div>
+          <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-pp-yiyecek"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title" id="yil-pp-ice-baslik">Pax Başına İçecek — Yıllık Karşılaştırma</div>
+          <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-pp-icenek"></canvas></div>
+        </div>
+      </div>
+
       <!-- B: AYLIK SEYİR (5, 6, 11) -->
       <div class="grid-2 mb-20" style="gap:20px">
         <div class="card">
@@ -413,7 +440,7 @@
       <div class="card mb-20">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
-            <div class="card-title" style="margin-bottom:4px">Kategori — İlk Ay → Son Ay Değişimi</div>
+            <div class="card-title" style="margin-bottom:4px">Kategori — İlk Ay <i data-lucide="arrow-right" class="date-arrow"></i> Son Ay Değişimi</div>
             <div style="font-size:12px;color:var(--text-dim)">Yıl içinde ilk ve son aydaki toplam harcama karşılaştırması</div>
           </div>
         </div>
@@ -438,9 +465,9 @@
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
           <div class="card-title" style="margin:0;flex:1">Top 20 Ürün</div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm" data-urun-metric="harcama" onclick="yilUrunYukle('harcama')">💰 En Çok Harcanan</button>
-            <button class="btn btn-secondary btn-sm" data-urun-metric="artis"   onclick="yilUrunYukle('artis')">📈 Fiyatı En Çok Artan</button>
-            <button class="btn btn-secondary btn-sm" data-urun-metric="dusus"   onclick="yilUrunYukle('dusus')">📉 Fiyatı En Çok Düşen</button>
+            <button class="btn btn-secondary btn-sm" data-urun-metric="harcama" onclick="yilUrunYukle('harcama')"><i data-lucide="wallet"></i>En Çok Harcanan</button>
+            <button class="btn btn-secondary btn-sm" data-urun-metric="artis"   onclick="yilUrunYukle('artis')"><i data-lucide="trending-up"></i>Fiyatı En Çok Artan</button>
+            <button class="btn btn-secondary btn-sm" data-urun-metric="dusus"   onclick="yilUrunYukle('dusus')"><i data-lucide="trending-down"></i>Fiyatı En Çok Düşen</button>
           </div>
         </div>
         <div class="chart-wrap" style="height:520px"><canvas id="yil-chart-urun"></canvas></div>
@@ -492,7 +519,7 @@
     </div>
     <div class="page-body">
       <div class="card mb-20">
-        <div class="card-title">🔴 Tetiklenen Alarmlar</div>
+        <div class="card-title"><i data-lucide="bell-ring" class="alarm-title-icon"></i>Tetiklenen Alarmlar</div>
         <div id="alarm-listesi"><div class="loading"><div class="spinner"></div> Kontrol ediliyor...</div></div>
       </div>
       <div class="card">
@@ -513,7 +540,7 @@
     <div class="page-body">
       <div class="card" style="max-width:600px">
         <div class="upload-zone" id="upload-zone">
-          <div class="upload-icon">📂</div>
+          <i class="upload-icon" data-lucide="cloud-upload"></i>
           <div style="font-weight:600;margin-bottom:6px">CSV dosyasını buraya sürükleyin</div>
           <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">veya tıklayarak seçin</div>
           <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Dosya Seç</button>
@@ -535,7 +562,7 @@
   <div class="modal">
     <div class="modal-header">
       <div class="modal-title">Yeni Alarm Eşiği</div>
-      <button class="modal-close" onclick="document.getElementById('modal-esik').classList.remove('open')">✕</button>
+      <button class="modal-close" onclick="document.getElementById('modal-esik').classList.remove('open')"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
       <div class="grid-2" style="gap:12px">
@@ -591,6 +618,9 @@
 // ── State ──────────────────────────────────────────────────────────────────────
 let ozetData = [], donemler = [];
 let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
+
+// ── Lucide refresh helper ─────────────────────────────────────────────────────
+function vcLucide() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
 
 // ── Para Birimi (Global) ──────────────────────────────────────────────────────
 let vcCurrency = (localStorage.getItem('vc_currency') === 'EUR') ? 'EUR' : 'TL';
@@ -946,7 +976,8 @@ async function loadAlarmlar() {
   const rows = await fetch('/api/alarmlar').then(r => r.json());
   const el = document.getElementById('alarm-listesi');
   if (!rows.length) {
-    el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:13px">✅ Hiçbir alarm tetiklenmedi</div>';
+    el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:13px"><i data-lucide="check-circle-2" class="ok-icon"></i>Hiçbir alarm tetiklenmedi</div>';
+    vcLucide();
     return;
   }
   el.innerHTML = rows.map(r => `
@@ -959,6 +990,7 @@ async function loadAlarmlar() {
       <span class="badge badge-red">Alarm</span>
     </div>
   `).join('');
+  vcLucide();
 }
 
 async function checkAlarmBadge() {
@@ -982,13 +1014,14 @@ async function loadEsikler() {
           <span class="badge badge-gray" style="margin-left:6px">${r.metrik}</span>
           ${r.tip ? `<span class="badge badge-gold" style="margin-left:4px">${r.tip}</span>` : ''}
         </div>
-        <div style="font-size:12px;color:var(--text-dim)">
-          ${r.yon === 'yukari' ? '↑' : '↓'} ${fmtN(r.esik_deger, 2)}
+        <div style="font-size:12px;color:var(--text-dim);display:inline-flex;align-items:center;gap:4px">
+          <i data-lucide="${r.yon === 'yukari' ? 'arrow-up' : 'arrow-down'}" class="delta-icon"></i> ${fmtN(r.esik_deger, 2)}
         </div>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="esikSil(${r.id})">✕</button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="esikSil(${r.id})"><i data-lucide="x"></i></button>
       </div>
     `).join('')
     : '<div style="padding:16px;color:var(--text-dim);font-size:13px">Henüz eşik tanımlanmamış</div>';
+  vcLucide();
 }
 
 async function esikKaydet() {
@@ -1204,13 +1237,14 @@ function renderFiyatTablo(seri, tbody) {
       <td style="text-align:right">${renderDelta(delta)}</td>
     </tr>`;
   }).join('');
+  vcLucide();
 }
 
 function renderDelta(v) {
   if (v === null || isNaN(v)) return '<span style="color:var(--text-xdim)">—</span>';
-  const sign = v > 0 ? '↑' : v < 0 ? '↓' : '·';
+  const ic   = v > 0.01 ? 'arrow-up' : v < -0.01 ? 'arrow-down' : 'minus';
   const col  = v > 0.01 ? 'var(--red)' : v < -0.01 ? 'var(--green)' : 'var(--text-dim)';
-  return `<span style="color:${col};font-weight:600">${sign} ${fmtN(Math.abs(v), 2)}%</span>`;
+  return `<span style="color:${col};font-weight:600;display:inline-flex;align-items:center;gap:2px;justify-content:flex-end"><i data-lucide="${ic}" class="delta-icon"></i> ${fmtN(Math.abs(v), 2)}%</span>`;
 }
 
 async function loadKategoriFiyat() {
@@ -1243,12 +1277,13 @@ async function loadKategoriFiyat() {
       const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
       return `<tr>
         <td><strong>${r.kategori}</strong></td>
-        <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} → ${r.son_donem}</td>
+        <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
         <td style="text-align:right">${fmtCur(ilk)}</td>
         <td style="text-align:right">${fmtCur(son)}</td>
         <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
       </tr>`;
     }).join('');
+    vcLucide();
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px">Hata: ${err.message}</td></tr>`;
   }
@@ -1266,6 +1301,7 @@ document.addEventListener('keydown', (e) => {
 // ─────────────────────────────────────────────────────────────────────────────
 let yilInited = false;
 let chartYilAylik, chartYilMix, chartYilYoy, chartYilKatPasta, chartYilKatStacked, chartYilUrun;
+let chartYilPpYiyecek, chartYilPpIcenek;
 let yilSecenekleri = [];
 const AY_KISA = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 
@@ -1312,6 +1348,7 @@ async function yillikAnalizYenile() {
     ]);
 
     renderYilKpi(ozet);
+    renderYilPpKarsilastirma();
     renderYilAylik(aylik);
     renderYilYoy(aylik);
     renderYilKategoriler(kat);
@@ -1333,8 +1370,8 @@ function renderYilKpi(ozet) {
     if (v === null || v === undefined || isNaN(v)) return '';
     const iyi = ters ? v < 0 : v > 0;
     const col = Math.abs(v) < 0.1 ? 'var(--text-dim)' : (iyi ? 'var(--red)' : 'var(--green)');
-    const sign = v > 0 ? '↑' : v < 0 ? '↓' : '·';
-    return `<span style="font-size:11px;font-weight:600;color:${col};margin-left:6px">${sign} ${fmtN(Math.abs(v), 1)}%</span>`;
+    const ic  = v > 0.1 ? 'arrow-up' : v < -0.1 ? 'arrow-down' : 'minus';
+    return `<span style="font-size:11px;font-weight:600;color:${col};margin-left:6px;display:inline-flex;align-items:center;gap:2px"><i data-lucide="${ic}" class="delta-icon"></i> ${fmtN(Math.abs(v), 1)}%</span>`;
   };
 
   const toplam = pickCur(by, 'toplam');
@@ -1356,6 +1393,58 @@ function renderYilKpi(ozet) {
       <div class="stat-sub">vs ${ozet.onceki_yil}${badge(c.yoy, c.ters)}</div>
     </div>
   `).join('');
+  vcLucide();
+}
+
+// ── A2: P.P. YILLIK KARŞILAŞTIRMA (Yiyecek + İçecek) ─────────────────────────
+function renderYilPpKarsilastirma() {
+  document.getElementById('yil-pp-yiy-baslik').textContent = `Pax Başına Yiyecek — Yıllık Karşılaştırma (${curLabel()})`;
+  document.getElementById('yil-pp-ice-baslik').textContent = `Pax Başına İçecek — Yıllık Karşılaştırma (${curLabel()})`;
+
+  chartYilPpYiyecek = renderPpYillikChart('yil-chart-pp-yiyecek', 'yiyecek', chartYilPpYiyecek);
+  chartYilPpIcenek  = renderPpYillikChart('yil-chart-pp-icenek',  'icenek',  chartYilPpIcenek);
+}
+
+function renderPpYillikChart(canvasId, tip, prevChart) {
+  const data = (ozetData || []).filter(r => r.tip === tip);
+  const yillar = [...new Set(data.map(r => +r.yil))].sort((a, b) => b - a); // en yeni yıl ilk
+  const aylar = Array.from({ length: 12 }, (_, i) => i + 1);
+  const labels = aylar.map(a => AY_KISA[a - 1]);
+
+  const datasets = yillar.map((y, idx) => {
+    const map = new Map(data.filter(r => +r.yil === y).map(r => [+r.ay_no, pickCur(r, 'toplam_pp')]));
+    const color = COLORS[idx % COLORS.length];
+    return {
+      label: String(y),
+      data: aylar.map(a => map.has(a) ? map.get(a) : null),
+      borderColor: color,
+      backgroundColor: color + '22',
+      borderWidth: idx === 0 ? 3 : 2,
+      tension: 0.3,
+      spanGaps: true,
+      pointRadius: 3,
+      pointBackgroundColor: color,
+      fill: false
+    };
+  });
+
+  if (prevChart) prevChart.destroy();
+  return new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
+      },
+      scales: {
+        y: { beginAtZero: false, ticks: { callback: v => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(v) }, title: { display: true, text: `P.P. (${curLabel()})` } },
+        x: { grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
 }
 
 // ── B: AYLIK SEYİR ───────────────────────────────────────────────────────────
@@ -1525,12 +1614,13 @@ function renderYilKategoriler(data) {
       const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
       return `<tr>
         <td><strong>${r.kategori}</strong></td>
-        <td style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} → ${AY_KISA[(+r.son_ay) - 1]}</td>
+        <td style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} <i data-lucide="arrow-right" class="date-arrow"></i> ${AY_KISA[(+r.son_ay) - 1]}</td>
         <td style="text-align:right">${fmtCur(ilk)}</td>
         <td style="text-align:right">${fmtCur(son)}</td>
         <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
       </tr>`;
     }).join('');
+    vcLucide();
   }
 }
 
@@ -1617,6 +1707,7 @@ function renderYilUrun(res, metric) {
         <td style="text-align:right">${cell}</td>
       </tr>`;
     }).join('');
+    vcLucide();
   }
 }
 
@@ -1644,12 +1735,14 @@ function renderYilKarsilastirma(data) {
       <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
     </tr>`;
   }).join('');
+  vcLucide();
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.querySelectorAll('[data-currency]').forEach(b => {
   b.classList.toggle('active', b.dataset.currency === vcCurrency);
 });
+vcLucide();
 setupUpload();
 init();
 </script>
