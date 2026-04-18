@@ -518,6 +518,331 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// YILLIK ANALİZ API'LERİ
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Yardımcı: opsiyonel tip filtresi SQL parça üretir
+function tipWhere(params, tip, base = '') {
+  let where = base;
+  if (tip) { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
+  return where;
+}
+
+// ── API: Yıllık — veride mevcut yıllar ────────────────────────────────────────
+app.get('/api/yillik/yil-listesi', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT DISTINCT yil
+      FROM fb_cost.tuketim
+      WHERE yil IS NOT NULL AND tutar_tl > 0
+      ORDER BY yil DESC
+    `);
+    res.json(rows.map(r => r.yil));
+  } catch (err) {
+    console.error('yillik/yil-listesi hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Yıllık — Özet KPI'lar (bu yıl + önceki yıl) ──────────────────────────
+// Modül 1, 2, 3: toplam maliyet, PP ort., misafir, kur, YoY %
+app.get('/api/yillik/ozet', async (req, res) => {
+  const yil = parseInt(req.query.yil);
+  const tip = req.query.tip || null;
+  if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
+
+  try {
+    async function yilOzeti(y) {
+      const params = [y];
+      const tipFilter = tipWhere(params, tip);
+      const { rows } = await pool.query(`
+        WITH aylik AS (
+          SELECT ay_no,
+                 SUM(tutar_tl)  AS tl,
+                 SUM(tutar_eur) AS eur,
+                 SUM(pp_tl)     AS pp_tl,
+                 SUM(pp_eur)    AS pp_eur,
+                 MAX(cost_pax)  AS cost_pax,
+                 AVG(NULLIF(kur,0)) AS kur
+          FROM fb_cost.tuketim
+          WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+          GROUP BY ay_no
+        )
+        SELECT
+          COALESCE(SUM(tl), 0)          AS toplam_tl,
+          COALESCE(SUM(eur), 0)         AS toplam_eur,
+          COALESCE(AVG(pp_tl), 0)       AS ort_pp_tl,
+          COALESCE(AVG(pp_eur), 0)      AS ort_pp_eur,
+          COALESCE(SUM(cost_pax), 0)    AS toplam_misafir,
+          COALESCE(AVG(kur), 0)         AS ort_kur,
+          COUNT(*)                      AS ay_sayisi
+        FROM aylik
+      `, params);
+      return rows[0];
+    }
+
+    const buYil = await yilOzeti(yil);
+    const onceki = await yilOzeti(yil - 1);
+
+    function yoy(a, b) {
+      const av = parseFloat(a) || 0;
+      const bv = parseFloat(b) || 0;
+      if (!bv) return null;
+      return ((av - bv) / bv) * 100;
+    }
+
+    res.json({
+      yil,
+      onceki_yil: yil - 1,
+      bu_yil: buYil,
+      onceki_yil_veri: onceki,
+      yoy: {
+        toplam_tl:      yoy(buYil.toplam_tl, onceki.toplam_tl),
+        toplam_eur:     yoy(buYil.toplam_eur, onceki.toplam_eur),
+        ort_pp_tl:      yoy(buYil.ort_pp_tl, onceki.ort_pp_tl),
+        ort_pp_eur:     yoy(buYil.ort_pp_eur, onceki.ort_pp_eur),
+        toplam_misafir: yoy(buYil.toplam_misafir, onceki.toplam_misafir),
+        ort_kur:        yoy(buYil.ort_kur, onceki.ort_kur),
+      }
+    });
+  } catch (err) {
+    console.error('yillik/ozet hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Yıllık — Aylık Seyir (5, 6, 11) ─────────────────────────────────────
+// 5: toplam TL/EUR zaman serisi
+// 6: yiyecek vs içecek aylık (stacked)
+// 11: YoY aylık karşılaştırma (önceki yıl aynı ay)
+app.get('/api/yillik/aylik', async (req, res) => {
+  const yil = parseInt(req.query.yil);
+  const tip = req.query.tip || null;
+  if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
+
+  try {
+    async function aylik(y) {
+      const params = [y];
+      const tipFilter = tipWhere(params, tip);
+      const { rows } = await pool.query(`
+        SELECT
+          ay_no,
+          MAX(ay) AS ay,
+          SUM(tutar_tl)  AS toplam_tl,
+          SUM(tutar_eur) AS toplam_eur,
+          SUM(CASE WHEN tip = 'yiyecek' THEN tutar_tl ELSE 0 END) AS yiyecek_tl,
+          SUM(CASE WHEN tip = 'icenek'  THEN tutar_tl ELSE 0 END) AS icenek_tl,
+          SUM(CASE WHEN tip = 'yiyecek' THEN tutar_eur ELSE 0 END) AS yiyecek_eur,
+          SUM(CASE WHEN tip = 'icenek'  THEN tutar_eur ELSE 0 END) AS icenek_eur,
+          SUM(pp_tl)     AS pp_tl,
+          SUM(pp_eur)    AS pp_eur,
+          MAX(cost_pax)  AS cost_pax,
+          AVG(NULLIF(kur, 0)) AS kur
+        FROM fb_cost.tuketim
+        WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+        GROUP BY ay_no
+        ORDER BY ay_no
+      `, params);
+      return rows;
+    }
+
+    const buYil = await aylik(yil);
+    const onceki = await aylik(yil - 1);
+
+    res.json({ yil, onceki_yil: yil - 1, bu_yil: buYil, onceki_yil_veri: onceki });
+  } catch (err) {
+    console.error('yillik/aylik hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Yıllık — Kategori analizleri (12, 13, 14) ───────────────────────────
+// 12: yıllık kategori toplamları
+// 13: kategori × ay matrisi
+// 14: kategori ilk→son ay değişimi
+app.get('/api/yillik/kategoriler', async (req, res) => {
+  const yil = parseInt(req.query.yil);
+  const tip = req.query.tip || null;
+  if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
+
+  try {
+    const params = [yil];
+    const tipFilter = tipWhere(params, tip);
+
+    const { rows: toplamlar } = await pool.query(`
+      SELECT kategori,
+             SUM(tutar_tl)  AS toplam_tl,
+             SUM(tutar_eur) AS toplam_eur
+      FROM fb_cost.tuketim
+      WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+      GROUP BY kategori
+      ORDER BY toplam_tl DESC
+    `, params);
+
+    const { rows: matris } = await pool.query(`
+      SELECT kategori, ay_no,
+             SUM(tutar_tl)  AS tutar_tl,
+             SUM(tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim
+      WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+      GROUP BY kategori, ay_no
+      ORDER BY kategori, ay_no
+    `, params);
+
+    const { rows: degisim } = await pool.query(`
+      WITH aylik AS (
+        SELECT kategori, ay_no,
+               SUM(tutar_tl) AS tl
+        FROM fb_cost.tuketim
+        WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        GROUP BY kategori, ay_no
+      ),
+      siralanmis AS (
+        SELECT kategori, ay_no, tl,
+               ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY ay_no)      AS rn_ilk,
+               ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY ay_no DESC) AS rn_son,
+               COUNT(*)    OVER (PARTITION BY kategori)                      AS n
+        FROM aylik
+      ),
+      ilk AS (SELECT kategori, ay_no AS ilk_ay, tl AS ilk_tl FROM siralanmis WHERE rn_ilk = 1),
+      son AS (SELECT kategori, ay_no AS son_ay, tl AS son_tl, n FROM siralanmis WHERE rn_son = 1)
+      SELECT i.kategori, i.ilk_ay, s.son_ay, i.ilk_tl, s.son_tl, s.n AS ay_sayisi,
+             CASE WHEN i.ilk_tl > 0
+                  THEN ((s.son_tl - i.ilk_tl) / i.ilk_tl * 100)::NUMERIC
+                  ELSE NULL END AS degisim_yuzde
+      FROM ilk i JOIN son s USING (kategori)
+      WHERE s.n >= 2
+      ORDER BY ABS(COALESCE(((s.son_tl - i.ilk_tl) / NULLIF(i.ilk_tl, 0) * 100), 0)) DESC
+    `, params);
+
+    res.json({ yil, toplamlar, matris, degisim });
+  } catch (err) {
+    console.error('yillik/kategoriler hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Yıllık — Ürün sıralamaları (17, 18, 19) ─────────────────────────────
+// metric=harcama → top N harcama (17)
+// metric=artis   → top N fiyat artışı (18)
+// metric=dusus   → top N fiyat düşüşü (19)
+app.get('/api/yillik/urunler', async (req, res) => {
+  const yil = parseInt(req.query.yil);
+  const tip = req.query.tip || null;
+  const metric = (req.query.metric || 'harcama').toLowerCase();
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+  if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
+
+  try {
+    if (metric === 'harcama') {
+      const params = [yil];
+      const tipFilter = tipWhere(params, tip);
+      params.push(limit);
+      const { rows } = await pool.query(`
+        SELECT stok_mali, kategori, tip,
+               SUM(tutar_tl)  AS toplam_tl,
+               SUM(tutar_eur) AS toplam_eur,
+               SUM(tuk_miktar) AS tuk_miktar
+        FROM fb_cost.tuketim
+        WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+        GROUP BY stok_mali, kategori, tip
+        ORDER BY toplam_tl DESC
+        LIMIT $${params.length}
+      `, params);
+      return res.json({ yil, metric, urunler: rows });
+    }
+
+    // Fiyat değişimi (artış / düşüş)
+    const yon = metric === 'dusus' ? 'ASC' : 'DESC';
+    const params = [yil];
+    const tipFilter = tipWhere(params, tip);
+    params.push(limit);
+
+    const { rows } = await pool.query(`
+      WITH aylik AS (
+        SELECT stok_mali, kategori, tip, ay_no,
+               AVG(birim_fiyat) AS ort_fiyat
+        FROM fb_cost.tuketim
+        WHERE yil = $1 AND birim_fiyat > 0 ${tipFilter}
+        GROUP BY stok_mali, kategori, tip, ay_no
+      ),
+      siralanmis AS (
+        SELECT stok_mali, kategori, tip, ay_no, ort_fiyat,
+               ROW_NUMBER() OVER (PARTITION BY stok_mali, kategori, tip ORDER BY ay_no)      AS rn_ilk,
+               ROW_NUMBER() OVER (PARTITION BY stok_mali, kategori, tip ORDER BY ay_no DESC) AS rn_son,
+               COUNT(*)    OVER (PARTITION BY stok_mali, kategori, tip)                      AS n
+        FROM aylik
+      ),
+      ilk AS (SELECT stok_mali, kategori, tip, ay_no AS ilk_ay, ort_fiyat AS ilk_fiyat FROM siralanmis WHERE rn_ilk = 1),
+      son AS (SELECT stok_mali, kategori, tip, ay_no AS son_ay, ort_fiyat AS son_fiyat, n FROM siralanmis WHERE rn_son = 1)
+      SELECT i.stok_mali, i.kategori, i.tip,
+             i.ilk_ay, s.son_ay, i.ilk_fiyat, s.son_fiyat, s.n AS ay_sayisi,
+             ((s.son_fiyat - i.ilk_fiyat) / i.ilk_fiyat * 100)::NUMERIC AS degisim_yuzde
+      FROM ilk i JOIN son s USING (stok_mali, kategori, tip)
+      WHERE s.n >= 2 AND i.ilk_fiyat > 0
+      ORDER BY degisim_yuzde ${yon}
+      LIMIT $${params.length}
+    `, params);
+
+    res.json({ yil, metric, urunler: rows });
+  } catch (err) {
+    console.error('yillik/urunler hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Yıllık — Yıl × Yıl karşılaştırma (24) ───────────────────────────────
+// Kategori bazında bu yıl vs önceki yıl toplamları
+app.get('/api/yillik/karsilastirma', async (req, res) => {
+  const yil = parseInt(req.query.yil);
+  const tip = req.query.tip || null;
+  if (!yil) return res.status(400).json({ error: 'yil parametresi zorunlu' });
+
+  try {
+    const params = [yil, yil - 1];
+    const tipFilter = tipWhere(params, tip);
+    const { rows } = await pool.query(`
+      WITH bu_yil AS (
+        SELECT kategori,
+               SUM(tutar_tl)  AS tl,
+               SUM(tutar_eur) AS eur
+        FROM fb_cost.tuketim
+        WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        GROUP BY kategori
+      ),
+      onceki AS (
+        SELECT kategori,
+               SUM(tutar_tl)  AS tl,
+               SUM(tutar_eur) AS eur
+        FROM fb_cost.tuketim
+        WHERE yil = $2 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        GROUP BY kategori
+      )
+      SELECT
+        COALESCE(b.kategori, o.kategori) AS kategori,
+        COALESCE(b.tl, 0)  AS bu_yil_tl,
+        COALESCE(b.eur, 0) AS bu_yil_eur,
+        COALESCE(o.tl, 0)  AS onceki_tl,
+        COALESCE(o.eur, 0) AS onceki_eur,
+        CASE WHEN COALESCE(o.tl, 0) > 0
+             THEN ((COALESCE(b.tl, 0) - o.tl) / o.tl * 100)::NUMERIC
+             ELSE NULL END AS degisim_tl_yuzde,
+        CASE WHEN COALESCE(o.eur, 0) > 0
+             THEN ((COALESCE(b.eur, 0) - o.eur) / o.eur * 100)::NUMERIC
+             ELSE NULL END AS degisim_eur_yuzde
+      FROM bu_yil b
+      FULL OUTER JOIN onceki o USING (kategori)
+      ORDER BY GREATEST(COALESCE(b.tl, 0), COALESCE(o.tl, 0)) DESC
+    `, params);
+
+    res.json({ yil, onceki_yil: yil - 1, kategoriler: rows });
+  } catch (err) {
+    console.error('yillik/karsilastirma hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Catch-all → index.html ────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

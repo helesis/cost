@@ -64,6 +64,7 @@
   .esik-row:last-child { border-bottom:none; }
   .tab-content { display:none; }
   .tab-content.active { display:block; }
+  #page-yillik [data-urun-metric].active { background: var(--gold-bg); color: var(--gold); border-color: var(--gold); font-weight: 600; }
   #alarm-badge { display:none; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; align-items:center; justify-content:center; margin-left:auto; }
   #alarm-badge.show { display:flex; }
 </style>
@@ -95,6 +96,9 @@
     </a>
     <a class="nav-item" data-page="fiyat" href="#">
       <span class="nav-icon">💹</span> Fiyat Analizi
+    </a>
+    <a class="nav-item" data-page="yillik" href="#">
+      <span class="nav-icon">📅</span> Yıllık Analiz
     </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
@@ -347,6 +351,129 @@
     </div>
   </div>
 
+  <!-- ── YILLIK ANALİZ ──────────────────────────────────────────────────── -->
+  <div id="page-yillik" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Yıllık Analiz</div>
+        <div class="page-sub">Seçilen yılın tüm aylarını kapsayan KPI, trend, kategori ve ürün analizleri</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="form-select" id="yil-sec" style="width:140px"></select>
+        <select class="form-select" id="yil-tip" style="width:140px">
+          <option value="">Hepsi</option>
+          <option value="yiyecek">Yiyecek</option>
+          <option value="icenek">İçecek</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="yillikAnalizYenile()">Yenile</button>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <!-- A: KPI KARTLARI (1, 2, 3) -->
+      <div class="stats-grid mb-20" id="yil-stats"></div>
+
+      <!-- B: AYLIK SEYİR (5, 6, 11) -->
+      <div class="grid-2 mb-20" style="gap:20px">
+        <div class="card">
+          <div class="card-title">Aylık Toplam Maliyet (TL & €)</div>
+          <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-aylik"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Yiyecek vs İçecek — Aylık Yığınlı</div>
+          <div class="chart-wrap" style="height:300px"><canvas id="yil-chart-mix"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card mb-20">
+        <div class="card-title">Yıl-Yıl Karşılaştırma — Aylık Toplam TL</div>
+        <div class="chart-wrap" style="height:320px"><canvas id="yil-chart-yoy"></canvas></div>
+      </div>
+
+      <!-- C: KATEGORİ (12, 13, 14) -->
+      <div class="grid-2 mb-20" style="gap:20px">
+        <div class="card">
+          <div class="card-title">Yıllık Kategori Dağılımı</div>
+          <div class="chart-wrap" style="height:320px"><canvas id="yil-chart-kat-pasta"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Kategori × Ay Yığınlı</div>
+          <div class="chart-wrap" style="height:320px"><canvas id="yil-chart-kat-stacked"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card mb-20">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Kategori — İlk Ay → Son Ay Değişimi</div>
+            <div style="font-size:12px;color:var(--text-dim)">Yıl içinde ilk ve son aydaki toplam harcama karşılaştırması</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Aralık</th>
+                <th style="text-align:right">İlk Ay TL</th>
+                <th style="text-align:right">Son Ay TL</th>
+                <th style="text-align:right">Δ %</th>
+              </tr>
+            </thead>
+            <tbody id="yil-kat-degisim-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- D: ÜRÜN SIRALAMALARI (17, 18, 19) -->
+      <div class="card mb-20">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+          <div class="card-title" style="margin:0;flex:1">Top 20 Ürün</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" data-urun-metric="harcama" onclick="yilUrunYukle('harcama')">💰 En Çok Harcanan</button>
+            <button class="btn btn-secondary btn-sm" data-urun-metric="artis"   onclick="yilUrunYukle('artis')">📈 Fiyatı En Çok Artan</button>
+            <button class="btn btn-secondary btn-sm" data-urun-metric="dusus"   onclick="yilUrunYukle('dusus')">📉 Fiyatı En Çok Düşen</button>
+          </div>
+        </div>
+        <div class="chart-wrap" style="height:520px"><canvas id="yil-chart-urun"></canvas></div>
+        <div class="table-wrap" style="margin-top:16px">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Ürün</th>
+                <th>Kategori</th>
+                <th>Tip</th>
+                <th class="th-deger" style="text-align:right">Değer</th>
+              </tr>
+            </thead>
+            <tbody id="yil-urun-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- E: YIL × YIL (24) -->
+      <div class="card">
+        <div class="card-title">Yıl × Yıl Karşılaştırma (Kategori Bazında)</div>
+        <div class="table-wrap">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th style="text-align:right" id="yil-karsilastirma-th-onceki">Önceki Yıl TL</th>
+                <th style="text-align:right" id="yil-karsilastirma-th-buyil">Bu Yıl TL</th>
+                <th style="text-align:right">Δ TL %</th>
+                <th style="text-align:right">Δ € %</th>
+              </tr>
+            </thead>
+            <tbody id="yil-karsilastirma-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── ALARMLAR ────────────────────────────────────────────────────────── -->
   <div id="page-alarmlar" class="tab-content">
     <div class="page-header">
@@ -478,6 +605,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'alarmlar') { loadAlarmlar(); loadEsikler(); }
     if (page === 'yukle') loadYukluDonemler();
     if (page === 'fiyat') initFiyatPage();
+    if (page === 'yillik') initYillikPage();
   });
 });
 
@@ -1058,6 +1186,362 @@ document.addEventListener('keydown', (e) => {
     fiyatAnalizEt();
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// YILLIK ANALİZ
+// ─────────────────────────────────────────────────────────────────────────────
+let yilInited = false;
+let chartYilAylik, chartYilMix, chartYilYoy, chartYilKatPasta, chartYilKatStacked, chartYilUrun;
+let yilSecenekleri = [];
+const AY_KISA = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+
+async function initYillikPage() {
+  if (!yilInited) {
+    try {
+      yilSecenekleri = await fetch('/api/yillik/yil-listesi').then(r => r.json());
+      const sel = document.getElementById('yil-sec');
+      if (!yilSecenekleri.length) {
+        sel.innerHTML = '<option value="">Veri yok</option>';
+      } else {
+        sel.innerHTML = yilSecenekleri.map(y => `<option value="${y}">${y}</option>`).join('');
+      }
+      document.getElementById('yil-sec').addEventListener('change', yillikAnalizYenile);
+      document.getElementById('yil-tip').addEventListener('change', yillikAnalizYenile);
+      yilInited = true;
+    } catch (e) {
+      toast('Yıl listesi alınamadı', 'error');
+      return;
+    }
+  }
+  yillikAnalizYenile();
+}
+
+function yilParams() {
+  const yil = document.getElementById('yil-sec').value;
+  const tip = document.getElementById('yil-tip').value;
+  const p = new URLSearchParams();
+  if (yil) p.append('yil', yil);
+  if (tip) p.append('tip', tip);
+  return { yil, tip, qs: p.toString() };
+}
+
+async function yillikAnalizYenile() {
+  const { yil, qs } = yilParams();
+  if (!yil) return;
+
+  try {
+    const [ozet, aylik, kat, karsilastirma] = await Promise.all([
+      fetch('/api/yillik/ozet?' + qs).then(r => r.json()),
+      fetch('/api/yillik/aylik?' + qs).then(r => r.json()),
+      fetch('/api/yillik/kategoriler?' + qs).then(r => r.json()),
+      fetch('/api/yillik/karsilastirma?' + qs).then(r => r.json()),
+    ]);
+
+    renderYilKpi(ozet);
+    renderYilAylik(aylik);
+    renderYilYoy(aylik);
+    renderYilKategoriler(kat);
+    renderYilKarsilastirma(karsilastirma);
+
+    // default ürün metriği: harcama
+    const aktif = document.querySelector('#page-yillik [data-urun-metric].active')?.dataset.urunMetric || 'harcama';
+    yilUrunYukle(aktif);
+  } catch (err) {
+    toast('Yıllık analiz yüklenemedi: ' + err.message, 'error');
+  }
+}
+
+// ── A: KPI KARTLARI ──────────────────────────────────────────────────────────
+function renderYilKpi(ozet) {
+  const by = ozet.bu_yil || {};
+  const yoy = ozet.yoy || {};
+  const badge = (v, ters = false) => {
+    if (v === null || v === undefined || isNaN(v)) return '';
+    const iyi = ters ? v < 0 : v > 0;
+    const col = Math.abs(v) < 0.1 ? 'var(--text-dim)' : (iyi ? 'var(--red)' : 'var(--green)');
+    const sign = v > 0 ? '↑' : v < 0 ? '↓' : '·';
+    return `<span style="font-size:11px;font-weight:600;color:${col};margin-left:6px">${sign} ${fmtN(Math.abs(v), 1)}%</span>`;
+  };
+
+  const cards = [
+    { label: 'Toplam Maliyet (TL)',   val: fmtTL(by.toplam_tl || 0),   yoy: yoy.toplam_tl },
+    { label: 'Toplam Maliyet (€)',    val: fmtEUR(by.toplam_eur || 0), yoy: yoy.toplam_eur },
+    { label: 'Aylık Ort. P.P. (TL)',  val: fmtTL(by.ort_pp_tl || 0),   yoy: yoy.ort_pp_tl },
+    { label: 'Aylık Ort. P.P. (€)',   val: fmtEUR(by.ort_pp_eur || 0), yoy: yoy.ort_pp_eur },
+    { label: 'Toplam Misafir',        val: new Intl.NumberFormat('tr-TR').format(by.toplam_misafir || 0), yoy: yoy.toplam_misafir, ters: true },
+    { label: 'Ortalama Kur (TL/€)',   val: fmtN(by.ort_kur || 0, 2),   yoy: yoy.ort_kur },
+  ];
+
+  document.getElementById('yil-stats').innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value">${c.val}</div>
+      <div class="stat-sub">vs ${ozet.onceki_yil}${badge(c.yoy, c.ters)}</div>
+    </div>
+  `).join('');
+}
+
+// ── B: AYLIK SEYİR ───────────────────────────────────────────────────────────
+function renderYilAylik(data) {
+  const rows = data.bu_yil || [];
+  const labels = rows.map(r => AY_KISA[(+r.ay_no) - 1] || ('Ay ' + r.ay_no));
+  const tl  = rows.map(r => +r.toplam_tl  || 0);
+  const eur = rows.map(r => +r.toplam_eur || 0);
+
+  if (chartYilAylik) chartYilAylik.destroy();
+  chartYilAylik = new Chart(document.getElementById('yil-chart-aylik'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'TL', data: tl, borderColor: '#8a6c2e', backgroundColor: 'rgba(138,108,46,0.12)', yAxisID: 'yTL', tension: 0.3, fill: true },
+        { label: '€',  data: eur, borderColor: '#2a4d7a', backgroundColor: 'rgba(42,77,122,0.08)', yAxisID: 'yEUR', tension: 0.3, borderDash: [5, 4] }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.yAxisID === 'yTL' ? `TL: ${fmtTL(ctx.parsed.y)}` : `€: ${fmtEUR(ctx.parsed.y)}` } }
+      },
+      scales: {
+        yTL:  { type: 'linear', position: 'left',  ticks: { color: '#8a6c2e', callback: v => new Intl.NumberFormat('tr-TR').format(v) }, title: { display: true, text: 'TL', color: '#8a6c2e' } },
+        yEUR: { type: 'linear', position: 'right', ticks: { color: '#2a4d7a' }, grid: { drawOnChartArea: false }, title: { display: true, text: '€', color: '#2a4d7a' } },
+      }
+    }
+  });
+
+  const labels2 = rows.map(r => AY_KISA[(+r.ay_no) - 1] || ('Ay ' + r.ay_no));
+  const yiy = rows.map(r => +r.yiyecek_tl || 0);
+  const ice = rows.map(r => +r.icenek_tl || 0);
+
+  if (chartYilMix) chartYilMix.destroy();
+  chartYilMix = new Chart(document.getElementById('yil-chart-mix'), {
+    type: 'bar',
+    data: {
+      labels: labels2,
+      datasets: [
+        { label: 'Yiyecek', data: yiy, backgroundColor: '#8a6c2e' },
+        { label: 'İçecek',  data: ice, backgroundColor: '#2a4d7a' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } } },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, ticks: { callback: v => new Intl.NumberFormat('tr-TR').format(v) } }
+      }
+    }
+  });
+}
+
+// ── B: YOY karşılaştırma ─────────────────────────────────────────────────────
+function renderYilYoy(data) {
+  const aylar = Array.from({ length: 12 }, (_, i) => i + 1);
+  const labels = aylar.map(a => AY_KISA[a - 1]);
+  const byMap = new Map((data.bu_yil || []).map(r => [+r.ay_no, +r.toplam_tl || 0]));
+  const onMap = new Map((data.onceki_yil_veri || []).map(r => [+r.ay_no, +r.toplam_tl || 0]));
+  const by = aylar.map(a => byMap.get(a) || 0);
+  const on = aylar.map(a => onMap.get(a) || 0);
+
+  if (chartYilYoy) chartYilYoy.destroy();
+  chartYilYoy = new Chart(document.getElementById('yil-chart-yoy'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: data.onceki_yil + '', data: on, backgroundColor: '#c4a45a' },
+        { label: data.yil + '',        data: by, backgroundColor: '#2d6a4f' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } }
+      },
+      scales: { y: { ticks: { callback: v => new Intl.NumberFormat('tr-TR').format(v) } } }
+    }
+  });
+}
+
+// ── C: KATEGORİ ─────────────────────────────────────────────────────────────
+function renderYilKategoriler(data) {
+  const toplamlar = data.toplamlar || [];
+  const matris    = data.matris    || [];
+  const degisim   = data.degisim   || [];
+
+  // Pasta
+  if (chartYilKatPasta) chartYilKatPasta.destroy();
+  chartYilKatPasta = new Chart(document.getElementById('yil-chart-kat-pasta'), {
+    type: 'doughnut',
+    data: {
+      labels: toplamlar.map(k => k.kategori),
+      datasets: [{
+        data: toplamlar.map(k => +k.toplam_tl || 0),
+        backgroundColor: toplamlar.map((_, i) => COLORS[i % COLORS.length]),
+        borderWidth: 2, borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtTL(ctx.parsed)}` } }
+      }
+    }
+  });
+
+  // Kategori × Ay yığınlı (tüm kategorileri çiz; TOP-8 göster)
+  const topKat = toplamlar.slice(0, 8).map(k => k.kategori);
+  const aylar = Array.from({ length: 12 }, (_, i) => i + 1);
+  const labels = aylar.map(a => AY_KISA[a - 1]);
+  const datasets = topKat.map((kat, idx) => {
+    const rowsKat = matris.filter(m => m.kategori === kat);
+    const m = new Map(rowsKat.map(r => [+r.ay_no, +r.tutar_tl || 0]));
+    return {
+      label: kat,
+      data: aylar.map(a => m.get(a) || 0),
+      backgroundColor: COLORS[idx % COLORS.length]
+    };
+  });
+
+  if (chartYilKatStacked) chartYilKatStacked.destroy();
+  chartYilKatStacked = new Chart(document.getElementById('yil-chart-kat-stacked'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtTL(ctx.parsed.y)}` } }
+      },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, ticks: { callback: v => new Intl.NumberFormat('tr-TR').format(v) } }
+      }
+    }
+  });
+
+  // Kategori değişim tablosu
+  const tbody = document.getElementById('yil-kat-degisim-tablo');
+  if (!degisim.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+  } else {
+    tbody.innerHTML = degisim.map(r => `
+      <tr>
+        <td><strong>${r.kategori}</strong></td>
+        <td style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} → ${AY_KISA[(+r.son_ay) - 1]}</td>
+        <td style="text-align:right">${fmtTL(+r.ilk_tl || 0)}</td>
+        <td style="text-align:right">${fmtTL(+r.son_tl || 0)}</td>
+        <td style="text-align:right">${renderDelta(r.degisim_yuzde !== null ? parseFloat(r.degisim_yuzde) : null)}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+// ── D: ÜRÜN SIRALAMALARI ─────────────────────────────────────────────────────
+async function yilUrunYukle(metric) {
+  document.querySelectorAll('#page-yillik [data-urun-metric]').forEach(b => {
+    b.classList.toggle('active', b.dataset.urunMetric === metric);
+  });
+
+  const { qs } = yilParams();
+  const p = new URLSearchParams(qs);
+  p.set('metric', metric);
+  p.set('limit', '20');
+
+  try {
+    const res = await fetch('/api/yillik/urunler?' + p.toString()).then(r => r.json());
+    renderYilUrun(res, metric);
+  } catch (err) {
+    toast('Ürün listesi alınamadı: ' + err.message, 'error');
+  }
+}
+
+function renderYilUrun(res, metric) {
+  const list = res.urunler || [];
+  const kisa = s => (s && s.length > 36) ? s.slice(0, 34) + '…' : (s || '');
+  const labels = list.map(u => kisa(u.stok_mali));
+
+  let values, bgColor, valFmt, valHeader;
+  if (metric === 'harcama') {
+    values = list.map(u => +u.toplam_tl || 0);
+    bgColor = '#8a6c2e';
+    valFmt = v => fmtTL(v);
+    valHeader = 'Toplam TL';
+  } else if (metric === 'artis') {
+    values = list.map(u => parseFloat(u.degisim_yuzde) || 0);
+    bgColor = '#c44a4a';
+    valFmt = v => fmtN(v, 2) + ' %';
+    valHeader = 'Δ %';
+  } else {
+    values = list.map(u => parseFloat(u.degisim_yuzde) || 0);
+    bgColor = '#2d6a4f';
+    valFmt = v => fmtN(v, 2) + ' %';
+    valHeader = 'Δ %';
+  }
+
+  if (chartYilUrun) chartYilUrun.destroy();
+  chartYilUrun = new Chart(document.getElementById('yil-chart-urun'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: bgColor, borderRadius: 4 }] },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => valFmt(ctx.parsed.x) } }
+      },
+      scales: {
+        x: { ticks: { callback: v => metric === 'harcama' ? new Intl.NumberFormat('tr-TR').format(v) : (fmtN(v, 1) + '%') } },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  document.querySelector('#page-yillik .th-deger').textContent = valHeader;
+  const tbody = document.getElementById('yil-urun-tablo');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+  } else {
+    tbody.innerHTML = list.map((u, i) => {
+      const v = metric === 'harcama' ? (+u.toplam_tl || 0) : (parseFloat(u.degisim_yuzde) || 0);
+      const cell = metric === 'harcama' ? fmtTL(v) : renderDelta(v);
+      return `<tr>
+        <td style="color:var(--text-dim)">${i + 1}</td>
+        <td><strong>${u.stok_mali}</strong></td>
+        <td style="color:var(--text-dim);font-size:12px">${u.kategori || '—'}</td>
+        <td style="font-size:12px">${u.tip || '—'}</td>
+        <td style="text-align:right">${cell}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ── E: YIL × YIL KARŞILAŞTIRMA ──────────────────────────────────────────────
+function renderYilKarsilastirma(data) {
+  const rows = data.kategoriler || [];
+  document.getElementById('yil-karsilastirma-th-onceki').textContent = data.onceki_yil + ' TL';
+  document.getElementById('yil-karsilastirma-th-buyil').textContent  = data.yil + ' TL';
+
+  const tbody = document.getElementById('yil-karsilastirma-tablo');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.kategori}</strong></td>
+      <td style="text-align:right">${fmtTL(+r.onceki_tl || 0)}</td>
+      <td style="text-align:right">${fmtTL(+r.bu_yil_tl || 0)}</td>
+      <td style="text-align:right">${renderDelta(r.degisim_tl_yuzde !== null ? parseFloat(r.degisim_tl_yuzde) : null)}</td>
+      <td style="text-align:right">${renderDelta(r.degisim_eur_yuzde !== null ? parseFloat(r.degisim_eur_yuzde) : null)}</td>
+    </tr>
+  `).join('');
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 setupUpload();
