@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F&B Maliyet Analizi — Voyage Sorgun</title>
+<link rel="stylesheet" href="/voyage-design-system.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  .upload-zone {
+    border: 2px dashed var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 40px;
+    text-align: center;
+    transition: all .2s;
+    cursor: pointer;
+    background: var(--surface2);
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--gold-light); background: var(--gold-bg); }
+  .upload-zone .upload-icon { font-size: 32px; margin-bottom: 12px; }
+  .chart-wrap { position: relative; height: 280px; }
+  .alarm-item { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .alarm-item:last-child { border-bottom:none; }
+  .alarm-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .alarm-dot.red { background:var(--red); }
+  .alarm-dot.yellow { background:var(--yellow); }
+  .search-results td.up { color:var(--red); }
+  .search-results td.down { color:var(--green); }
+  .donem-tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:var(--gold-bg); color:var(--gold); margin:2px; }
+  .nav-section { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-xdim); padding:12px 12px 4px; font-weight:600; }
+  .esik-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .esik-row:last-child { border-bottom:none; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+  #alarm-badge { display:none; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; align-items:center; justify-content:center; margin-left:auto; }
+  #alarm-badge.show { display:flex; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-mark">V</div>
+    <div>
+      <div class="brand-name">Voyage <span>Cost</span></div>
+      <div class="brand-sub">F&B Maliyet Analizi</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">Analiz</div>
+    <a class="nav-item active" data-page="ozet" href="#">
+      <span class="nav-icon">📊</span> Genel Özet
+    </a>
+    <a class="nav-item" data-page="trend" href="#">
+      <span class="nav-icon">📈</span> Trend
+    </a>
+    <a class="nav-item" data-page="kategori" href="#">
+      <span class="nav-icon">🗂️</span> Kategoriler
+    </a>
+    <a class="nav-item" data-page="urun" href="#">
+      <span class="nav-icon">🔍</span> Ürün Ara
+    </a>
+    <div class="nav-section">Sistem</div>
+    <a class="nav-item" data-page="alarmlar" href="#">
+      <span class="nav-icon">🔔</span> Alarmlar
+      <span id="alarm-badge">0</span>
+    </a>
+    <a class="nav-item" data-page="yukle" href="#">
+      <span class="nav-icon">⬆️</span> Veri Yükle
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="user-avatar">A</div>
+      <div>
+        <div class="user-role">Ali Ozkir</div>
+        <div style="font-size:11px;color:var(--text-dim)">General Manager</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- ── GENEL ÖZET ─────────────────────────────────────────────────────── -->
+  <div id="page-ozet" class="tab-content active">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Genel Özet</div>
+        <div class="page-sub" id="ozet-subtitle">Yükleniyor...</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select class="form-select" id="ozet-donem" style="width:180px"></select>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="stats-grid" id="ozet-stats"></div>
+      <div class="grid-2" style="gap:20px">
+        <div class="card">
+          <div class="card-title">Yiyecek vs İçecek Dağılımı</div>
+          <div class="chart-wrap"><canvas id="chart-dagilim"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Pax Başına Maliyet (€)</div>
+          <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TREND ──────────────────────────────────────────────────────────── -->
+  <div id="page-trend" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Trend Analizi</div>
+        <div class="page-sub">Yıllar arası karşılaştırma</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <select class="form-select" id="trend-tip" style="width:140px">
+          <option value="yiyecek">Yiyecek</option>
+          <option value="icenek">İçecek</option>
+        </select>
+        <select class="form-select" id="trend-metrik" style="width:180px">
+          <option value="toplam_tl">Toplam TL</option>
+          <option value="toplam_eur">Toplam EUR</option>
+          <option value="toplam_pp_tl">P.P. TL</option>
+          <option value="toplam_pp_eur">P.P. EUR</option>
+          <option value="toplam_pp_gr">P.P. GR (Yiyecek)</option>
+          <option value="toplam_pp_cl">P.P. CL (İçecek)</option>
+        </select>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="card mb-20">
+        <div class="card-title">Aylık Trend</div>
+        <div class="chart-wrap" style="height:340px"><canvas id="chart-trend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Kur Etkisi (TL/€)</div>
+        <div class="chart-wrap"><canvas id="chart-kur"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KATEGORİLER ────────────────────────────────────────────────────── -->
+  <div id="page-kategori" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Kategori Dağılımı</div>
+        <div class="page-sub">Dönem bazında kategori maliyetleri</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <select class="form-select" id="kat-donem" style="width:180px"></select>
+        <select class="form-select" id="kat-tip" style="width:140px">
+          <option value="yiyecek">Yiyecek</option>
+          <option value="icenek">İçecek</option>
+        </select>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="grid-2" style="gap:20px">
+        <div class="card">
+          <div class="card-title">Kategori Pasta Grafik</div>
+          <div class="chart-wrap"><canvas id="chart-kat-pasta"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Kategori Detay</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Kategori</th><th style="text-align:right">TL</th><th style="text-align:right">EUR</th><th style="text-align:right">Pay %</th></tr></thead>
+              <tbody id="kat-tablo"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ÜRÜN ARA ────────────────────────────────────────────────────────── -->
+  <div id="page-urun" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Ürün Arama</div>
+        <div class="page-sub">Ürün bazında tarihsel karşılaştırma</div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="card mb-20">
+        <div style="display:flex;gap:12px;align-items:center">
+          <input type="text" class="form-input" id="urun-q" placeholder="Ürün adı yazın... (örn: DANA ANTRIKOT)" style="flex:1">
+          <select class="form-select" id="urun-tip" style="width:140px">
+            <option value="">Hepsi</option>
+            <option value="yiyecek">Yiyecek</option>
+            <option value="icenek">İçecek</option>
+          </select>
+          <button class="btn btn-primary" onclick="urunAra()">Ara</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" id="urun-baslik">Sonuçlar</div>
+        <div class="chart-wrap mb-20" style="display:none" id="urun-chart-wrap">
+          <canvas id="chart-urun"></canvas>
+        </div>
+        <div class="table-wrap">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Dönem</th><th>Tip</th><th>Kategori</th>
+                <th style="text-align:right">Miktar</th><th>Birim</th>
+                <th style="text-align:right">Birim Fyt</th>
+                <th style="text-align:right">Tutar TL</th>
+                <th style="text-align:right">P.P. TL</th>
+                <th style="text-align:right">P.P. €</th>
+                <th style="text-align:right">Kur</th>
+              </tr>
+            </thead>
+            <tbody id="urun-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ALARMLAR ────────────────────────────────────────────────────────── -->
+  <div id="page-alarmlar" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Alarmlar & Eşikler</div>
+        <div class="page-sub">Son dönem tetikleyici kontrolleri</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('modal-esik').classList.add('open')">+ Eşik Ekle</button>
+    </div>
+    <div class="page-body">
+      <div class="card mb-20">
+        <div class="card-title">🔴 Tetiklenen Alarmlar</div>
+        <div id="alarm-listesi"><div class="loading"><div class="spinner"></div> Kontrol ediliyor...</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Tanımlı Eşikler</div>
+        <div id="esik-listesi"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── VERİ YÜKLE ─────────────────────────────────────────────────────── -->
+  <div id="page-yukle" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Veri Yükle</div>
+        <div class="page-sub">fb_tarama.py ile üretilen CSV dosyasını yükleyin</div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="card" style="max-width:600px">
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-icon">📂</div>
+          <div style="font-weight:600;margin-bottom:6px">CSV dosyasını buraya sürükleyin</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-bottom:16px">veya tıklayarak seçin</div>
+          <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Dosya Seç</button>
+          <input type="file" id="file-input" accept=".csv" style="display:none">
+        </div>
+        <div id="upload-sonuc" style="margin-top:16px;display:none"></div>
+        <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:8px">YÜKLENMİŞ DÖNEMLER</div>
+          <div id="yuklu-donemler"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── MODAL: Eşik Ekle ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-esik">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Yeni Alarm Eşiği</div>
+      <button class="modal-close" onclick="document.getElementById('modal-esik').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Alarm Adı</label>
+          <input class="form-input" id="esik-ad" placeholder="örn: P.P. TL yiyecek yüksek">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tip</label>
+          <select class="form-select" id="esik-tip">
+            <option value="">Hepsi</option>
+            <option value="yiyecek">Yiyecek</option>
+            <option value="icenek">İçecek</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Metrik</label>
+          <select class="form-select" id="esik-metrik">
+            <option value="pp_tl">P.P. TL</option>
+            <option value="pp_eur">P.P. EUR</option>
+            <option value="pp_gr">P.P. GR</option>
+            <option value="pp_cl">P.P. CL</option>
+            <option value="tutar_tl">Toplam TL</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Eşik Değer</label>
+          <input class="form-input" id="esik-deger" type="number" placeholder="örn: 150">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Yön</label>
+          <select class="form-select" id="esik-yon">
+            <option value="yukari">Yukarı aşarsa uyar</option>
+            <option value="asagi">Aşağı düşerse uyar</option>
+          </select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Kategori (opsiyonel)</label>
+          <input class="form-input" id="esik-kategori" placeholder="Boş bırakılırsa tüm kategoriler">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-esik').classList.remove('open')">İptal</button>
+      <button class="btn btn-primary" onclick="esikKaydet()">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let ozetData = [], donemler = [];
+let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
+
+const COLORS = [
+  '#8a6c2e','#2d6a4f','#2a4d7a','#7a2d2d','#92672a',
+  '#c4a45a','#5a9e7a','#6a8dc4','#c47a7a','#d4a45a',
+  '#4a3a1e','#1d4a33','#1a3050','#4a1d1d','#5a3a10',
+];
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+  el.addEventListener('click', e => {
+    e.preventDefault();
+    const page = el.dataset.page;
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    if (page === 'trend') renderTrend();
+    if (page === 'kategori') renderKategori();
+    if (page === 'alarmlar') { loadAlarmlar(); loadEsikler(); }
+    if (page === 'yukle') loadYukluDonemler();
+  });
+});
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, tip = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${tip}`;
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── Formatters ─────────────────────────────────────────────────────────────────
+const fmtTL  = n => new Intl.NumberFormat('tr-TR', { style:'currency', currency:'TRY', maximumFractionDigits:0 }).format(n);
+const fmtEUR = n => new Intl.NumberFormat('tr-TR', { style:'currency', currency:'EUR', minimumFractionDigits:2, maximumFractionDigits:2 }).format(n);
+const fmtN   = (n, d=1) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits:d }).format(n);
+
+// ── Başlangıç ─────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const [ozet, don] = await Promise.all([
+      fetch('/api/ozet').then(r => r.json()),
+      fetch('/api/donemler').then(r => r.json())
+    ]);
+    ozetData = ozet;
+    donemler = don;
+
+    // Dönem select'lerini doldur
+    const donemOpts = don.map(d => `<option value="${d.tarih_str}">${d.ay} ${d.yil}</option>`).join('');
+    ['ozet-donem','kat-donem'].forEach(id => {
+      document.getElementById(id).innerHTML = donemOpts;
+    });
+
+    renderOzet();
+    checkAlarmBadge();
+  } catch (e) {
+    toast('Veri yüklenemedi. CSV yüklenmiş mi?', 'error');
+  }
+}
+
+// ── Özet ──────────────────────────────────────────────────────────────────────
+function renderOzet() {
+  const tarih = document.getElementById('ozet-donem').value;
+  const rows = ozetData.filter(r => r.tarih_str === tarih);
+  const yiy = rows.find(r => r.tip === 'yiyecek') || {};
+  const ice = rows.find(r => r.tip === 'icenek')  || {};
+  const don = donemler.find(d => d.tarih_str === tarih) || {};
+
+  const toplamTL  = (+yiy.toplam_tl || 0) + (+ice.toplam_tl || 0);
+  const toplamEUR = (+yiy.toplam_eur || 0) + (+ice.toplam_eur || 0);
+  const ppTL      = (+yiy.toplam_pp_tl || 0) + (+ice.toplam_pp_tl || 0);
+  const ppEUR     = (+yiy.toplam_pp_eur || 0) + (+ice.toplam_pp_eur || 0);
+
+  document.getElementById('ozet-subtitle').textContent =
+    `${don.ay || ''} ${don.yil || ''} · ${fmtN(don.cost_pax || 0, 0)} pax · Kur: ${fmtN(don.kur || 0, 4)} TL/€`;
+
+  document.getElementById('ozet-stats').innerHTML = `
+    <div class="stat-card gold">
+      <div class="stat-value">${fmtEUR(toplamEUR)}</div>
+      <div class="stat-label">Toplam F&B Maliyet (€)</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-value">${fmtTL(toplamTL)}</div>
+      <div class="stat-label">Toplam F&B Maliyet (TL)</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-value">${fmtEUR(ppEUR)}</div>
+      <div class="stat-label">Pax Başına Toplam (€)</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-value">${fmtEUR(+yiy.toplam_pp_eur || 0)}</div>
+      <div class="stat-label">Pax Başına Yiyecek (€)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${fmtEUR(+ice.toplam_pp_eur || 0)}</div>
+      <div class="stat-label">Pax Başına İçecek (€)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)}g</div>
+      <div class="stat-label">Pax Başına Yiyecek (GR)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${fmtN(+ice.toplam_pp_cl || 0, 1)}cl</div>
+      <div class="stat-label">Pax Başına İçecek (CL)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">${fmtN(don.kur || 0, 2)}</div>
+      <div class="stat-label">Kur (TL/€)</div>
+    </div>
+  `;
+
+  // Dağılım pasta
+  if (chartDagilim) chartDagilim.destroy();
+  chartDagilim = new Chart(document.getElementById('chart-dagilim'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Yiyecek', 'İçecek'],
+      datasets: [{ data: [+yiy.toplam_eur || 0, +ice.toplam_eur || 0], backgroundColor: ['#8a6c2e','#2a4d7a'], borderWidth:0 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } }
+  });
+
+  // PP EUR trend (tüm dönemler, sadece bu tip)
+  const donemSirali = [...new Set(ozetData.map(r => r.tarih_str))].sort();
+  const yiyPP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='yiyecek'); return r ? +r.toplam_pp_eur : null; });
+  const icePP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='icenek'); return r ? +r.toplam_pp_eur : null; });
+
+  if (chartPpEur) chartPpEur.destroy();
+  chartPpEur = new Chart(document.getElementById('chart-pp-eur'), {
+    type: 'line',
+    data: {
+      labels: donemSirali,
+      datasets: [
+        { label:'Yiyecek P.P. €', data: yiyPP, borderColor:'#8a6c2e', backgroundColor:'rgba(138,108,46,.1)', tension:.3, fill:true },
+        { label:'İçecek P.P. €',  data: icePP, borderColor:'#2a4d7a', backgroundColor:'rgba(42,77,122,.1)', tension:.3, fill:true }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      scales:{ y:{ beginAtZero:false } } }
+  });
+}
+
+document.getElementById('ozet-donem').addEventListener('change', renderOzet);
+
+// ── Trend ──────────────────────────────────────────────────────────────────────
+function renderTrend() {
+  const tip    = document.getElementById('trend-tip').value;
+  const metrik = document.getElementById('trend-metrik').value;
+  const filtered = ozetData.filter(r => r.tip === tip).sort((a,b) => a.yil-b.yil || a.ay_no-b.ay_no);
+
+  const labels  = filtered.map(r => r.tarih_str);
+  const values  = filtered.map(r => +r[metrik] || 0);
+
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart(document.getElementById('chart-trend'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: metrik, data: values, backgroundColor: COLORS[0], borderRadius:4 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ y:{ beginAtZero:false } } }
+  });
+
+  // Kur grafiği
+  const kurData = donemler.sort((a,b) => a.yil-b.yil || a.ay_no-b.ay_no);
+  if (chartKur) chartKur.destroy();
+  chartKur = new Chart(document.getElementById('chart-kur'), {
+    type: 'line',
+    data: {
+      labels: kurData.map(d => d.tarih_str),
+      datasets: [{ label:'Kur (TL/€)', data: kurData.map(d => +d.kur), borderColor:'#92672a', backgroundColor:'rgba(146,103,42,.1)', tension:.3, fill:true }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+      scales:{ y:{ beginAtZero:false } } }
+  });
+}
+
+['trend-tip','trend-metrik'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderTrend);
+});
+
+// ── Kategoriler ────────────────────────────────────────────────────────────────
+async function renderKategori() {
+  const tarih = document.getElementById('kat-donem').value;
+  const tip   = document.getElementById('kat-tip').value;
+  if (!tarih) return;
+
+  const rows = await fetch(`/api/kategoriler?tarih=${tarih}&tip=${tip}`).then(r => r.json());
+  const toplam = rows.reduce((s,r) => s + +r.tutar_eur, 0);
+
+  if (chartKatPasta) chartKatPasta.destroy();
+  chartKatPasta = new Chart(document.getElementById('chart-kat-pasta'), {
+    type: 'doughnut',
+    data: {
+      labels: rows.slice(0,10).map(r => r.kategori?.split(' - ')[1] || r.kategori),
+      datasets: [{ data: rows.slice(0,10).map(r => +r.tutar_eur), backgroundColor: COLORS, borderWidth:0 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'right',labels:{font:{size:11}}}} }
+  });
+
+  document.getElementById('kat-tablo').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.kategori?.split(' - ').slice(1).join(' ') || r.kategori}</td>
+      <td style="text-align:right">${fmtTL(r.tutar_tl)}</td>
+      <td style="text-align:right">${fmtEUR(r.tutar_eur)}</td>
+      <td style="text-align:right">${fmtN((+r.tutar_eur/toplam)*100, 1)}%</td>
+    </tr>
+  `).join('');
+}
+
+['kat-donem','kat-tip'].forEach(id => {
+  document.getElementById(id).addEventListener('change', renderKategori);
+});
+
+// ── Ürün Arama ────────────────────────────────────────────────────────────────
+async function urunAra() {
+  const q   = document.getElementById('urun-q').value.trim();
+  const tip = document.getElementById('urun-tip').value;
+  if (!q) return;
+
+  const rows = await fetch(`/api/urun?q=${encodeURIComponent(q)}&tip=${tip}`).then(r => r.json());
+  document.getElementById('urun-baslik').textContent = `${rows.length} sonuç: "${q}"`;
+
+  // Trend grafiği
+  const donemSet = [...new Set(rows.map(r => r.tarih_str))].sort();
+  const urunSet  = [...new Set(rows.map(r => r.stok_mali))].slice(0, 5);
+  const wrap = document.getElementById('urun-chart-wrap');
+
+  if (urunSet.length > 0) {
+    wrap.style.display = 'block';
+    if (chartUrun) chartUrun.destroy();
+    chartUrun = new Chart(document.getElementById('chart-urun'), {
+      type: 'line',
+      data: {
+        labels: donemSet,
+        datasets: urunSet.map((u, i) => ({
+          label: u.length > 40 ? u.substring(0,40)+'...' : u,
+          data: donemSet.map(d => { const r = rows.find(x => x.tarih_str===d && x.stok_mali===u); return r ? +r.pp_tl : null; }),
+          borderColor: COLORS[i], tension:.3, spanGaps:true
+        }))
+      },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{ y:{ beginAtZero:false } } }
+    });
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  document.getElementById('urun-tablo').innerHTML = rows.map(r => `
+    <tr>
+      <td>${r.tarih_str}</td>
+      <td><span class="badge ${r.tip==='yiyecek' ? 'badge-gold' : 'badge-blue'}">${r.tip}</span></td>
+      <td style="font-size:11px">${r.kategori?.split(' - ').slice(1).join(' ') || '-'}</td>
+      <td style="text-align:right">${fmtN(r.tuk_miktar, 2)}</td>
+      <td>${r.birim}</td>
+      <td style="text-align:right">${fmtTL(r.birim_fiyat)}</td>
+      <td style="text-align:right">${fmtTL(r.tutar_tl)}</td>
+      <td style="text-align:right">${fmtTL(r.pp_tl)}</td>
+      <td style="text-align:right">${fmtEUR(r.pp_eur)}</td>
+      <td style="text-align:right">${fmtN(r.kur, 2)}</td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('urun-q').addEventListener('keydown', e => { if (e.key==='Enter') urunAra(); });
+
+// ── Alarmlar ──────────────────────────────────────────────────────────────────
+async function loadAlarmlar() {
+  const rows = await fetch('/api/alarmlar').then(r => r.json());
+  const el = document.getElementById('alarm-listesi');
+  if (!rows.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text-dim);font-size:13px">✅ Hiçbir alarm tetiklenmedi</div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => `
+    <div class="alarm-item">
+      <div class="alarm-dot red"></div>
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px">${r.alarm}</div>
+        <div style="font-size:12px;color:var(--text-dim)">${r.donem} · ${r.metrik}: <strong>${fmtN(r.gerceklesen,2)}</strong> (eşik: ${fmtN(r.esik,2)})</div>
+      </div>
+      <span class="badge badge-red">Alarm</span>
+    </div>
+  `).join('');
+}
+
+async function checkAlarmBadge() {
+  try {
+    const rows = await fetch('/api/alarmlar').then(r => r.json());
+    const badge = document.getElementById('alarm-badge');
+    if (rows.length > 0) {
+      badge.textContent = rows.length;
+      badge.classList.add('show');
+    }
+  } catch(e) {}
+}
+
+async function loadEsikler() {
+  const rows = await fetch('/api/alarmlar/esikler').then(r => r.json());
+  document.getElementById('esik-listesi').innerHTML = rows.length
+    ? rows.map(r => `
+      <div class="esik-row">
+        <div style="flex:1">
+          <span style="font-weight:600">${r.ad}</span>
+          <span class="badge badge-gray" style="margin-left:6px">${r.metrik}</span>
+          ${r.tip ? `<span class="badge badge-gold" style="margin-left:4px">${r.tip}</span>` : ''}
+        </div>
+        <div style="font-size:12px;color:var(--text-dim)">
+          ${r.yon === 'yukari' ? '↑' : '↓'} ${fmtN(r.esik_deger, 2)}
+        </div>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="esikSil(${r.id})">✕</button>
+      </div>
+    `).join('')
+    : '<div style="padding:16px;color:var(--text-dim);font-size:13px">Henüz eşik tanımlanmamış</div>';
+}
+
+async function esikKaydet() {
+  const body = {
+    ad: document.getElementById('esik-ad').value,
+    tip: document.getElementById('esik-tip').value || null,
+    metrik: document.getElementById('esik-metrik').value,
+    kategori: document.getElementById('esik-kategori').value || null,
+    esik_deger: parseFloat(document.getElementById('esik-deger').value),
+    yon: document.getElementById('esik-yon').value
+  };
+  if (!body.ad || !body.esik_deger) return toast('Ad ve eşik değeri zorunlu', 'error');
+  await fetch('/api/alarmlar/esikler', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  document.getElementById('modal-esik').classList.remove('open');
+  toast('Eşik eklendi', 'success');
+  loadEsikler();
+}
+
+async function esikSil(id) {
+  await fetch(`/api/alarmlar/esikler/${id}`, { method:'DELETE' });
+  loadEsikler();
+}
+
+// ── CSV Upload ────────────────────────────────────────────────────────────────
+function setupUpload() {
+  const zone  = document.getElementById('upload-zone');
+  const input = document.getElementById('file-input');
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); uploadFile(e.dataTransfer.files[0]); });
+  input.addEventListener('change', () => uploadFile(input.files[0]));
+}
+
+async function uploadFile(file) {
+  if (!file) return;
+  const sonuc = document.getElementById('upload-sonuc');
+  sonuc.style.display = 'block';
+  sonuc.innerHTML = '<div class="loading"><div class="spinner"></div> Yükleniyor...</div>';
+
+  const fd = new FormData();
+  fd.append('csv', file);
+
+  try {
+    const res = await fetch('/api/upload', { method:'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      sonuc.innerHTML = `<div class="toast toast-success">${data.mesaj}</div>`;
+      toast(data.mesaj, 'success');
+      init(); // yenile
+      loadYukluDonemler();
+    } else {
+      sonuc.innerHTML = `<div class="toast toast-error">${data.error}</div>`;
+    }
+  } catch(e) {
+    sonuc.innerHTML = `<div class="toast toast-error">Yükleme hatası: ${e.message}</div>`;
+  }
+}
+
+async function loadYukluDonemler() {
+  const rows = await fetch('/api/donemler').then(r => r.json()).catch(() => []);
+  document.getElementById('yuklu-donemler').innerHTML = rows.length
+    ? rows.map(d => `<span class="donem-tag">${d.ay} ${d.yil}</span>`).join('')
+    : '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+setupUpload();
+init();
+</script>
+</body>
+</html>

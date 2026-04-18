@@ -1,0 +1,63 @@
+# ── Node.js ───────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ── Ortam değişkenleri / Gizli bilgiler ───────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+*.pem
+*.key
+
+# ── Uygulama dosyaları ────────────────────────────────────────────────────────
+uploads/
+*.csv
+tmp/
+temp/
+dist/
+build/
+
+# ── Loglar ────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Veritabanı yedekleri ──────────────────────────────────────────────────────
+*.sql.bak
+*.dump
+*.backup
+
+# ── IDE / Editör ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── İşletim sistemi ───────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Test / Coverage ───────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ── Cursor / AI araçları ──────────────────────────────────────────────────────
+.cursor/
+.codex/
