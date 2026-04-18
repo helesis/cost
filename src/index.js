@@ -220,7 +220,7 @@ app.post('/api/upload', upload.single('csv'), async (req, res) => {
             parseFloat(r.tuk_miktar) || 0, parseFloat(r.birim_fiyat) || 0,
             parseFloat(r.tutar_tl) || 0, parseFloat(r.tutar_eur) || 0,
             parseFloat(r.pp_gr) || 0, parseFloat(r.pp_cl) || 0,
-            parseFloat(r.pp_tl) || 0, parseFloat(r.tutar_eur) || 0
+            parseFloat(r.pp_tl) || 0, parseFloat(r.pp_eur) || 0
           );
           p += 21;
         }

@@ -54,6 +54,13 @@
     width: 40px; height: 40px; margin: 0 auto 12px; display: block; color: var(--gold); stroke-width: 1.6;
   }
 
+  /* Sortable table headers */
+  .search-results th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .search-results th.sortable:hover { color: var(--gold); }
+  .search-results th.sortable .sort-ind { display: inline-block; margin-left: 4px; opacity: .35; font-size: 10px; transition: opacity .15s, color .15s; }
+  .search-results th.sortable.asc .sort-ind,
+  .search-results th.sortable.desc .sort-ind { opacity: 1; color: var(--gold); }
+
   .upload-zone {
     border: 2px dashed var(--border2);
     border-radius: var(--radius-lg);
@@ -448,11 +455,11 @@
           <table class="search-results">
             <thead>
               <tr>
-                <th>Kategori</th>
-                <th>Aralık</th>
-                <th style="text-align:right" id="yil-kat-th-ilk">İlk Ay</th>
-                <th style="text-align:right" id="yil-kat-th-son">Son Ay</th>
-                <th style="text-align:right">Δ %</th>
+                <th class="sortable" data-sort-type="text">Kategori</th>
+                <th class="sortable" data-sort-type="num">Aralık</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right" id="yil-kat-th-ilk">İlk Ay</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right" id="yil-kat-th-son">Son Ay</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right">Δ %</th>
               </tr>
             </thead>
             <tbody id="yil-kat-degisim-tablo"></tbody>
@@ -476,10 +483,10 @@
             <thead>
               <tr>
                 <th>#</th>
-                <th>Ürün</th>
-                <th>Kategori</th>
-                <th>Tip</th>
-                <th class="th-deger" style="text-align:right">Değer</th>
+                <th class="sortable" data-sort-type="text">Ürün</th>
+                <th class="sortable" data-sort-type="text">Kategori</th>
+                <th class="sortable" data-sort-type="text">Tip</th>
+                <th class="sortable th-deger" data-sort-type="num" style="text-align:right">Değer</th>
               </tr>
             </thead>
             <tbody id="yil-urun-tablo"></tbody>
@@ -494,10 +501,10 @@
           <table class="search-results">
             <thead>
               <tr>
-                <th>Kategori</th>
-                <th style="text-align:right" id="yil-karsilastirma-th-onceki">Önceki Yıl</th>
-                <th style="text-align:right" id="yil-karsilastirma-th-buyil">Bu Yıl</th>
-                <th style="text-align:right" id="yil-karsilastirma-th-delta">Δ %</th>
+                <th class="sortable" data-sort-type="text">Kategori</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right" id="yil-karsilastirma-th-onceki">Önceki Yıl</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right" id="yil-karsilastirma-th-buyil">Bu Yıl</th>
+                <th class="sortable" data-sort-type="num" style="text-align:right" id="yil-karsilastirma-th-delta">Δ %</th>
               </tr>
             </thead>
             <tbody id="yil-karsilastirma-tablo"></tbody>
@@ -621,6 +628,76 @@ let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
 
 // ── Lucide refresh helper ─────────────────────────────────────────────────────
 function vcLucide() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
+
+// ── Sıralanabilir tablo başlıkları ────────────────────────────────────────────
+function vcSortTableBody(table, colIdx, dir, type) {
+  const tbody = table.tBodies[0];
+  if (!tbody) return;
+  const rows = Array.from(tbody.rows).filter(r => !r.dataset.noSort && r.cells.length > colIdx);
+  if (rows.length < 2) return;
+  const sign = dir === 'asc' ? 1 : -1;
+  const getVal = (row) => {
+    const cell = row.cells[colIdx];
+    if (!cell) return type === 'num' ? -Infinity : '';
+    const sv = cell.getAttribute('data-sort-value');
+    if (sv !== null) {
+      return type === 'num' ? (parseFloat(sv) || 0) : sv.toLocaleLowerCase('tr');
+    }
+    const txt = (cell.textContent || '').trim();
+    if (type === 'num') {
+      const n = parseFloat(txt.replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, ''));
+      return isNaN(n) ? -Infinity : n;
+    }
+    return txt.toLocaleLowerCase('tr');
+  };
+  rows.sort((a, b) => {
+    const va = getVal(a), vb = getVal(b);
+    if (va < vb) return -1 * sign;
+    if (va > vb) return  1 * sign;
+    return 0;
+  });
+  const frag = document.createDocumentFragment();
+  rows.forEach(r => frag.appendChild(r));
+  tbody.appendChild(frag);
+}
+
+function vcMakeSortable(table) {
+  if (!table) return;
+  const thr = table.tHead && table.tHead.rows[0];
+  if (!thr) return;
+  Array.from(thr.cells).forEach((th, idx) => {
+    if (!th.classList.contains('sortable')) return;
+    if (!th.querySelector('.sort-ind')) {
+      const ind = document.createElement('span');
+      ind.className = 'sort-ind';
+      ind.textContent = '↕';
+      th.appendChild(ind);
+    }
+    if (!th.dataset.sortBound) {
+      th.dataset.sortBound = '1';
+      th.addEventListener('click', () => {
+        const cur = th.classList.contains('asc') ? 'asc' : (th.classList.contains('desc') ? 'desc' : null);
+        const next = cur === 'asc' ? 'desc' : 'asc';
+        Array.from(thr.cells).forEach(t => {
+          t.classList.remove('asc', 'desc');
+          const i = t.querySelector('.sort-ind');
+          if (i) i.textContent = '↕';
+        });
+        th.classList.add(next);
+        const i = th.querySelector('.sort-ind');
+        if (i) i.textContent = next === 'asc' ? '↑' : '↓';
+        vcSortTableBody(table, idx, next, th.dataset.sortType || 'text');
+      });
+    }
+    // Re-render sonrası seçili sıralamayı koru
+    if (th.classList.contains('asc') || th.classList.contains('desc')) {
+      const dir = th.classList.contains('asc') ? 'asc' : 'desc';
+      const i = th.querySelector('.sort-ind');
+      if (i) i.textContent = dir === 'asc' ? '↑' : '↓';
+      vcSortTableBody(table, idx, dir, th.dataset.sortType || 'text');
+    }
+  });
+}
 
 // ── Para Birimi (Global) ──────────────────────────────────────────────────────
 let vcCurrency = (localStorage.getItem('vc_currency') === 'EUR') ? 'EUR' : 'TL';
@@ -1612,15 +1689,17 @@ function renderYilKategoriler(data) {
       const ilk = eur ? +r.ilk_eur || 0 : +r.ilk_tl || 0;
       const son = eur ? +r.son_eur || 0 : +r.son_tl || 0;
       const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
+      const dltN = (dlt !== null && dlt !== undefined) ? parseFloat(dlt) : null;
       return `<tr>
         <td><strong>${r.kategori}</strong></td>
-        <td style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} <i data-lucide="arrow-right" class="date-arrow"></i> ${AY_KISA[(+r.son_ay) - 1]}</td>
-        <td style="text-align:right">${fmtCur(ilk)}</td>
-        <td style="text-align:right">${fmtCur(son)}</td>
-        <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+        <td data-sort-value="${+r.ilk_ay || 0}" style="color:var(--text-dim);font-size:12px">${AY_KISA[(+r.ilk_ay) - 1]} <i data-lucide="arrow-right" class="date-arrow"></i> ${AY_KISA[(+r.son_ay) - 1]}</td>
+        <td data-sort-value="${ilk}" style="text-align:right">${fmtCur(ilk)}</td>
+        <td data-sort-value="${son}" style="text-align:right">${fmtCur(son)}</td>
+        <td data-sort-value="${dltN === null ? -Infinity : dltN}" style="text-align:right">${renderDelta(dltN)}</td>
       </tr>`;
     }).join('');
     vcLucide();
+    vcMakeSortable(tbody.closest('table'));
   }
 }
 
@@ -1692,22 +1771,24 @@ function renderYilUrun(res, metric) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
   } else {
     tbody.innerHTML = list.map((u, i) => {
-      let cell;
+      let cell, sortVal;
       if (metric === 'harcama') {
-        cell = fmtCur(pickCur(u, 'toplam'));
+        sortVal = pickCur(u, 'toplam') || 0;
+        cell = fmtCur(sortVal);
       } else {
-        const v = parseFloat(eur ? u.degisim_eur_yuzde : u.degisim_yuzde) || 0;
-        cell = renderDelta(v);
+        sortVal = parseFloat(eur ? u.degisim_eur_yuzde : u.degisim_yuzde) || 0;
+        cell = renderDelta(sortVal);
       }
       return `<tr>
         <td style="color:var(--text-dim)">${i + 1}</td>
         <td><strong>${u.stok_mali}</strong></td>
         <td style="color:var(--text-dim);font-size:12px">${u.kategori || '—'}</td>
         <td style="font-size:12px">${u.tip || '—'}</td>
-        <td style="text-align:right">${cell}</td>
+        <td data-sort-value="${sortVal}" style="text-align:right">${cell}</td>
       </tr>`;
     }).join('');
     vcLucide();
+    vcMakeSortable(tbody.closest('table'));
   }
 }
 
@@ -1728,14 +1809,16 @@ function renderYilKarsilastirma(data) {
     const onceki = eur ? +r.onceki_eur || 0 : +r.onceki_tl || 0;
     const buYil  = eur ? +r.bu_yil_eur || 0 : +r.bu_yil_tl || 0;
     const dlt    = eur ? r.degisim_eur_yuzde : r.degisim_tl_yuzde;
+    const dltN   = (dlt !== null && dlt !== undefined) ? parseFloat(dlt) : null;
     return `<tr>
       <td><strong>${r.kategori}</strong></td>
-      <td style="text-align:right">${fmtCur(onceki)}</td>
-      <td style="text-align:right">${fmtCur(buYil)}</td>
-      <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+      <td data-sort-value="${onceki}" style="text-align:right">${fmtCur(onceki)}</td>
+      <td data-sort-value="${buYil}" style="text-align:right">${fmtCur(buYil)}</td>
+      <td data-sort-value="${dltN === null ? -Infinity : dltN}" style="text-align:right">${renderDelta(dltN)}</td>
     </tr>`;
   }).join('');
   vcLucide();
+  vcMakeSortable(tbody.closest('table'));
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
