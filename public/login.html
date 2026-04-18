@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voyage Cost — Giriş</title>
+<link rel="stylesheet" href="/voyage-design-system.css">
+<style>
+  :root {
+    --navy:        #0f1e3a;
+    --navy-2:      #1a2d52;
+    --navy-3:      #24406e;
+    --navy-border: #2d4a7a;
+    --text-light:  #e8ecf3;
+    --text-dim-l:  #9aa7bd;
+  }
+
+  body {
+    background: radial-gradient(circle at 20% 20%, var(--navy-2) 0%, var(--navy) 60%, #080e1c 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: var(--text-light);
+  }
+
+  .login-wrap {
+    width: 100%;
+    max-width: 420px;
+  }
+
+  .brand {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .brand-mark {
+    width: 56px; height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 28px; font-weight: 600;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(138, 108, 46, 0.3);
+  }
+  .brand-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 500;
+    color: var(--text-light);
+    letter-spacing: 0.5px;
+  }
+  .brand-name span { color: var(--gold-light); }
+  .brand-sub {
+    font-size: 12px;
+    color: var(--text-dim-l);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 6px;
+  }
+
+  .login-card {
+    background: rgba(26, 45, 82, 0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--navy-border);
+    border-radius: var(--radius-lg);
+    padding: 36px 32px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  }
+
+  .login-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-light);
+    margin-bottom: 6px;
+  }
+  .login-desc {
+    font-size: 13px;
+    color: var(--text-dim-l);
+    margin-bottom: 24px;
+  }
+
+  .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim-l);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .login-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: rgba(15, 30, 58, 0.6);
+    border: 1px solid var(--navy-border);
+    border-radius: var(--radius);
+    color: var(--text-light);
+    font-family: 'Mulish', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .login-input:focus {
+    outline: none;
+    border-color: var(--gold-light);
+    background: rgba(15, 30, 58, 0.9);
+    box-shadow: 0 0 0 3px rgba(196, 164, 90, 0.15);
+  }
+  .login-input::placeholder { color: #5e6b85; }
+
+  .otp-input {
+    text-align: center;
+    font-size: 22px;
+    letter-spacing: 10px;
+    font-weight: 600;
+    padding: 16px;
+  }
+
+  .btn-login {
+    width: 100%;
+    padding: 13px;
+    background: linear-gradient(135deg, var(--gold) 0%, #a37f35 100%);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-family: 'Mulish', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .btn-login:hover:not(:disabled) {
+    background: linear-gradient(135deg, #a37f35 0%, var(--gold-light) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(138, 108, 46, 0.35);
+  }
+  .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .btn-back {
+    background: none;
+    border: none;
+    color: var(--text-dim-l);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-top: 14px;
+    text-decoration: underline;
+    font-family: inherit;
+  }
+  .btn-back:hover { color: var(--gold-light); }
+
+  .msg {
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .msg.show { display: block; }
+  .msg.error {
+    background: rgba(122, 45, 45, 0.2);
+    border: 1px solid rgba(200, 100, 100, 0.3);
+    color: #f0b5b5;
+  }
+  .msg.success {
+    background: rgba(45, 106, 79, 0.2);
+    border: 1px solid rgba(100, 200, 150, 0.3);
+    color: #a6e0c5;
+  }
+
+  .email-display {
+    font-size: 13px;
+    color: var(--gold-light);
+    font-weight: 500;
+    margin-top: 4px;
+  }
+
+  .footer-note {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim-l);
+    margin-top: 24px;
+    letter-spacing: 0.05em;
+  }
+
+  .hidden { display: none; }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="brand">
+    <div class="brand-mark">V</div>
+    <div class="brand-name">Voyage <span>Cost</span></div>
+    <div class="brand-sub">F&amp;B Maliyet Analizi</div>
+  </div>
+
+  <div class="login-card">
+
+    <!-- Adım 1: E-posta -->
+    <div id="step-email">
+      <div class="login-title">Giriş Yap</div>
+      <div class="login-desc">E-posta adresinize tek kullanımlık bir kod göndereceğiz.</div>
+
+      <div id="msg-email" class="msg"></div>
+
+      <form id="form-email">
+        <div class="form-group">
+          <label class="form-label" for="email">E-posta Adresi</label>
+          <input type="email" id="email" class="login-input" placeholder="ornek@voyagehotel.com" autocomplete="email" required>
+        </div>
+        <button type="submit" class="btn-login" id="btn-send">Kod Gönder</button>
+      </form>
+    </div>
+
+    <!-- Adım 2: OTP -->
+    <div id="step-otp" class="hidden">
+      <div class="login-title">Doğrulama Kodu</div>
+      <div class="login-desc">
+        Gönderdiğimiz 6 haneli kodu girin.
+        <div class="email-display" id="email-display"></div>
+      </div>
+
+      <div id="msg-otp" class="msg"></div>
+
+      <form id="form-otp">
+        <div class="form-group">
+          <label class="form-label" for="kod">6 Haneli Kod</label>
+          <input type="text" id="kod" class="login-input otp-input" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="••••••" autocomplete="one-time-code" required>
+        </div>
+        <button type="submit" class="btn-login" id="btn-verify">Giriş Yap</button>
+        <button type="button" class="btn-back" id="btn-back">← Farklı e-posta kullan</button>
+      </form>
+    </div>
+
+  </div>
+
+  <div class="footer-note">© Voyage Sorgun — İç Sistem</div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  if (localStorage.getItem('vc_token')) {
+    window.location.href = '/';
+  }
+
+  const stepEmail = $('step-email');
+  const stepOtp   = $('step-otp');
+  let currentEmail = '';
+
+  function showMsg(el, text, type) {
+    el.textContent = text;
+    el.className = 'msg show ' + type;
+  }
+  function hideMsg(el) { el.className = 'msg'; }
+
+  function setLoading(btn, loading, defaultText) {
+    if (loading) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Gönderiliyor...';
+    } else {
+      btn.disabled = false;
+      btn.textContent = defaultText;
+    }
+  }
+
+  $('form-email').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('email').value.trim();
+    const msg = $('msg-email');
+    const btn = $('btn-send');
+    hideMsg(msg);
+    setLoading(btn, true);
+
+    try {
+      const r = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Bir hata oluştu');
+
+      currentEmail = email;
+      $('email-display').textContent = email;
+      stepEmail.classList.add('hidden');
+      stepOtp.classList.remove('hidden');
+      setTimeout(() => $('kod').focus(), 100);
+    } catch (err) {
+      showMsg(msg, err.message, 'error');
+    } finally {
+      setLoading(btn, false, 'Kod Gönder');
+    }
+  });
+
+  $('form-otp').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const kod = $('kod').value.trim();
+    const msg = $('msg-otp');
+    const btn = $('btn-verify');
+    hideMsg(msg);
+
+    if (!/^\d{6}$/.test(kod)) {
+      showMsg(msg, 'Kod 6 haneli olmalı', 'error');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Doğrulanıyor...';
+
+    try {
+      const r = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: currentEmail, kod })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Kod doğrulanamadı');
+
+      localStorage.setItem('vc_token', data.token);
+      localStorage.setItem('vc_email', data.email);
+      showMsg(msg, 'Giriş başarılı, yönlendiriliyorsunuz...', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 600);
+    } catch (err) {
+      showMsg(msg, err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Giriş Yap';
+    }
+  });
+
+  $('btn-back').addEventListener('click', () => {
+    stepOtp.classList.add('hidden');
+    stepEmail.classList.remove('hidden');
+    $('kod').value = '';
+    hideMsg($('msg-otp'));
+    $('email').focus();
+  });
+
+  $('kod').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '');
+  });
+</script>
+
+</body>
+</html>

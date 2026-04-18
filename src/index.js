@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -7,23 +9,149 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const { parse } = require('csv-parse');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const { Resend } = require('resend');
 
 const app = express();
-const PORT = 3010;
+const PORT = parseInt(process.env.PORT) || 3010;
 
 // ── DB Bağlantısı ─────────────────────────────────────────────────────────────
 const pool = new Pool({
-  host: '127.0.0.1',
-  port: 5432,
-  database: 'voyagestars',
-  user: 'postgres',
+  host: process.env.DB_HOST || '127.0.0.1',
+  port: parseInt(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'voyagestars',
+  user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'postgres',
 });
+
+// ── Auth yapılandırması ───────────────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+const RESEND_FROM = process.env.RESEND_FROM || 'Voyage Cost <onboarding@resend.dev>';
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
+
+// ── Auth Middleware: /api/* için JWT zorunlu (auth route'ları hariç) ─────────
+function requireAuth(req, res, next) {
+  if (req.path.startsWith('/api/auth/')) return next();
+  if (!req.path.startsWith('/api/')) return next();
+
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (!ALLOWED_EMAILS.includes((payload.email || '').toLowerCase())) {
+      return res.status(403).json({ error: 'Erişim reddedildi' });
+    }
+    req.user = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
+  }
+}
+app.use(requireAuth);
+
+// ── API: Auth — OTP gönder ────────────────────────────────────────────────────
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
+    }
+    if (!ALLOWED_EMAILS.includes(email)) {
+      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
+    }
+    if (!resend) {
+      return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış (RESEND_API_KEY)' });
+    }
+
+    const kod = Math.floor(100000 + Math.random() * 900000).toString();
+    const gecerliUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 dk
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+
+    await pool.query(
+      `INSERT INTO fb_cost.otp_kodlari (email, kod, gecerli_until, ip_adresi)
+       VALUES ($1, $2, $3, $4)`,
+      [email, kod, gecerliUntil, ip]
+    );
+
+    const { error } = await resend.emails.send({
+      from: RESEND_FROM,
+      to: email,
+      subject: 'Voyage Cost — Giriş Kodunuz',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#faf9f6;border-radius:12px;">
+          <h2 style="color:#1a2847;margin:0 0 16px;font-family:Georgia,serif;">Voyage Cost</h2>
+          <p style="color:#1a1814;font-size:15px;margin:0 0 8px;">Giriş kodunuz:</p>
+          <div style="font-size:36px;font-weight:700;color:#8a6c2e;letter-spacing:8px;padding:20px;text-align:center;background:#f7f1e6;border-radius:8px;margin:16px 0;">${kod}</div>
+          <p style="color:#7a7369;font-size:13px;margin:16px 0 0;">Bu kod 10 dakika geçerlidir. Eğer bu girişi siz talep etmediyseniz bu e-postayı yok sayabilirsiniz.</p>
+        </div>
+      `
+    });
+
+    if (error) {
+      console.error('Resend hatası:', error);
+      return res.status(500).json({ error: 'E-posta gönderilemedi' });
+    }
+
+    res.json({ ok: true, mesaj: 'Doğrulama kodu e-posta adresinize gönderildi' });
+  } catch (err) {
+    console.error('send-otp hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Auth — OTP doğrula → JWT ─────────────────────────────────────────────
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const email = (req.body?.email || '').trim().toLowerCase();
+    const kod = (req.body?.kod || '').trim();
+    if (!email || !kod) {
+      return res.status(400).json({ error: 'E-posta ve kod zorunlu' });
+    }
+    if (!ALLOWED_EMAILS.includes(email)) {
+      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT id FROM fb_cost.otp_kodlari
+       WHERE email = $1 AND kod = $2
+         AND kullanildi = FALSE
+         AND gecerli_until > NOW()
+       ORDER BY id DESC LIMIT 1`,
+      [email, kod]
+    );
+
+    if (!rows.length) {
+      return res.status(401).json({ error: 'Kod hatalı veya süresi dolmuş' });
+    }
+
+    await pool.query(
+      'UPDATE fb_cost.otp_kodlari SET kullanildi = TRUE WHERE id = $1',
+      [rows[0].id]
+    );
+
+    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ ok: true, token, email });
+  } catch (err) {
+    console.error('verify-otp hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Route: /login → login.html ────────────────────────────────────────────────
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/login.html'));
+});
 
 // ── CSV Upload ────────────────────────────────────────────────────────────────
 const upload = multer({
@@ -292,6 +420,100 @@ app.delete('/api/alarmlar/esikler/:id', async (req, res) => {
     await pool.query('DELETE FROM fb_cost.alarm_esikleri WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Fiyat Analizi — ürün bazında dönemsel birim fiyat serisi ────────────
+app.get('/api/fiyat-analizi', async (req, res) => {
+  const { stok_mali, tip } = req.query;
+  if (!stok_mali || !stok_mali.trim()) {
+    return res.status(400).json({ error: 'stok_mali parametresi zorunlu' });
+  }
+  try {
+    const params = [`%${stok_mali.trim()}%`];
+    let where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0`;
+    if (tip) { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
+
+    const { rows } = await pool.query(`
+      SELECT
+        tarih_str, yil, ay_no, tip, kategori, stok_mali, birim,
+        AVG(birim_fiyat)::NUMERIC AS birim_fiyat,
+        AVG(NULLIF(kur, 0))::NUMERIC AS kur,
+        CASE
+          WHEN AVG(NULLIF(kur, 0)) > 0
+          THEN (AVG(birim_fiyat) / AVG(NULLIF(kur, 0)))::NUMERIC
+          ELSE NULL
+        END AS birim_fiyat_eur
+      FROM fb_cost.tuketim
+      ${where}
+      GROUP BY tarih_str, yil, ay_no, tip, kategori, stok_mali, birim
+      ORDER BY yil, ay_no, stok_mali
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('fiyat-analizi hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Fiyat Analizi — kategori bazında dönemler arası değişim ─────────────
+app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
+  const { tarih_baslangic, tarih_bitis, tip } = req.query;
+  try {
+    const params = [];
+    let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL`;
+    if (tarih_baslangic) { where += ` AND tarih_str >= $${params.length + 1}`; params.push(tarih_baslangic); }
+    if (tarih_bitis)     { where += ` AND tarih_str <= $${params.length + 1}`; params.push(tarih_bitis); }
+    if (tip)             { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
+
+    // Her kategori için ilk ve son dönemi (yil, ay_no sıralı) bul,
+    // o dönemlerdeki ortalama birim_fiyat ve birim_fiyat_eur üzerinden yüzde değişim hesapla.
+    const { rows } = await pool.query(`
+      WITH donemler AS (
+        SELECT
+          kategori,
+          tarih_str,
+          yil, ay_no,
+          AVG(birim_fiyat)::NUMERIC AS ort_tl,
+          CASE WHEN AVG(NULLIF(kur, 0)) > 0
+               THEN (AVG(birim_fiyat) / AVG(NULLIF(kur, 0)))::NUMERIC
+               ELSE NULL END AS ort_eur
+        FROM fb_cost.tuketim
+        ${where}
+        GROUP BY kategori, tarih_str, yil, ay_no
+      ),
+      siralanmis AS (
+        SELECT
+          kategori, tarih_str, yil, ay_no, ort_tl, ort_eur,
+          ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY yil, ay_no) AS rn_ilk,
+          ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY yil DESC, ay_no DESC) AS rn_son
+        FROM donemler
+      ),
+      ilk AS (SELECT kategori, tarih_str AS ilk_donem, ort_tl AS ilk_tl, ort_eur AS ilk_eur FROM siralanmis WHERE rn_ilk = 1),
+      son AS (SELECT kategori, tarih_str AS son_donem, ort_tl AS son_tl, ort_eur AS son_eur FROM siralanmis WHERE rn_son = 1)
+      SELECT
+        i.kategori,
+        i.ilk_donem, s.son_donem,
+        i.ilk_tl  AS ilk_donem_fiyat,
+        s.son_tl  AS son_donem_fiyat,
+        i.ilk_eur AS ilk_donem_fiyat_eur,
+        s.son_eur AS son_donem_fiyat_eur,
+        CASE WHEN i.ilk_tl > 0
+             THEN ((s.son_tl - i.ilk_tl) / i.ilk_tl * 100)::NUMERIC
+             ELSE NULL END AS degisim_yuzde,
+        CASE WHEN i.ilk_eur > 0
+             THEN ((s.son_eur - i.ilk_eur) / i.ilk_eur * 100)::NUMERIC
+             ELSE NULL END AS degisim_eur_yuzde
+      FROM ilk i
+      JOIN son s USING (kategori)
+      ORDER BY ABS(COALESCE(((s.son_tl - i.ilk_tl) / NULLIF(i.ilk_tl, 0) * 100), 0)) DESC
+    `, params);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('fiyat-analizi/kategoriler hatası:', err);
     res.status(500).json({ error: err.message });
   }
 });

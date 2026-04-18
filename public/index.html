@@ -5,6 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>F&B Maliyet Analizi — Voyage Sorgun</title>
 <link rel="stylesheet" href="/voyage-design-system.css">
+<script>
+// ── Auth guard + fetch wrapper — API çağrılarından önce çalışmalı ─────────────
+(function() {
+  const token = localStorage.getItem('vc_token');
+  if (!token) {
+    window.location.replace('/login');
+    return;
+  }
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(url, opts = {}) {
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      const t = localStorage.getItem('vc_token');
+      if (t) {
+        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + t });
+      }
+    }
+    return origFetch(url, opts).then(r => {
+      if (r.status === 401) {
+        localStorage.removeItem('vc_token');
+        localStorage.removeItem('vc_email');
+        window.location.replace('/login');
+      }
+      return r;
+    });
+  };
+  window.vcLogout = function() {
+    localStorage.removeItem('vc_token');
+    localStorage.removeItem('vc_email');
+    window.location.replace('/login');
+  };
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   .upload-zone {
@@ -61,6 +93,9 @@
     <a class="nav-item" data-page="urun" href="#">
       <span class="nav-icon">🔍</span> Ürün Ara
     </a>
+    <a class="nav-item" data-page="fiyat" href="#">
+      <span class="nav-icon">💹</span> Fiyat Analizi
+    </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
       <span class="nav-icon">🔔</span> Alarmlar
@@ -74,12 +109,18 @@
   <div class="sidebar-footer">
     <div class="sidebar-user">
       <div class="user-avatar">A</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="user-role">Ali Ozkir</div>
-        <div style="font-size:11px;color:var(--text-dim)">General Manager</div>
+        <div id="user-email" style="font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
       </div>
     </div>
+    <button class="btn-signout" onclick="window.vcLogout()" style="width:100%;margin-top:10px;padding:8px;border-radius:var(--radius);font-size:12px;cursor:pointer;font-family:inherit;">
+      Çıkış Yap
+    </button>
   </div>
+  <script>
+    document.getElementById('user-email').textContent = localStorage.getItem('vc_email') || '';
+  </script>
 </div>
 
 <div id="main">
@@ -223,6 +264,89 @@
     </div>
   </div>
 
+  <!-- ── FİYAT ANALİZİ ──────────────────────────────────────────────────── -->
+  <div id="page-fiyat" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Fiyat Analizi</div>
+        <div class="page-sub">Ürün ve kategori bazında dönemsel birim fiyat değişimi</div>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="card mb-20">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="text" class="form-input" id="fiyat-q" placeholder="Ürün adı yazın... (örn: DANA ANTRIKOT)" style="flex:1;min-width:260px">
+          <select class="form-select" id="fiyat-tip" style="width:140px">
+            <option value="">Hepsi</option>
+            <option value="yiyecek">Yiyecek</option>
+            <option value="icenek">İçecek</option>
+          </select>
+          <button class="btn btn-primary" onclick="fiyatAnalizEt()">Analiz Et</button>
+        </div>
+      </div>
+
+      <div class="card mb-20">
+        <div class="card-title" id="fiyat-baslik">Ürün seçin ve "Analiz Et" butonuna basın</div>
+        <div class="chart-wrap mb-20" style="display:none;height:320px" id="fiyat-chart-wrap">
+          <canvas id="chart-fiyat"></canvas>
+        </div>
+        <div class="table-wrap" id="fiyat-tablo-wrap" style="display:none">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Dönem</th>
+                <th>Kategori</th>
+                <th style="text-align:right">Birim Fiyat TL</th>
+                <th style="text-align:right">Birim Fiyat €</th>
+                <th style="text-align:right">Kur</th>
+                <th style="text-align:right">Δ TL %</th>
+                <th style="text-align:right">Δ € %</th>
+              </tr>
+            </thead>
+            <tbody id="fiyat-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Kategori Bazında Fiyat Değişimi</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem ortalama birim fiyat karşılaştırması</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select class="form-select" id="kat-fiyat-baslangic" style="width:130px"></select>
+            <span style="color:var(--text-dim)">→</span>
+            <select class="form-select" id="kat-fiyat-bitis" style="width:130px"></select>
+            <select class="form-select" id="kat-fiyat-tip" style="width:120px">
+              <option value="">Hepsi</option>
+              <option value="yiyecek">Yiyecek</option>
+              <option value="icenek">İçecek</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyat()">Yenile</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Aralık</th>
+                <th style="text-align:right">İlk Dönem TL</th>
+                <th style="text-align:right">Son Dönem TL</th>
+                <th style="text-align:right">Δ TL %</th>
+                <th style="text-align:right">Δ € %</th>
+              </tr>
+            </thead>
+            <tbody id="kat-fiyat-tablo"><tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Yükleniyor...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ── ALARMLAR ────────────────────────────────────────────────────────── -->
   <div id="page-alarmlar" class="tab-content">
     <div class="page-header">
@@ -353,6 +477,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'kategori') renderKategori();
     if (page === 'alarmlar') { loadAlarmlar(); loadEsikler(); }
     if (page === 'yukle') loadYukluDonemler();
+    if (page === 'fiyat') initFiyatPage();
   });
 });
 
@@ -713,6 +838,226 @@ async function loadYukluDonemler() {
     ? rows.map(d => `<span class="donem-tag">${d.ay} ${d.yil}</span>`).join('')
     : '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
 }
+
+// ── FİYAT ANALİZİ ─────────────────────────────────────────────────────────────
+let chartFiyat;
+let fiyatPageInited = false;
+
+function initFiyatPage() {
+  if (!fiyatPageInited) {
+    const bas = document.getElementById('kat-fiyat-baslangic');
+    const bit = document.getElementById('kat-fiyat-bitis');
+    if (donemler && donemler.length) {
+      const sorted = [...donemler].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
+      const opts = sorted.map(d => `<option value="${d.tarih_str}">${d.tarih_str}</option>`).join('');
+      bas.innerHTML = opts;
+      bit.innerHTML = opts;
+      bas.value = sorted[0].tarih_str;
+      bit.value = sorted[sorted.length - 1].tarih_str;
+    }
+    fiyatPageInited = true;
+    loadKategoriFiyat();
+  }
+  const q = document.getElementById('fiyat-q');
+  if (q) setTimeout(() => q.focus(), 50);
+}
+
+async function fiyatAnalizEt() {
+  const q = document.getElementById('fiyat-q').value.trim();
+  const tip = document.getElementById('fiyat-tip').value;
+  if (!q) { toast('Ürün adı girin', 'warning'); return; }
+
+  const baslik = document.getElementById('fiyat-baslik');
+  const chartWrap = document.getElementById('fiyat-chart-wrap');
+  const tabloWrap = document.getElementById('fiyat-tablo-wrap');
+  const tbody = document.getElementById('fiyat-tablo');
+
+  baslik.innerHTML = '<div class="loading"><div class="spinner"></div> Analiz ediliyor...</div>';
+  chartWrap.style.display = 'none';
+  tabloWrap.style.display = 'none';
+
+  try {
+    const params = new URLSearchParams({ stok_mali: q });
+    if (tip) params.append('tip', tip);
+    const rows = await fetch('/api/fiyat-analizi?' + params).then(r => r.json());
+
+    if (!rows.length) {
+      baslik.textContent = `"${q}" için fiyat verisi bulunamadı`;
+      return;
+    }
+
+    // Aynı üründen birden fazla stok_mali eşleşirse, dönem bazında ortalama al
+    const mapDonem = new Map();
+    for (const r of rows) {
+      const k = r.tarih_str;
+      if (!mapDonem.has(k)) {
+        mapDonem.set(k, { tarih_str: r.tarih_str, yil: r.yil, ay_no: r.ay_no,
+          kategoriler: new Set(), sumTL: 0, sumEUR: 0, sumKUR: 0, n: 0 });
+      }
+      const g = mapDonem.get(k);
+      if (r.kategori) g.kategoriler.add(r.kategori);
+      g.sumTL  += parseFloat(r.birim_fiyat) || 0;
+      g.sumEUR += parseFloat(r.birim_fiyat_eur) || 0;
+      g.sumKUR += parseFloat(r.kur) || 0;
+      g.n++;
+    }
+    const seri = [...mapDonem.values()]
+      .map(g => ({
+        tarih_str: g.tarih_str, yil: g.yil, ay_no: g.ay_no,
+        kategori: [...g.kategoriler].join(', ') || '—',
+        birim_fiyat: g.sumTL / g.n,
+        birim_fiyat_eur: g.sumEUR / g.n,
+        kur: g.sumKUR / g.n
+      }))
+      .sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
+
+    const urunSayisi = new Set(rows.map(r => r.stok_mali)).size;
+    baslik.textContent = `${urunSayisi === 1 ? rows[0].stok_mali : `"${q}" (${urunSayisi} ürün)`} — ${seri.length} dönem`;
+
+    renderFiyatChart(seri);
+    renderFiyatTablo(seri, tbody);
+    chartWrap.style.display = 'block';
+    tabloWrap.style.display = 'block';
+  } catch (err) {
+    baslik.textContent = 'Hata: ' + err.message;
+    toast('Analiz hatası: ' + err.message, 'error');
+  }
+}
+
+function renderFiyatChart(seri) {
+  const ctx = document.getElementById('chart-fiyat').getContext('2d');
+  if (chartFiyat) chartFiyat.destroy();
+
+  chartFiyat = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: seri.map(d => d.tarih_str),
+      datasets: [
+        {
+          label: 'Birim Fiyat (TL)',
+          data: seri.map(d => d.birim_fiyat),
+          borderColor: '#8a6c2e',
+          backgroundColor: 'rgba(138,108,46,0.1)',
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: 'yTL',
+          pointRadius: 4,
+          pointBackgroundColor: '#8a6c2e'
+        },
+        {
+          label: 'Birim Fiyat (€)',
+          data: seri.map(d => d.birim_fiyat_eur),
+          borderColor: '#2a4d7a',
+          backgroundColor: 'rgba(42,77,122,0.1)',
+          borderWidth: 2,
+          borderDash: [5, 4],
+          tension: 0.3,
+          yAxisID: 'yEUR',
+          pointRadius: 4,
+          pointBackgroundColor: '#2a4d7a'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              if (ctx.dataset.yAxisID === 'yTL') return `TL: ${fmtTL(v)}`;
+              return `€: ${fmtEUR(v)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        yTL: {
+          type: 'linear', position: 'left',
+          title: { display: true, text: 'TL', color: '#8a6c2e' },
+          ticks: { color: '#8a6c2e', callback: v => new Intl.NumberFormat('tr-TR').format(v) },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        yEUR: {
+          type: 'linear', position: 'right',
+          title: { display: true, text: '€', color: '#2a4d7a' },
+          ticks: { color: '#2a4d7a', callback: v => new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 2 }).format(v) },
+          grid: { drawOnChartArea: false }
+        },
+        x: { grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+}
+
+function renderFiyatTablo(seri, tbody) {
+  tbody.innerHTML = seri.map((d, i) => {
+    const prev = i > 0 ? seri[i - 1] : null;
+    const dTL  = prev && prev.birim_fiyat     > 0 ? ((d.birim_fiyat     - prev.birim_fiyat)     / prev.birim_fiyat     * 100) : null;
+    const dEUR = prev && prev.birim_fiyat_eur > 0 ? ((d.birim_fiyat_eur - prev.birim_fiyat_eur) / prev.birim_fiyat_eur * 100) : null;
+    return `<tr>
+      <td><strong>${d.tarih_str}</strong></td>
+      <td style="color:var(--text-dim);font-size:12px">${d.kategori}</td>
+      <td style="text-align:right">${fmtTL(d.birim_fiyat)}</td>
+      <td style="text-align:right">${fmtEUR(d.birim_fiyat_eur)}</td>
+      <td style="text-align:right;color:var(--text-dim)">${d.kur ? fmtN(d.kur, 4) : '—'}</td>
+      <td style="text-align:right">${renderDelta(dTL)}</td>
+      <td style="text-align:right">${renderDelta(dEUR)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderDelta(v) {
+  if (v === null || isNaN(v)) return '<span style="color:var(--text-xdim)">—</span>';
+  const sign = v > 0 ? '↑' : v < 0 ? '↓' : '·';
+  const col  = v > 0.01 ? 'var(--red)' : v < -0.01 ? 'var(--green)' : 'var(--text-dim)';
+  return `<span style="color:${col};font-weight:600">${sign} ${fmtN(Math.abs(v), 2)}%</span>`;
+}
+
+async function loadKategoriFiyat() {
+  const bas = document.getElementById('kat-fiyat-baslangic').value;
+  const bit = document.getElementById('kat-fiyat-bitis').value;
+  const tip = document.getElementById('kat-fiyat-tip').value;
+  const tbody = document.getElementById('kat-fiyat-tablo');
+
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px"><div class="spinner" style="display:inline-block"></div> Yükleniyor...</td></tr>`;
+
+  try {
+    const params = new URLSearchParams();
+    if (bas) params.append('tarih_baslangic', bas);
+    if (bit) params.append('tarih_bitis', bit);
+    if (tip) params.append('tip', tip);
+    const rows = await fetch('/api/fiyat-analizi/kategoriler?' + params).then(r => r.json());
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td><strong>${r.kategori}</strong></td>
+        <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} → ${r.son_donem}</td>
+        <td style="text-align:right">${fmtTL(r.ilk_donem_fiyat)}</td>
+        <td style="text-align:right">${fmtTL(r.son_donem_fiyat)}</td>
+        <td style="text-align:right">${renderDelta(parseFloat(r.degisim_yuzde))}</td>
+        <td style="text-align:right">${renderDelta(parseFloat(r.degisim_eur_yuzde))}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:20px">Hata: ${err.message}</td></tr>`;
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'fiyat-q') {
+    e.preventDefault();
+    fiyatAnalizEt();
+  }
+});
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 setupUpload();
