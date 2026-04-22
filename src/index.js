@@ -8,7 +8,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
-const { parseExcelToRows } = require('./excelImport');
+const { parseExcelToRows, normalizeTuketimRowForDb } = require('./excelImport');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const { Resend } = require('resend');
@@ -227,6 +227,8 @@ app.post(
       rows = rows.concat(part);
     }
 
+    rows = rows.map(normalizeTuketimRowForDb);
+
     // Yüklenen dönemleri bul ve sil (yeniden yükleme desteği)
     const donemler = [...new Set(rows.map(r => `${r.tarih_str}__${r.tip}`))];
     const client = await pool.connect();
@@ -380,6 +382,24 @@ app.get('/api/donemler', async (req, res) => {
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Belirli dönem (tarih_str) için tüm tüketim satırlarını siler
+app.delete('/api/donemler', async (req, res) => {
+  const tarih_str = (req.query.tarih_str || '').trim();
+  if (!tarih_str) {
+    return res.status(400).json({ error: 'tarih_str parametresi gerekli' });
+  }
+  if (!/^\d{4}-\d{2}(-15g)?$/.test(tarih_str)) {
+    return res.status(400).json({ error: 'Geçersiz tarih_str' });
+  }
+  try {
+    const { rowCount } = await pool.query('DELETE FROM fb_cost.tuketim WHERE tarih_str = $1', [tarih_str]);
+    return res.json({ ok: true, silinen: rowCount, tarih_str });
+  } catch (err) {
+    console.error('donemler DELETE:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
 

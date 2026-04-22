@@ -80,7 +80,10 @@
   .alarm-dot.yellow { background:var(--yellow); }
   .search-results td.up { color:var(--red); }
   .search-results td.down { color:var(--green); }
-  .donem-tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:var(--gold-bg); color:var(--gold); margin:2px; }
+  .donem-tag { display:inline-flex; align-items:center; gap:2px; padding:2px 2px 2px 8px; border-radius:20px; font-size:11px; font-weight:600; background:var(--gold-bg); color:var(--gold); margin:2px; }
+  .donem-tag .donem-tag-x { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; margin:0; padding:0; border:none; border-radius:50%;
+    background:transparent; color:var(--text-dim); cursor:pointer; font-size:16px; line-height:1; font-weight:400; transition:color .15s, background .15s; flex-shrink:0; }
+  .donem-tag .donem-tag-x:hover { color:var(--red); background:rgba(200,50,50,.12); }
   .nav-section { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-xdim); padding:12px 12px 4px; font-weight:600; }
   .esik-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .esik-row:last-child { border-bottom:none; }
@@ -1167,12 +1170,37 @@ async function uploadFiles(fileList) {
 
 async function loadYukluDonemler() {
   const rows = await fetch('/api/donemler').then(r => r.json()).catch(() => []);
+  window._yukluDonemCache = rows;
   document.getElementById('yuklu-donemler').innerHTML = rows.length
     ? rows.map(d => {
         const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
-        return `<span class="donem-tag">${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}</span>`;
+        const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
+        const ts = JSON.stringify(d.tarih_str || '');
+        return `<span class="donem-tag"><span class="donem-tag-label">${etiket}</span><button type="button" class="donem-tag-x" title="Bu dönemi sil" aria-label="Sil" onclick="vcSilDonem(${ts})">×</button></span>`;
       }).join('')
     : '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
+}
+
+async function vcSilDonem(tarihStr) {
+  if (tarihStr == null || tarihStr === '') return;
+  const row = (window._yukluDonemCache || []).find(d => d.tarih_str === tarihStr);
+  const kismi = (tarihStr || '').endsWith('-15g');
+  const etiket = row ? `${row.ay} ${row.yil}${kismi ? ' (15 gün)' : ''}` : tarihStr;
+  if (!confirm(`“${etiket}” dönemine ait tüm yiyecek ve içecek verileri silinsin mi?\n\nBu işlem geri alınamaz.`)) return;
+  try {
+    const u = new URLSearchParams({ tarih_str: tarihStr });
+    const res = await fetch('/api/donemler?' + u.toString(), { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      toast(`${data.silinen || 0} satır silindi`, 'success');
+      init();
+      loadYukluDonemler();
+    } else {
+      toast(data.error || 'Silinemedi', 'error');
+    }
+  } catch (e) {
+    toast('Silme hatası: ' + (e && e.message), 'error');
+  }
 }
 
 // ── FİYAT ANALİZİ ─────────────────────────────────────────────────────────────

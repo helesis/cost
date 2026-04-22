@@ -114,6 +114,7 @@ cost/
 | `GET`  | `/api/kategoriler?tarih=&tip=` | Kategori dağılımı |
 | `GET`  | `/api/urun?q=&tip=` | Ürün arama |
 | `GET`  | `/api/donemler` | Yüklenmiş dönemlerin listesi |
+| `DELETE` | `/api/donemler?tarih_str=` | O `tarih_str` için tüm tüketim satırlarını siler |
 | `GET`  | `/api/alarmlar` | Tetiklenen alarmlar |
 | `GET`  | `/api/alarmlar/esikler` | Alarm eşiklerini listele |
 | `POST` | `/api/alarmlar/esikler` | Yeni alarm eşiği ekle |
@@ -139,6 +140,7 @@ pp_gr, pp_cl, pp_tl, pp_eur
   yan yana saklanabilir; yıllık aggregasyonlar `-15g` dönemleri otomatik
   hariç tutar.
 - Aynı `tarih_str + tip` ile yeniden yükleme yapıldığında mevcut kayıtlar silinip yenileri eklenir.
+- **Web yüklemesi (Excel/CSV)**: `normalizeTuketimRowForDb` yiyecekte `tuk_miktar` kaynağını **kg** kabul edip **grama** (×1000) çevirir (satır `birim`i gr/g/gram ise dönüştürülmez). İçecekte `pp_miktar` varsa ve sütun birimi cl/ml/lt değilse P.P. değeri **litre** kabul edilip **pp_cl** = santilitre (×100) yapılır. Eski CSV’de `pp_miktar` yoksa dosyadaki `pp_gr` / `pp_cl` olduğu gibi alınır.
 
 ---
 
