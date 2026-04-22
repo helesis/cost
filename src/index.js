@@ -154,10 +154,10 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
-// ── CSV / Excel Yükle ──────────────────────────────────────────────────────────
+// ── CSV / Excel Yükle (tek veya çoklu dosya) ────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 50 * 1024 * 1024, files: 200 }, // 50MB / dosya, en fazla 200 dosya
   fileFilter: (req, file, cb) => {
     const n = (file.originalname || '').toLowerCase();
     if (!/\.(csv|xlsx|xlsm|xls)$/.test(n)) {
@@ -167,36 +167,64 @@ const upload = multer({
   }
 });
 
+function parseUploadFileBuffer(buffer, name) {
+  if (/\.csv$/i.test(name)) {
+    const text = buffer.toString('utf8');
+    return parseCsvSync(text, { columns: true, skip_empty_lines: true, bom: true });
+  }
+  const { rows: excelRows, error: excelError } = parseExcelToRows(buffer, name);
+  if (excelError) {
+    const err = new Error(excelError);
+    err.code = 'PARSE';
+    err.file = name;
+    throw err;
+  }
+  return excelRows;
+}
+
 // ── API: CSV / Excel Yükle ───────────────────────────────────────────────────
 app.post(
   '/api/upload',
   (req, res, next) => {
-    upload.any()(req, res, (err) => {
-      if (err) return res.status(400).json({ error: err.message || 'Dosya yüklenemedi' });
-      next();
-    });
+    // files[]: çoklu; file / csv: tek dosya (eski istemciler)
+    upload.fields([{ name: 'files', maxCount: 200 }, { name: 'file', maxCount: 1 }, { name: 'csv', maxCount: 1 }])(
+      req,
+      res,
+      (err) => {
+        if (err) return res.status(400).json({ error: err.message || 'Dosya yüklenemedi' });
+        next();
+      }
+    );
   },
   async (req, res) => {
-  const f = (req.files || []).find((x) => x.fieldname === 'file' || x.fieldname === 'csv');
-  if (!f) return res.status(400).json({ error: 'Dosya bulunamadı' });
+  const bag = req.files || {};
+  const fromMulti = Array.isArray(bag.files) ? bag.files : [];
+  const fromSingle = (Array.isArray(bag.file) ? bag.file[0] : null) || (Array.isArray(bag.csv) ? bag.csv[0] : null);
+  const fileList = fromMulti.length
+    ? fromMulti
+    : fromSingle
+      ? [fromSingle]
+      : [];
+  if (!fileList.length) {
+    return res.status(400).json({ error: 'Dosya bulunamadı' });
+  }
 
-  const name = f.originalname || '';
   let rows = [];
 
   try {
-    if (/\.csv$/i.test(name)) {
-      const text = f.buffer.toString('utf8');
-      rows = parseCsvSync(text, { columns: true, skip_empty_lines: true, bom: true });
-    } else {
-      const { rows: excelRows, error: excelError } = parseExcelToRows(f.buffer, name);
-      if (excelError) {
-        return res.status(400).json({ error: excelError });
+    for (const f of fileList) {
+      const name = f.originalname || 'dosya';
+      let part;
+      try {
+        part = parseUploadFileBuffer(f.buffer, name);
+      } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        return res.status(400).json({ error: `${name}: ${msg}` });
       }
-      rows = excelRows;
-    }
-
-    if (!rows.length) {
-      return res.status(400).json({ error: 'Dosya boş veya hatalı format' });
+      if (!part.length) {
+        return res.status(400).json({ error: `${name}: boş veya hatalı format` });
+      }
+      rows = rows.concat(part);
     }
 
     // Yüklenen dönemleri bul ve sil (yeniden yükleme desteği)
@@ -255,7 +283,8 @@ app.post(
         ok: true,
         inserted,
         donemler: donemler.length,
-        mesaj: `${inserted} satır, ${donemler.length} dönem yüklendi`
+        dosya_sayisi: fileList.length,
+        mesaj: `${fileList.length} dosya, ${inserted} satır, ${donemler.length} dönem yüklendi`
       });
 
     } catch (err) {

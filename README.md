@@ -109,7 +109,7 @@ cost/
 
 | Method | Path | Açıklama |
 | --- | --- | --- |
-| `POST` | `/api/upload` | CSV veya Excel yükler (form-data: `file`) |
+| `POST` | `/api/upload` | CSV veya Excel (çoklu: form-data alanı `files[]`, tek: `file` / `csv`) |
 | `GET`  | `/api/ozet` | Dönem bazlı özet KPI |
 | `GET`  | `/api/kategoriler?tarih=&tip=` | Kategori dağılımı |
 | `GET`  | `/api/urun?q=&tip=` | Ürün arama |
