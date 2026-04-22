@@ -7,7 +7,8 @@ const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
 const multer = require('multer');
-const { parse } = require('csv-parse');
+const { parse: parseCsvSync } = require('csv-parse/sync');
+const { parseExcelToRows } = require('./excelImport');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const { Resend } = require('resend');
@@ -153,36 +154,49 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/login.html'));
 });
 
-// ── CSV Upload ────────────────────────────────────────────────────────────────
+// ── CSV / Excel Yükle ──────────────────────────────────────────────────────────
 const upload = multer({
-  dest: path.join(__dirname, '../uploads'),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   fileFilter: (req, file, cb) => {
-    if (!file.originalname.endsWith('.csv')) {
-      return cb(new Error('Sadece CSV dosyası yüklenebilir'));
+    const n = (file.originalname || '').toLowerCase();
+    if (!/\.(csv|xlsx|xlsm|xls)$/.test(n)) {
+      return cb(new Error('Sadece .csv, .xlsx, .xlsm, .xls yükleyin'));
     }
     cb(null, true);
   }
 });
 
-// ── API: CSV Yükle ────────────────────────────────────────────────────────────
-app.post('/api/upload', upload.single('csv'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Dosya bulunamadı' });
+// ── API: CSV / Excel Yükle ───────────────────────────────────────────────────
+app.post(
+  '/api/upload',
+  (req, res, next) => {
+    upload.any()(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || 'Dosya yüklenemedi' });
+      next();
+    });
+  },
+  async (req, res) => {
+  const f = (req.files || []).find((x) => x.fieldname === 'file' || x.fieldname === 'csv');
+  if (!f) return res.status(400).json({ error: 'Dosya bulunamadı' });
 
-  const filePath = req.file.path;
-  const rows = [];
+  const name = f.originalname || '';
+  let rows = [];
 
   try {
-    await new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(parse({ columns: true, skip_empty_lines: true, bom: true }))
-        .on('data', (row) => rows.push(row))
-        .on('end', resolve)
-        .on('error', reject);
-    });
+    if (/\.csv$/i.test(name)) {
+      const text = f.buffer.toString('utf8');
+      rows = parseCsvSync(text, { columns: true, skip_empty_lines: true, bom: true });
+    } else {
+      const { rows: excelRows, error: excelError } = parseExcelToRows(f.buffer, name);
+      if (excelError) {
+        return res.status(400).json({ error: excelError });
+      }
+      rows = excelRows;
+    }
 
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'CSV boş veya hatalı format' });
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Dosya boş veya hatalı format' });
     }
 
     // Yüklenen dönemleri bul ve sil (yeniden yükleme desteği)
@@ -236,7 +250,6 @@ app.post('/api/upload', upload.single('csv'), async (req, res) => {
       }
 
       await client.query('COMMIT');
-      fs.unlinkSync(filePath);
 
       res.json({
         ok: true,
@@ -253,11 +266,11 @@ app.post('/api/upload', upload.single('csv'), async (req, res) => {
     }
 
   } catch (err) {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     console.error('Upload hatası:', err);
     res.status(500).json({ error: err.message });
   }
-});
+  }
+);
 
 // ── API: Özet KPI'lar ─────────────────────────────────────────────────────────
 app.get('/api/ozet', async (req, res) => {
@@ -463,7 +476,7 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   const { tarih_baslangic, tarih_bitis, tip } = req.query;
   try {
     const params = [];
-    let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL`;
+    let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g'`;
     if (tarih_baslangic) { where += ` AND tarih_str >= $${params.length + 1}`; params.push(tarih_baslangic); }
     if (tarih_bitis)     { where += ` AND tarih_str <= $${params.length + 1}`; params.push(tarih_bitis); }
     if (tip)             { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
@@ -566,7 +579,7 @@ app.get('/api/yillik/ozet', async (req, res) => {
                  MAX(cost_pax)  AS cost_pax,
                  AVG(NULLIF(kur,0)) AS kur
           FROM fb_cost.tuketim
-          WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+          WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
           GROUP BY ay_no
         )
         SELECT
@@ -640,7 +653,7 @@ app.get('/api/yillik/aylik', async (req, res) => {
           MAX(cost_pax)  AS cost_pax,
           AVG(NULLIF(kur, 0)) AS kur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
         GROUP BY ay_no
         ORDER BY ay_no
       `, params);
@@ -675,7 +688,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
              SUM(tutar_tl)  AS toplam_tl,
              SUM(tutar_eur) AS toplam_eur
       FROM fb_cost.tuketim
-      WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+      WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
       GROUP BY kategori
       ORDER BY toplam_tl DESC
     `, params);
@@ -685,7 +698,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
              SUM(tutar_tl)  AS tutar_tl,
              SUM(tutar_eur) AS tutar_eur
       FROM fb_cost.tuketim
-      WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+      WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
       GROUP BY kategori, ay_no
       ORDER BY kategori, ay_no
     `, params);
@@ -696,7 +709,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori, ay_no
       ),
       siralanmis AS (
@@ -753,7 +766,7 @@ app.get('/api/yillik/urunler', async (req, res) => {
                SUM(tutar_eur) AS toplam_eur,
                SUM(tuk_miktar) AS tuk_miktar
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 ${tipFilter}
+        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
         GROUP BY stok_mali, kategori, tip
         ORDER BY ${sortField} DESC
         LIMIT $${params.length}
@@ -777,7 +790,7 @@ app.get('/api/yillik/urunler', async (req, res) => {
                     THEN AVG(birim_fiyat) / AVG(NULLIF(kur, 0))
                     ELSE NULL END AS ort_fiyat_eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND birim_fiyat > 0 ${tipFilter}
+        WHERE yil = $1 AND birim_fiyat > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
         GROUP BY stok_mali, kategori, tip, ay_no
       ),
       siralanmis AS (
@@ -837,7 +850,7 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori
       ),
       onceki AS (
@@ -845,7 +858,7 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $2 AND tutar_tl > 0 AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $2 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori
       )
       SELECT
