@@ -247,28 +247,43 @@ function parseTarihVeTipFromText(text) {
 function normalizeTukMiktarYiyecekKgToGr(tuk, birim) {
   const t = +tuk || 0;
   const b = normalizeText(birim).replace(/ /g, '');
-  if (b.includes('gram') || b === 'gr' || b === 'g' || b.endsWith('gr')) return t;
+  // "kilogram" contains "gram" — önce kg / kilo
+  if (b.includes('kilo') || b === 'kg' || b.endsWith('kg')) return t * 1000;
+  if ((b.includes('gram') && !b.includes('kilo')) || b === 'gr' || b === 'g' || b.endsWith('gr')) {
+    return t;
+  }
   return t * 1000;
 }
 
 /**
- * yiyecek: P.P. sütunu (P.P. / GR. vb.) gr cinsinden; ürün birim sütunundan bağımsız.
- * icenek: P.P. raporunda değer genelde litredir → DB’de pp_cl = santilitre.
+ * tuk=0, tutar>0, birim>0: Excel D/E'den türet.
+ * tuk=0, birim=0, tutar>0: sadece tutarı korumak için (KDV satırı vb.) birim fiyat=1, tuk sanal.
  */
-function ppGrClFixed(birim, ppMiktar, tip) {
-  const b = normalizeText(birim).replace(/ /g, '');
-  const x = +ppMiktar || 0;
+function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
+  let t = +tuk || 0;
+  let bf = +birimFiyat || 0;
+  const tt = +tutarTl || 0;
   const tipN = tip === 'icecek' ? 'icenek' : tip;
-  if (tipN === 'yiyecek') {
-    return { pp_gr: x, pp_cl: 0 };
+  if (t !== 0) {
+    return { tuk_miktar: t, birim_fiyat: bf };
   }
-  if (tipN === 'icenek') {
-    if (b === 'cl' || (b.includes('santil') && !b.includes('litre'))) return { pp_gr: 0, pp_cl: x };
-    if (b.includes('ml') || b.includes('mililitre') || b.includes('milil')) return { pp_gr: 0, pp_cl: x / 10 };
-    if ((b.includes('litre') && !b.includes('mili')) || b === 'lt' || b === 'l') return { pp_gr: 0, pp_cl: x * 100 };
-    return { pp_gr: 0, pp_cl: x * 100 };
+  if (bf > 0 && tt > 0) {
+    if (tipN === 'yiyecek') {
+      return { tuk_miktar: (tt / bf) * 1000, birim_fiyat: bf };
+    }
+    if (tipN === 'icenek') {
+      return { tuk_miktar: tt / bf, birim_fiyat: bf };
+    }
   }
-  return { pp_gr: 0, pp_cl: 0 };
+  if (tt > 0 && t === 0 && bf === 0) {
+    if (tipN === 'yiyecek') {
+      return { tuk_miktar: tt * 1000, birim_fiyat: 1 };
+    }
+    if (tipN === 'icenek') {
+      return { tuk_miktar: tt, birim_fiyat: 1 };
+    }
+  }
+  return { tuk_miktar: t, birim_fiyat: bf };
 }
 
 function isCategoryRow(stokMali, stokNo, nums) {
@@ -410,29 +425,31 @@ function parseExcelToRows(buffer, originalname) {
 }
 
 /**
- * Yükleme (Excel/CSV) sonrası DB birimleri: yiyecek tuk gr, icenek pp_cl (lt→×100 cl).
- * pp_miktar gelmezse (eski CSV) mevcut pp_gr/pp_cl korunur; kayıt alanı yok, insert öncesi silinir.
+ * Yükleme: yiyecek tuk → gram, icenek tuk = litre. Tutar/pp DB'de türetilir; burada sadece
+ * miktar/birim fiyat (ve kur, cost pax) kalır. Eski CSV'lerde tuk yoksa tutar_tl + birim fiyatle doldurur.
  */
 function normalizeTuketimRowForDb(r) {
   const o = { ...r };
   o.tip = o.tip === 'icecek' ? 'icenek' : o.tip;
   const birim = o.birim || '';
+  let tuk = parseFloat(o.tuk_miktar) || 0;
+  let birimF = parseFloat(o.birim_fiyat) || 0;
+  const tutar = parseFloat(o.tutar_tl) || 0;
   if (o.tip === 'yiyecek') {
-    o.tuk_miktar = String(normalizeTukMiktarYiyecekKgToGr(parseFloat(o.tuk_miktar) || 0, birim));
+    tuk = normalizeTukMiktarYiyecekKgToGr(tuk, birim);
   }
-  const ppMik = o.pp_miktar;
-  const hasPpMik = ppMik != null && String(ppMik).trim() !== '';
-  if (hasPpMik) {
-    const { pp_gr, pp_cl } = ppGrClFixed(birim, parseFloat(ppMik) || 0, o.tip);
-    o.pp_gr = String(pp_gr);
-    o.pp_cl = String(pp_cl);
-  } else {
-    o.pp_gr = String(parseFloat(o.pp_gr) || 0);
-    o.pp_cl = String(parseFloat(o.pp_cl) || 0);
-  }
-  if (o.pp_miktar !== undefined) {
-    delete o.pp_miktar;
-  }
+  const filled = backfillTukBirim(o.tip, tuk, birimF, tutar);
+  tuk = filled.tuk_miktar;
+  birimF = filled.birim_fiyat;
+  o.tuk_miktar = String(tuk);
+  o.birim_fiyat = String(birimF);
+  delete o.tutar_tl;
+  delete o.tutar_eur;
+  delete o.pp_gr;
+  delete o.pp_cl;
+  delete o.pp_tl;
+  delete o.pp_eur;
+  delete o.pp_miktar;
   return o;
 }
 

@@ -1,13 +1,9 @@
--- cost_analysis schema ve tuketim (türetilmiş tutar/pp sütunları)
--- Sıfır kurulum: tüm .sql'yi uygulayın.
--- Mevcut tuketim verisini korumak için: migrate_v2_tuketim_computed.sql
+-- Mevcut fb_cost.tuketim → tutar/pp türetilmiş sütunlar (miktar, birim fiyat, kur, cost pax = tek kaynak)
+-- Yedek: pg_dump veya tuketim_mig_bak. PostgreSQL 12+.
+-- psql -U cost -d cost_analysis -f migrate_v2_tuketim_computed.sql
 --
--- Çalıştır: psql -U postgres -d cost_analysis -f migrate.sql
--- (ve önce: CREATE DATABASE cost_analysis; gerekirse)
+-- İkinci kez çalıştırılırsa hata: "migrate_v2: zaten uygulandı" ve durur (veri korunur).
 
-CREATE SCHEMA IF NOT EXISTS fb_cost;
-
--- Formül yardımcıları (fb_cost_functions.sql ile aynı; tek dosyada çalışsın diye gömülü)
 CREATE OR REPLACE FUNCTION fb_cost.tuketim_tutar_tl(
   p_tip      TEXT,
   p_tuk      NUMERIC,
@@ -108,28 +104,48 @@ AS $$
     END
 $$;
 
--- UYARI: Aşağıdaki DROP, tüketim satırlarını siler. Veriyi koruyun veya yedeği alın.
-DROP TABLE IF EXISTS fb_cost.tuketim CASCADE;
+DO $guard$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'fb_cost' AND table_name = 'tuketim'
+  ) THEN
+    RAISE EXCEPTION 'migrate_v2: fb_cost.tuketim yok. Önce migrate.sql veya en azından tabloyu oluşturun.';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'fb_cost' AND table_name = 'tuketim'
+      AND column_name = 'tutar_tl' AND is_generated = 'ALWAYS'
+  ) THEN
+    RAISE EXCEPTION 'migrate_v2: tuketim zaten yeni şemada. İkinci kez uygulamayın.' USING HINT = 'Beklenmeyense şema yedeğini kontrol edin';
+  END IF;
+END
+$guard$;
 
-CREATE TABLE fb_cost.tuketim (
+CREATE TABLE IF NOT EXISTS fb_cost.tuketim_mig_bak (LIKE fb_cost.tuketim INCLUDING ALL);
+TRUNCATE fb_cost.tuketim_mig_bak;
+INSERT INTO fb_cost.tuketim_mig_bak SELECT * FROM fb_cost.tuketim;
+
+DROP TABLE IF EXISTS fb_cost.tuketim_new;
+
+CREATE TABLE fb_cost.tuketim_new (
   id              SERIAL PRIMARY KEY,
   dosya           TEXT,
-  tip             TEXT NOT NULL,          -- 'yiyecek' | 'icenek'
-  tarih_str       TEXT NOT NULL,          -- '2025-04' | '2025-04-15g'
+  tip             TEXT NOT NULL,
+  tarih_str       TEXT NOT NULL,
   yil             INTEGER NOT NULL,
   ay_no           INTEGER NOT NULL,
   ay              TEXT,
   gun             INTEGER,
-  cost_pax        NUMERIC,                -- misafir sayısı (pax)
-  kur             NUMERIC,                 -- TL cinsinden: 1 EUR = kur TL
+  cost_pax        NUMERIC,
+  kur             NUMERIC,
   kategori        TEXT,
   stok_mali       TEXT NOT NULL,
   stok_no         TEXT,
   birim           TEXT,
-  tuk_miktar      NUMERIC NOT NULL DEFAULT 0,  -- yiyecek: gram, icenek: litre
-  birim_fiyat     NUMERIC NOT NULL DEFAULT 0,   -- yiyecek: TL/kg, icenek: TL/lt
+  tuk_miktar      NUMERIC NOT NULL DEFAULT 0,
+  birim_fiyat     NUMERIC NOT NULL DEFAULT 0,
   yukleme_zamani  TIMESTAMPTZ DEFAULT NOW(),
-
   tutar_tl  NUMERIC GENERATED ALWAYS AS (fb_cost.tuketim_tutar_tl(tip, tuk_miktar, birim_fiyat)) STORED,
   tutar_eur NUMERIC GENERATED ALWAYS AS (fb_cost.tuketim_tutar_eur(tip, tuk_miktar, birim_fiyat, kur)) STORED,
   pp_tl     NUMERIC GENERATED ALWAYS AS (fb_cost.tuketim_pp_tl(tip, tuk_miktar, birim_fiyat, cost_pax)) STORED,
@@ -138,35 +154,50 @@ CREATE TABLE fb_cost.tuketim (
   pp_cl     NUMERIC GENERATED ALWAYS AS (fb_cost.tuketim_pp_cl(tip, tuk_miktar, cost_pax)) STORED
 );
 
+INSERT INTO fb_cost.tuketim_new (
+  dosya, tip, tarih_str, yil, ay_no, ay, gun, cost_pax, kur, kategori, stok_mali, stok_no, birim,
+  tuk_miktar, birim_fiyat, yukleme_zamani
+)
+SELECT
+  o.dosya, o.tip, o.tarih_str, o.yil, o.ay_no, o.ay, o.gun, o.cost_pax, o.kur, o.kategori, o.stok_mali, o.stok_no, o.birim,
+  o.tuk_miktar_new, o.birim_fiyat_new, o.yukleme_zamani
+FROM (
+  SELECT
+    t.dosya, t.tip, t.tarih_str, t.yil, t.ay_no, t.ay, t.gun, t.cost_pax, t.kur, t.kategori, t.stok_mali, t.stok_no, t.birim,
+    t.yukleme_zamani,
+    COALESCE(
+      NULLIF(t.tuk_miktar, 0),
+      CASE
+        WHEN t.tip = 'yiyecek' AND NULLIF(t.birim_fiyat, 0) IS NOT NULL AND COALESCE(t.tutar_tl, 0) > 0
+          THEN (t.tutar_tl / t.birim_fiyat) * 1000.0
+        WHEN t.tip IN ('icenek', 'icecek') AND NULLIF(t.birim_fiyat, 0) IS NOT NULL AND COALESCE(t.tutar_tl, 0) > 0
+          THEN t.tutar_tl / t.birim_fiyat
+        ELSE 0
+      END,
+      CASE
+        WHEN COALESCE(t.tutar_tl, 0) > 0 AND COALESCE(t.tuk_miktar, 0) = 0 AND COALESCE(t.birim_fiyat, 0) = 0
+             AND t.tip = 'yiyecek'
+          THEN t.tutar_tl * 1000.0
+        WHEN COALESCE(t.tutar_tl, 0) > 0 AND COALESCE(t.tuk_miktar, 0) = 0 AND COALESCE(t.birim_fiyat, 0) = 0
+             AND t.tip IN ('icenek', 'icecek')
+          THEN t.tutar_tl
+        ELSE 0
+      END
+    )::NUMERIC AS tuk_miktar_new,
+    CASE
+      WHEN COALESCE(t.tutar_tl, 0) > 0 AND COALESCE(t.tuk_miktar, 0) = 0 AND COALESCE(t.birim_fiyat, 0) = 0
+        THEN 1::NUMERIC
+      ELSE COALESCE(t.birim_fiyat, 0)
+    END::NUMERIC AS birim_fiyat_new
+  FROM fb_cost.tuketim t
+) o;
+
+DROP TABLE fb_cost.tuketim;
+
+ALTER TABLE fb_cost.tuketim_new RENAME TO tuketim;
+
 CREATE INDEX IF NOT EXISTS idx_tuketim_tarih   ON fb_cost.tuketim(tarih_str);
 CREATE INDEX IF NOT EXISTS idx_tuketim_tip     ON fb_cost.tuketim(tip);
 CREATE INDEX IF NOT EXISTS idx_tuketim_stok    ON fb_cost.tuketim(stok_mali);
 CREATE INDEX IF NOT EXISTS idx_tuketim_yil_ay  ON fb_cost.tuketim(yil, ay_no);
 CREATE INDEX IF NOT EXISTS idx_tuketim_kategori ON fb_cost.tuketim(kategori);
-
--- OTP kodları tablosu (login sistemi)
-CREATE TABLE IF NOT EXISTS fb_cost.otp_kodlari (
-  id            SERIAL PRIMARY KEY,
-  email         TEXT NOT NULL,
-  kod           TEXT NOT NULL,
-  gecerli_until TIMESTAMPTZ NOT NULL,
-  kullanildi    BOOLEAN DEFAULT FALSE,
-  ip_adresi     TEXT,
-  olusturma     TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_otp_email ON fb_cost.otp_kodlari(email);
-CREATE INDEX IF NOT EXISTS idx_otp_gecerli ON fb_cost.otp_kodlari(gecerli_until);
-
--- Alarm eşikleri tablosu
-CREATE TABLE IF NOT EXISTS fb_cost.alarm_esikleri (
-  id          SERIAL PRIMARY KEY,
-  ad          TEXT NOT NULL,
-  tip         TEXT,                     -- 'yiyecek' | 'icenek' | NULL (ikisi de)
-  metrik      TEXT NOT NULL,            -- 'pp_tl' | 'pp_eur' | 'pp_gr' | 'pp_cl' | 'tutar_tl'
-  kategori    TEXT,                     -- NULL = tüm kategoriler
-  stok_mali   TEXT,                     -- NULL = kategori geneli
-  esik_deger  NUMERIC NOT NULL,
-  yon         TEXT NOT NULL DEFAULT 'yukari', -- 'yukari' | 'asagi'
-  aktif       BOOLEAN DEFAULT TRUE,
-  olusturma   TIMESTAMPTZ DEFAULT NOW()
-);

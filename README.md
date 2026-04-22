@@ -33,7 +33,9 @@ CSV veya Excel (.xlsx) dosyalarından dönemsel tüketim verilerini PostgreSQL v
 
 ```
 cost/
-├── migrate.sql                    # PostgreSQL şema & tablo tanımları
+├── migrate.sql                    # Sıfır kurulum: fb_cost + tuketim (türetilmiş tutar/pp)
+├── migrate_v2_tuketim_computed.sql # Mevcut DB'yi yeni şemaya taşır (yedek alın)
+├── fb_cost_functions.sql          # İsteğe bağlı: SQL tutar fonksiyonları (migrate.sql içinde de var)
 ├── package.json
 ├── src/
 │   └── index.js                   # Express API sunucusu
@@ -55,8 +57,8 @@ cost/
 ### Gereksinimler
 
 - Node.js 18+
-- PostgreSQL 13+
-- `voyagestars` adında bir veritabanı
+- PostgreSQL 12+ (türetilmiş `STORED` sütunlar için)
+- Örnek: `cost_analysis` veya `voyagestars` adında bir veritabanı
 
 ### Adımlar
 
@@ -66,11 +68,19 @@ cost/
    npm install
    ```
 
-2. Veritabanı şemasını oluşturun:
+2. Veritabanı şemasını oluşturun (sıfırdan; `tuketim` mevcut veriyi **siler**):
 
    ```bash
-   psql -U postgres -d voyagestars -f migrate.sql
+   psql -U postgres -d cost_analysis -f migrate.sql
    ```
+
+   **Mevcut** eski `tuketim` tablonuz (düz `tutar_tl` sütunlu) varsa yedek alıp:
+
+   ```bash
+   psql -U postgres -d cost_analysis -f migrate_v2_tuketim_computed.sql
+   ```
+
+   (İkinci kez çalıştırmayın: hata verir ve durur. Yedek: `fb_cost.tuketim_mig_bak`.)
 
 3. (İsteğe bağlı) Veritabanı parolası için ortam değişkeni:
 
@@ -98,7 +108,7 @@ cost/
 | --- | --- |
 | Host | `127.0.0.1` |
 | Port (DB) | `5432` |
-| Database | `voyagestars` |
+| Database | `cost_analysis` veya `voyagestars` (`.env` / `DB_NAME`) |
 | User | `postgres` |
 | Password | `$DB_PASSWORD` veya `postgres` |
 | App Port | `3010` |
@@ -122,25 +132,29 @@ cost/
 
 ---
 
-## CSV Format Beklentisi
+## CSV / Excel ve veri modeli (tek kaynak alanlar)
 
-CSV dosyasının başlık satırı aşağıdaki kolonları içermelidir:
+`fb_cost.tuketim` satırı **doldururken** sadece şunlar yazılır: dönem meta (`dosya`, `tip`, `tarih_str`, yıl/ay), **cost_pax**, **kur**, stok alanları, **birim**, **tuk_miktar**, **birim_fiyat**.
+
+Aşağıdakiler **veritabanında türetilir** (Excel’de F–J sütunlarıyla uyumlu formül):
+
+- **tutar TL** = yiyecek: `(gram / 1000) × TL/kg` · içecek: `litre × TL/lt`
+- **tutar EUR** = `tutar TL / kur` (kur: 1 EUR’nun kaç TL olduğu)
+- **P.P. TL / P.P. EUR** = toplam tutar ÷ `cost_pax` (ve EUR için kur)
+- **P.P. gr** = yiyecek: `gram / cost_pax` · **P.P. cl** = içecek: `(litre × 100) / cost_pax`
+
+`tip` sütununda: `yiyecek` veya `icenek`. **CSV** eski dışa aktarımlarda `tutar_tl`, `pp_*` sütunları da bulunabilir; yüklerken doldurma için yalnızca **miktar ve birim fiyat yoksa** (veya 0) `tutar_tl` tüketim miktarsız satırlarda kullanılır, sonra türetim yine aynı kuralla yapılır.
+
+Zorunlu/önerilen başlıklar (örnek):
 
 ```
 dosya, tip, tarih_str, yil, ay_no, ay, gun, cost_pax, kur,
-kategori, stok_mali, stok_no, birim,
-tuk_miktar, birim_fiyat, tutar_tl, tutar_eur,
-pp_gr, pp_cl, pp_tl, pp_eur
+kategori, stok_mali, stok_no, birim, tuk_miktar, birim_fiyat
 ```
 
-- `tip`: `yiyecek` veya `icenek`
-- `tarih_str`: `YYYY-MM` formatında (örn. `2025-04`) — tam ay verisi için.
-  Ayın 15'inde alınan kısmi veri için `YYYY-MM-15g` formatı kullanılır
-  (örn. `2025-11-15g`). Bu sayede aynı ayın hem tam hem kısmi versiyonu
-  yan yana saklanabilir; yıllık aggregasyonlar `-15g` dönemleri otomatik
-  hariç tutar.
-- Aynı `tarih_str + tip` ile yeniden yükleme yapıldığında mevcut kayıtlar silinip yenileri eklenir.
-- **Web yüklemesi (Excel/CSV)**: `normalizeTuketimRowForDb` yiyecekte `tuk_miktar` kaynağını **kg** kabul edip **grama** (×1000) çevirir (satır `birim`i gr/g/gram ise dönüştürülmez). İçecekte `pp_miktar` varsa ve sütun birimi cl/ml/lt değilse P.P. değeri **litre** kabul edilip **pp_cl** = santilitre (×100) yapılır. Eski CSV’de `pp_miktar` yoksa dosyadaki `pp_gr` / `pp_cl` olduğu gibi alınır.
+- `tarih_str`: `YYYY-MM` (tam ay) veya kısmi raporlarda `YYYY-MM-15g`
+- Aynı `tarih_str + tip` ile yeniden yüklemede o dönem satırları silinir ve yenileri eklenir.
+- **Yiyedeğ** Excel’de miktar **kg** ise, `birim` “Kilogram” iken (önce `gram` eşleşmesi yapılmaz) g’ye çevrilir. **KDV vb.** satır: miktar ve birim fiyat yok, yalnızca tutar varsa, tutar korumak için `birim_fiyat = 1` ve sanal miktar atanır.
 
 ---
 
@@ -176,8 +190,8 @@ Her iki script de:
 - Sheet adından tip (`yiyecek` / `icenek`), gün, ay, yıl çıkarır.
 - "Cost Pax" ve "Kur" değerlerini sheet'in meta alanından okur.
 - Ürün satırlarını ayrıştırır; özet/toplam/kategori başlık satırlarını atlar.
-- `birim` kolonuna göre `pp_gr` (g) ve `pp_cl` (cl) değerlerini normalize eder
-  (KG → ×1000, GR → ×1, LT → ×100, ML → ÷10, ADET/PORS → 0).
+- Aynı formül mantığıyla `tutar_*` ve `pp_*` değerlerini **hesaplayarak** CSV’ye yazar
+  (yiyecek: kg → g; içecek: litre; kur ve cost pax üstten okunur).
 
 Çıktı CSV'sini web arayüzünden **Veri Yükle** sayfasından yükleyin.
 
@@ -185,12 +199,10 @@ Her iki script de:
 
 ## Veritabanı Şeması
 
-`fb_cost` şeması altında iki tablo bulunur:
+- `fb_cost.tuketim` — kayıt: `tuk_miktar`, `birim_fiyat`, `kur`, `cost_pax` + meta; `tutar_tl`, `tutar_eur`, `pp_*` sütunları **GENERATED** (formüller `fb_cost.tuketim_*` SQL fonksiyonları ve `migrate.sql` ile aynı).
+- `fb_cost.otp_kodlari`, `fb_cost.alarm_esikleri` — giriş ve alarmlar
 
-- `fb_cost.tuketim` — tüketim verilerinin ana tablosu
-- `fb_cost.alarm_esikleri` — alarm eşik tanımları
-
-Detaylar için `migrate.sql` dosyasına bakın.
+Detay: `migrate.sql` ve `fb_cost_functions.sql`.
 
 ---
 

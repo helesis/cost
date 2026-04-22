@@ -459,21 +459,74 @@ def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
     return candidates[0]
 
 
-def pp_gr_cl(birim: str, pp_miktar: float, tip: str) -> tuple[float, float]:
-    b = (birim or "").upper().strip()
-    if tip == "yiyecek":
-        if b in ("KG", "KGS", "KILO", "KİLO", "KILOGRAM", "KİLOGRAM"):
-            return (pp_miktar * 1000.0, 0.0)
-        if b in ("GR", "G", "GRAM"):
-            return (pp_miktar, 0.0)
-        return (0.0, 0.0)
-    if b in ("LT", "L", "LITRE", "LİTRE"):
-        return (0.0, pp_miktar * 100.0)
-    if b in ("CL", "SANTILITRE", "SANTİLİTRE"):
-        return (0.0, pp_miktar)
-    if b in ("ML", "MILILITRE", "MİLİLİTRE", "MLT"):
-        return (0.0, pp_miktar / 10.0)
-    return (0.0, 0.0)
+def _norm_tip(tip: str) -> str:
+    return "icenek" if tip in ("icecek", "içeçek") else tip
+
+
+def tutar_tl_from(tip: str, tuk: float, birim_fiyat: float) -> float:
+    t = tuk or 0.0
+    bf = birim_fiyat or 0.0
+    t0 = _norm_tip(tip)
+    if t0 == "yiyecek":
+        return (t / 1000.0) * bf
+    if t0 == "icenek":
+        return t * bf
+    return t * bf
+
+
+def normalize_tuk_miktar_yiyecek_kg_to_gr(tuk: float, birim: str) -> float:
+    b = normalize_text(birim).replace(" ", "")
+    if "kilo" in b or b in ("kg", "kgs"):
+        return tuk * 1000.0
+    if ("gram" in b and "kilo" not in b) or b in ("gr", "g") or b.endswith("gr"):
+        return tuk
+    return tuk * 1000.0
+
+
+def backfill_tuk_birim(tip: str, tuk: float, birim_fiyat: float, tutar_tl: float) -> tuple[float, float]:
+    t = tuk or 0.0
+    bf = birim_fiyat or 0.0
+    tt = tutar_tl or 0.0
+    t0 = _norm_tip(tip)
+    if t:
+        return t, bf
+    if bf and tt:
+        if t0 == "yiyecek":
+            return (tt / bf) * 1000.0, bf
+        if t0 == "icenek":
+            return tt / bf, bf
+    if tt and not t and not bf:
+        if t0 == "yiyecek":
+            return tt * 1000.0, 1.0
+        if t0 == "icenek":
+            return tt, 1.0
+    return t, bf
+
+
+def derive_tutar_pp(
+    tip: str,
+    tuk: float,
+    birim_fiyat: float,
+    kur: Optional[float],
+    cost_pax: Optional[float],
+) -> dict[str, float]:
+    t0 = _norm_tip(tip)
+    cp = cost_pax or 0.0
+    k = kur or 0.0
+    tt = tutar_tl_from(tip, tuk, birim_fiyat)
+    te = (tt / k) if k else 0.0
+    pp_tl = (tt / cp) if cp else 0.0
+    pp_eur = (te / cp) if (cp and k) else 0.0
+    pp_gr = (tuk / cp) if (t0 == "yiyecek" and cp) else 0.0
+    pp_cl = ((tuk * 100.0) / cp) if (t0 == "icenek" and cp) else 0.0
+    return {
+        "tutar_tl": tt,
+        "tutar_eur": te,
+        "pp_tl": pp_tl,
+        "pp_eur": pp_eur,
+        "pp_gr": pp_gr,
+        "pp_cl": pp_cl,
+    }
 
 
 def get_cell(row: pd.Series, idx: Optional[int]) -> Any:
@@ -509,12 +562,12 @@ def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: 
 
     parse_fail_count = 0
     category_empty = 0
-    unit_unknown = 0
+    no_pax_tutar = 0
     for r in rows:
         if not r.get("kategori"):
             category_empty += 1
-        if r.get("pp_miktar_parse_ok") and r.get("pp_miktar", 0) > 0 and r.get("pp_gr", 0) == 0 and r.get("pp_cl", 0) == 0:
-            unit_unknown += 1
+        if (r.get("tutar_tl") or 0) > 0 and not (r.get("cost_pax") or 0):
+            no_pax_tutar += 1
         for f in NUMERIC_FIELDS:
             if not r.get(f"{f}_parse_ok", True) and r.get(f"{f}_raw", ""):
                 parse_fail_count += 1
@@ -523,8 +576,8 @@ def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: 
         warnings_list.append(f"yüksek parse hata sayısı: {parse_fail_count}")
     if category_empty > max(5, len(rows) * 0.3):
         warnings_list.append(f"kategori boş satır fazla: {category_empty}")
-    if unit_unknown > max(5, len(rows) * 0.3):
-        warnings_list.append(f"birim normalize edilemeyen pp satırı fazla: {unit_unknown}")
+    if no_pax_tutar > max(5, len(rows) * 0.3):
+        warnings_list.append(f"cost_pax yok iken tutar>0 satır sayısı yüksek: {no_pax_tutar}")
 
     status = "OK"
     if warnings_list:
@@ -594,7 +647,13 @@ def sheet_isle(
                     "stok_no": stok_no_str,
                 })
 
-        pp_gr, pp_cl = pp_gr_cl(birim, parsed_out["pp_miktar"], tip)
+        tuk0 = float(parsed_out.get("tuk_miktar") or 0)
+        bf0 = float(parsed_out.get("birim_fiyat") or 0)
+        tut0 = float(parsed_out.get("tutar_tl") or 0)
+        if _norm_tip(tip) == "yiyecek":
+            tuk0 = normalize_tuk_miktar_yiyecek_kg_to_gr(tuk0, birim)
+        tuk0, bf0 = backfill_tuk_birim(tip, tuk0, bf0, tut0)
+        d = derive_tutar_pp(tip, tuk0, bf0, meta.get("kur"), meta.get("cost_pax"))
         row_has_warning = any(not parsed_out.get(f"{f}_parse_ok", True) and parsed_out.get(f"{f}_raw", "") for f in NUMERIC_FIELDS)
 
         rows.append({
@@ -617,8 +676,14 @@ def sheet_isle(
             "stok_no": stok_no_str,
             "birim": birim,
             **parsed_out,
-            "pp_gr": round(pp_gr, 4),
-            "pp_cl": round(pp_cl, 4),
+            "tuk_miktar": tuk0,
+            "birim_fiyat": bf0,
+            "tutar_tl": round(d["tutar_tl"], 4),
+            "tutar_eur": round(d["tutar_eur"], 4),
+            "pp_tl": round(d["pp_tl"], 4),
+            "pp_eur": round(d["pp_eur"], 4),
+            "pp_gr": round(d["pp_gr"], 4),
+            "pp_cl": round(d["pp_cl"], 4),
             "satir_warning": row_has_warning,
         })
 
