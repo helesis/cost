@@ -1138,6 +1138,20 @@ function setupUpload() {
   zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
   zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); uploadFiles(e.dataTransfer.files); });
   input.addEventListener('change', () => { uploadFiles(input.files); input.value = ''; });
+
+  const yukluDonemler = document.getElementById('yuklu-donemler');
+  if (yukluDonemler && !yukluDonemler.dataset.vcDonemDelegate) {
+    yukluDonemler.dataset.vcDonemDelegate = '1';
+    yukluDonemler.addEventListener('click', (e) => {
+      const btn = e.target && e.target.closest && e.target.closest('.donem-tag-x');
+      if (!btn) return;
+      e.preventDefault();
+      const enc = btn.getAttribute('data-tstr');
+      if (enc == null || enc === '') return;
+      const tarihStr = decodeURIComponent(enc);
+      vcSilDonem(tarihStr);
+    });
+  }
 }
 
 async function uploadFiles(fileList) {
@@ -1175,8 +1189,8 @@ async function loadYukluDonemler() {
     ? rows.map(d => {
         const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
         const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
-        const ts = JSON.stringify(d.tarih_str || '');
-        return `<span class="donem-tag"><span class="donem-tag-label">${etiket}</span><button type="button" class="donem-tag-x" title="Bu dönemi sil" aria-label="Sil" onclick="vcSilDonem(${ts})">×</button></span>`;
+        const tEnc = encodeURIComponent(d.tarih_str || '');
+        return `<span class="donem-tag"><span class="donem-tag-label">${etiket}</span><button type="button" class="donem-tag-x" title="Bu dönemi sil" aria-label="Sil" data-tstr="${tEnc}">×</button></span>`;
       }).join('')
     : '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
 }
