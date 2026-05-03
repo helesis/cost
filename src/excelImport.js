@@ -287,18 +287,39 @@ function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
   return { tuk_miktar: t, birim_fiyat: bf };
 }
 
-/** Ürün değil, altındaki satırların grup başlığı (toplamda yer almaz) */
+/** "1023001 - BEBEK MAMALARI" → "BEBEK MAMALARI" (grup / kategori hücresi) */
+function grupBaslikEtiketi(stokMali) {
+  const sm = String(stokMali).trim();
+  const m = sm.match(/^\d+\s*-\s*(.+)$/);
+  if (m) return m[1].trim();
+  return sm;
+}
+
+/**
+ * Ürün değil, altındaki satırların grup başlığı (toplamda yer almaz).
+ * Excel'de "1001001 - DANA ETLERI" ara toplam miktarı dolu, tutar/birim fiyat 0 — yine grup.
+ */
 function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
   if (!stokMali || !String(stokMali).trim()) return false;
   const sm = String(stokMali).trim();
   const sn = (stokNoStr || '').toString().trim().toLowerCase();
-  const hasAmount =
-    (numVals.tutar_tl || 0) !== 0 ||
-    (numVals.tuk_miktar || 0) !== 0 ||
-    (numVals.birim_fiyat || 0) !== 0;
-  if (hasAmount) return false;
-
   const hasRealStokNo = !!sn && sn !== '0' && sn !== 'nan';
+
+  const tutar = numVals.tutar_tl || 0;
+  const birimFiyat = numVals.birim_fiyat || 0;
+  const tuk = numVals.tuk_miktar || 0;
+
+  if (
+    !hasRealStokNo &&
+    tutar === 0 &&
+    birimFiyat === 0 &&
+    /^\d+\s*-\s/.test(sm)
+  ) {
+    return true;
+  }
+
+  const hasAmount = tutar !== 0 || tuk !== 0 || birimFiyat !== 0;
+  if (hasAmount) return false;
   if (hasRealStokNo) return false;
 
   const startsWithDigit = /^\d/.test(sm);
@@ -450,7 +471,7 @@ function parseExcelToRows(buffer, originalname) {
     }
 
     if (isGroupHeaderRow(sm, stokNoStr, numVals)) {
-      kategori = sm;
+      kategori = grupBaslikEtiketi(sm);
       continue;
     }
 

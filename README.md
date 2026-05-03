@@ -69,11 +69,13 @@ cost/
    npm install
    ```
 
-2. Veritabanı şemasını oluşturun (sıfırdan; `tuketim` mevcut veriyi **siler**):
+2. Veritabanı şemasını oluşturun. **`migrate.sql` `fb_cost.tuketim` tablosunu `DROP` edip yeniden oluşturur**; üretimde mevcut satırlar silinir. Yedek almadan çalıştırmayın. Sıfır kurulumda:
 
    ```bash
    psql -U postgres -d cost_analysis -f migrate.sql
    ```
+
+   Üretimde yalnızca sütun eklemek için `migrate_add_grup_column.sql` gibi hedefli dosyaları tercih edin; tam şema taşıması için `migrate_v2_tuketim_computed.sql` (bir kez, yedekli) kullanın.
 
    **Mevcut** eski `tuketim` tablonuz (düz `tutar_tl` sütunlu) varsa yedek alıp:
 
@@ -103,16 +105,41 @@ cost/
 
 ## Yapılandırma
 
-`src/index.js` içinde varsayılan bağlantı bilgileri:
+Ortam değişkenleri `src/index.js` içinde `dotenv` ile okunur (proje kökünde `.env`). Tanımlı değilse kod içi varsayılanlar kullanılır:
 
-| Parametre | Varsayılan |
-| --- | --- |
-| Host | `127.0.0.1` |
-| Port (DB) | `5432` |
-| Database | `cost_analysis` veya `voyagestars` (`.env` / `DB_NAME`) |
-| User | `postgres` |
-| Password | `$DB_PASSWORD` veya `postgres` |
-| App Port | `3010` |
+| Parametre | Ortam değişkeni | Kod varsayılanı |
+| --- | --- | --- |
+| Host | `DB_HOST` | `127.0.0.1` |
+| Port (DB) | `DB_PORT` | `5432` |
+| Database | `DB_NAME` | `voyagestars` |
+| User | `DB_USER` | `postgres` |
+| Password | `DB_PASSWORD` | `postgres` |
+| App Port | `PORT` | `3010` |
+
+Üretimde sık görülen örnek: `DB_NAME=cost_analysis`, `DB_USER=cost`, `DB_PORT=5434` (PostgreSQL Docker konteynerinin host’a map ettiği port; uygulama ile **aynı** portu kullanın).
+
+---
+
+## Üretim sunucusu (notlar)
+
+- Uygulama örnek dizin: `/var/www/cost-analysis`. Kod güncellemesi: `git pull`, ardından süreç yöneticisiyle yeniden başlatma (ör. `pm2 restart <uygulama_adı>`).
+- **PostgreSQL çoğu kurulumda Docker’da** çalışır (ör. konteyner adı `cost-analysis-db`, host’ta `127.0.0.1:5434` → konteyner `5432`). Aynı makinede başka bir Postgres örneği `5432` kullanıyor olabilir. **`psql` veya GUI ile bağlanırken mutlaka `.env` içindeki `DB_PORT` değerini kullanın** (`-p 5434`); aksi halde yanlış veritabanı örneğine gidip “password authentication failed” alırsınız.
+- Komut satırından migrate: `psql` **yalnızca `PGPASSWORD`** okur; `.env` içindeki `DB_PASSWORD` otomatik gitmez. `.env` yüklendikten sonra eşleştirin:
+
+  ```bash
+  cd /var/www/cost-analysis
+  set -a && source .env && set +a
+  export PGPASSWORD="$DB_PASSWORD"
+  psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f ./migrate.sql
+  ```
+
+  `.env` satırında Windows satır sonu (`^M`) varsa parolaya `\r` karışabilir; sorun yaşarsanız `dos2unix .env` veya editörden LF kullanın. **`migrate.sql` çalıştıktan sonra** `fb_cost.tuketim` satır sayısını kontrol edin; beklenmedik şekilde boşaldıysa veriyi Excel/CSV ile yeniden yükleyin.
+- Konteyner içinde süper kullanıcı (`postgres`) ile bakım için (konteyner ve compose’daki `POSTGRES_PASSWORD` sizin ortamınıza göre):
+
+  ```bash
+  docker exec -it cost-analysis-db psql -U postgres -d cost_analysis -c '\du'
+  ```
+- SQL dosyasını yerel makineden sunucuya aktarmak için örnek: `scp migrate.sql kullanici@sunucu:/var/www/cost-analysis/` (SSH kullanıcı ve host kendi ortamınıza göre).
 
 ---
 
@@ -205,6 +232,52 @@ Her iki script de:
 - `fb_cost.otp_kodlari`, `fb_cost.alarm_esikleri` — giriş ve alarmlar
 
 Detay: `migrate.sql` ve `fb_cost_functions.sql`.
+
+---
+
+## Sunucuda çalıştırma
+
+Örnek kurulum dizini: `/var/www/cost-analysis`. Veritabanı (Docker) ayakta ve `.env` doğru (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, gerekiyorsa `PORT`, `JWT_SECRET`, vb.) olmalı.
+
+1. **Güncelleme ve bağımlılık**
+
+   ```bash
+   cd /var/www/cost-analysis
+   git pull
+   npm install --omit=dev
+   ```
+
+2. **Doğrudan Node (ön planda test)**
+
+   ```bash
+   cd /var/www/cost-analysis
+   npm start
+   ```
+
+   Varsayılan dinleme: `http://0.0.0.0:3010` (`PORT` ile değişir). Durdurmak için `Ctrl+C`.
+
+3. **PM2 ile sürekli çalışma (önerilen)**
+
+   İlk kez:
+
+   ```bash
+   cd /var/www/cost-analysis
+   pm2 start src/index.js --name cost-analysis --cwd /var/www/cost-analysis
+   pm2 save
+   ```
+
+   Kod veya `.env` değişince:
+
+   ```bash
+   pm2 restart cost-analysis
+   ```
+
+   Log ve durum: `pm2 logs cost-analysis`, `pm2 status`.
+
+4. **Ön koşullar**
+
+   - PostgreSQL konteyneri çalışıyor olmalı (`docker ps` ile `cost-analysis-db` veya sizin compose adınız).
+   - Sunucuda güvenlik duvarı / ters vekil (nginx, Caddy, …) kullanıyorsanız dışarıya genelde 80/443 açılır; uygulama 3010’da dinliyorsa vekil bu porta `proxy_pass` yapmalıdır.
 
 ---
 

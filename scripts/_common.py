@@ -544,19 +544,32 @@ def _pn_val(parsed_numeric: dict[str, ParsedNumber], key: str) -> float:
     return float(p.value)
 
 
+def grup_baslik_etiketi(stok_mali: str) -> str:
+    sm = str(stok_mali).strip()
+    m = re.match(r"^\d+\s*-\s*(.+)$", sm)
+    if m:
+        return m.group(1).strip()
+    return sm
+
+
 def is_group_header_row(stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber]) -> bool:
     if not stok_mali or not str(stok_mali).strip():
         return False
     sm = str(stok_mali).strip()
     sn = (stok_no_str or "").strip().lower()
-    has_amount = (
-        _pn_val(parsed_numeric, "tutar_tl") != 0
-        or _pn_val(parsed_numeric, "tuk_miktar") != 0
-        or _pn_val(parsed_numeric, "birim_fiyat") != 0
-    )
+    has_real_stok_no = bool(sn) and sn not in ("0", "nan")
+
+    tutar = _pn_val(parsed_numeric, "tutar_tl")
+    bf = _pn_val(parsed_numeric, "birim_fiyat")
+    tuk = _pn_val(parsed_numeric, "tuk_miktar")
+
+    if not has_real_stok_no and tutar == 0 and bf == 0 and re.match(r"^\d+\s*-\s", sm):
+        return True
+
+    has_amount = tutar != 0 or tuk != 0 or bf != 0
     if has_amount:
         return False
-    if sn and sn not in ("0", "nan"):
+    if has_real_stok_no:
         return False
     starts_digit = bool(re.match(r"^\d", sm))
     looks_section = " - " in sm or bool(re.match(r"^\d{4,}", sm))
@@ -657,7 +670,7 @@ def sheet_isle(
             continue
 
         if is_group_header_row(stok_mali, stok_no_str, parsed_numeric):
-            current_kategori = stok_mali
+            current_kategori = grup_baslik_etiketi(stok_mali)
             continue
 
         # satırı ürün olarak kabul etmek için minimum sinyal
