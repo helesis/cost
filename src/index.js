@@ -255,20 +255,20 @@ app.post(
         let p = 1;
 
         for (const r of batch) {
-          values.push(`($${p},$${p+1},$${p+2},$${p+3},$${p+4},$${p+5},$${p+6},$${p+7},$${p+8},$${p+9},$${p+10},$${p+11},$${p+12},$${p+13},$${p+14})`);
+          values.push(`($${p},$${p+1},$${p+2},$${p+3},$${p+4},$${p+5},$${p+6},$${p+7},$${p+8},$${p+9},$${p+10},$${p+11},$${p+12},$${p+13},$${p+14},$${p+15})`);
           params.push(
             r.dosya, r.tip, r.tarih_str,
             parseInt(r.yil) || null, parseInt(r.ay_no) || null, r.ay, parseInt(r.gun) || null,
             parseFloat(r.cost_pax) || null, parseFloat(r.kur) || null,
-            r.kategori || null, r.stok_mali, r.stok_no || null, r.birim || null,
+            r.kategori || null, r.grup || null, r.stok_mali, r.stok_no || null, r.birim || null,
             parseFloat(r.tuk_miktar) || 0, parseFloat(r.birim_fiyat) || 0
           );
-          p += 15;
+          p += 16;
         }
 
         await client.query(
           `INSERT INTO fb_cost.tuketim
-           (dosya,tip,tarih_str,yil,ay_no,ay,gun,cost_pax,kur,kategori,stok_mali,stok_no,birim,
+           (dosya,tip,tarih_str,yil,ay_no,ay,gun,cost_pax,kur,kategori,grup,stok_mali,stok_no,birim,
             tuk_miktar,birim_fiyat)
            VALUES ${values.join(',')}`,
           params
@@ -351,7 +351,7 @@ app.get('/api/urun', async (req, res) => {
   if (!q) return res.json([]);
   try {
     const { rows } = await pool.query(`
-      SELECT tarih_str, yil, ay_no, tip, stok_mali, kategori,
+      SELECT tarih_str, yil, ay_no, tip, stok_mali, kategori, grup,
              tuk_miktar, birim, birim_fiyat, tutar_tl, tutar_eur,
              pp_gr, pp_cl, pp_tl, pp_eur, cost_pax, kur
       FROM fb_cost.tuketim

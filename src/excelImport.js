@@ -26,9 +26,10 @@ const AY_CESITLERI = [
 const AY_GOSTER = { 1: 'OCAK', 2: 'ŞUBAT', 3: 'MART', 4: 'NİSAN', 5: 'MAYIS', 6: 'HAZİRAN', 7: 'TEMMUZ', 8: 'AĞUSTOS', 9: 'EYLÜL', 10: 'EKİM', 11: 'KASIM', 12: 'ARALIK' };
 
 const SKIP_STOKLAR = [
-  'brüt tüketim', 'fiyat farkı', 'ödenmez', 'net tüketim',
+  'brüt tüketim', 'net tüketim',
   'toplam', 'cost pax', 'kur', 'stok malı',
 ];
+/* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -286,12 +287,76 @@ function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
   return { tuk_miktar: t, birim_fiyat: bf };
 }
 
-function isCategoryRow(stokMali, stokNo, nums) {
-  if (!stokMali) return false;
-  const sn = (stokNo || '').toString().trim().toLowerCase();
-  if (sn && sn !== '0' && sn !== 'nan') return false;
-  if (nums.some((v) => v !== 0 && v != null)) return false;
-  return /^\d{3,}/.test(stokMali) || stokMali.includes(' - ');
+/** Ürün değil, altındaki satırların grup başlığı (toplamda yer almaz) */
+function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
+  if (!stokMali || !String(stokMali).trim()) return false;
+  const sm = String(stokMali).trim();
+  const sn = (stokNoStr || '').toString().trim().toLowerCase();
+  const hasAmount =
+    (numVals.tutar_tl || 0) !== 0 ||
+    (numVals.tuk_miktar || 0) !== 0 ||
+    (numVals.birim_fiyat || 0) !== 0;
+  if (hasAmount) return false;
+
+  const hasRealStokNo = !!sn && sn !== '0' && sn !== 'nan';
+  if (hasRealStokNo) return false;
+
+  const startsWithDigit = /^\d/.test(sm);
+  const looksLikeSectionTitle = sm.includes(' - ') || /^\d{4,}/.test(sm);
+  if (startsWithDigit || looksLikeSectionTitle) return true;
+  return false;
+}
+
+/** Sayfa sonu: fiyat farkı + ödenmez tutarları (pozitif, TL); yalnızca son satırlarda ara */
+function scanFooterDeductions(grid, startRow, colMap) {
+  let fiyatFarki = 0;
+  let odenmez = 0;
+  const tailFrom = Math.max(startRow, grid.length - 45);
+  for (let r = tailFrom; r < grid.length; r++) {
+    const row = grid[r] || [];
+    const raw = getCell(row, colMap, 'stok_mali');
+    const smn = normalizeText(raw);
+    if (!smn) continue;
+    const tut = parseNumberTR(getCell(row, colMap, 'tutar_tl'));
+    if (smn.includes('fiyat fark')) {
+      fiyatFarki += Math.abs(tut);
+    } else if (smn.includes('odenmez')) {
+      odenmez += Math.abs(tut);
+    }
+  }
+  return { fiyatFarki, odenmez };
+}
+
+function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur) {
+  if (!(amountTl > 0)) return null;
+  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  let tuk;
+  let birim;
+  if (tipN === 'yiyecek') {
+    tuk = -amountTl * 1000;
+    birim = 'Gram';
+  } else {
+    tuk = -amountTl;
+    birim = 'Litre';
+  }
+  return {
+    dosya: dosyaName,
+    tip,
+    tarih_str: tarih.tarih_str,
+    yil: String(tarih.yil),
+    ay_no: String(tarih.ay_no),
+    ay: tarih.ay,
+    gun: String(tarih.gun),
+    cost_pax: costPax != null ? String(costPax) : '',
+    kur: kur != null ? String(kur) : '',
+    kategori: '',
+    grup: '',
+    stok_mali: label,
+    stok_no: '__DUZELTME__',
+    birim,
+    tuk_miktar: String(tuk),
+    birim_fiyat: '1',
+  };
 }
 
 /**
@@ -384,7 +449,7 @@ function parseExcelToRows(buffer, originalname) {
       numVals[f] = parseNumberTR(getCell(row, bestMap, f));
     }
 
-    if (isCategoryRow(sm, stokNoStr, Object.values(numVals))) {
+    if (isGroupHeaderRow(sm, stokNoStr, numVals)) {
       kategori = sm;
       continue;
     }
@@ -403,6 +468,7 @@ function parseExcelToRows(buffer, originalname) {
       cost_pax: costPax != null ? String(costPax) : '',
       kur: kur != null ? String(kur) : '',
       kategori: kategori || '',
+      grup: kategori || '',
       stok_mali: sm,
       stok_no: stokNoStr,
       birim,
@@ -415,6 +481,34 @@ function parseExcelToRows(buffer, originalname) {
       pp_cl: '0',
       pp_tl: String(numVals.pp_tl),
       pp_eur: String(numVals.pp_eur),
+    });
+  }
+
+  const { fiyatFarki, odenmez } = scanFooterDeductions(grid, headerRowIdx + 1, bestMap);
+  const dff = buildDeductionRow('— Excel: Fiyat farkı düşümü —', fiyatFarki, tip, tarih, name, costPax, kur);
+  const dod = buildDeductionRow('— Excel: Ödenmez toplamı düşümü —', odenmez, tip, tarih, name, costPax, kur);
+  if (dff) {
+    out.push({
+      ...dff,
+      tutar_tl: '0',
+      tutar_eur: '0',
+      pp_miktar: '0',
+      pp_tl: '0',
+      pp_eur: '0',
+      pp_gr: '0',
+      pp_cl: '0',
+    });
+  }
+  if (dod) {
+    out.push({
+      ...dod,
+      tutar_tl: '0',
+      tutar_eur: '0',
+      pp_miktar: '0',
+      pp_tl: '0',
+      pp_eur: '0',
+      pp_gr: '0',
+      pp_cl: '0',
     });
   }
 
@@ -443,6 +537,9 @@ function normalizeTuketimRowForDb(r) {
   birimF = filled.birim_fiyat;
   o.tuk_miktar = String(tuk);
   o.birim_fiyat = String(birimF);
+  if ((o.grup == null || String(o.grup).trim() === '') && o.kategori) {
+    o.grup = o.kategori;
+  }
   delete o.tutar_tl;
   delete o.tutar_eur;
   delete o.pp_gr;

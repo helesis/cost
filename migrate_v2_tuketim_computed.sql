@@ -140,6 +140,7 @@ CREATE TABLE fb_cost.tuketim_new (
   cost_pax        NUMERIC,
   kur             NUMERIC,
   kategori        TEXT,
+  grup            TEXT,
   stok_mali       TEXT NOT NULL,
   stok_no         TEXT,
   birim           TEXT,
@@ -155,11 +156,12 @@ CREATE TABLE fb_cost.tuketim_new (
 );
 
 INSERT INTO fb_cost.tuketim_new (
-  dosya, tip, tarih_str, yil, ay_no, ay, gun, cost_pax, kur, kategori, stok_mali, stok_no, birim,
+  dosya, tip, tarih_str, yil, ay_no, ay, gun, cost_pax, kur, kategori, grup, stok_mali, stok_no, birim,
   tuk_miktar, birim_fiyat, yukleme_zamani
 )
 SELECT
-  o.dosya, o.tip, o.tarih_str, o.yil, o.ay_no, o.ay, o.gun, o.cost_pax, o.kur, o.kategori, o.stok_mali, o.stok_no, o.birim,
+  o.dosya, o.tip, o.tarih_str, o.yil, o.ay_no, o.ay, o.gun, o.cost_pax, o.kur, o.kategori, o.kategori,
+  o.stok_mali, o.stok_no, o.birim,
   o.tuk_miktar_new, o.birim_fiyat_new, o.yukleme_zamani
 FROM (
   SELECT

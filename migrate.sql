@@ -123,6 +123,7 @@ CREATE TABLE fb_cost.tuketim (
   cost_pax        NUMERIC,                -- misafir sayısı (pax)
   kur             NUMERIC,                 -- TL cinsinden: 1 EUR = kur TL
   kategori        TEXT,
+  grup            TEXT,
   stok_mali       TEXT NOT NULL,
   stok_no         TEXT,
   birim           TEXT,

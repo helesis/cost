@@ -35,6 +35,7 @@ CSV veya Excel (.xlsx) dosyalarından dönemsel tüketim verilerini PostgreSQL v
 cost/
 ├── migrate.sql                    # Sıfır kurulum: fb_cost + tuketim (türetilmiş tutar/pp)
 ├── migrate_v2_tuketim_computed.sql # Mevcut DB'yi yeni şemaya taşır (yedek alın)
+├── migrate_add_grup_column.sql     # Sadece `grup` sütunu ekler (eski kurulumlar)
 ├── fb_cost_functions.sql          # İsteğe bağlı: SQL tutar fonksiyonları (migrate.sql içinde de var)
 ├── package.json
 ├── src/
@@ -141,7 +142,8 @@ Aşağıdakiler **veritabanında türetilir** (Excel’de F–J sütunlarıyla u
 - **tutar TL** = yiyecek: `(gram / 1000) × TL/kg` · içecek: `litre × TL/lt`
 - **tutar EUR** = `tutar TL / kur` (kur: 1 EUR’nun kaç TL olduğu)
 - **P.P. TL / P.P. EUR** = toplam tutar ÷ `cost_pax` (ve EUR için kur)
-- **P.P. gr** = yiyecek: `gram / cost_pax` · **P.P. cl** = içecek: `(litre × 100) / cost_pax`
+- **grup**: Liste başlığı (stok malı başında rakam veya bölüm metni, stok no yok / tutar yok); alt ürün satırlarına `grup` + `kategori` olarak yazılır; toplam ürün satırı değildir.
+- **Fiyat farkı / ödenmez toplamı**: Sayfanın **son ~45 satırında** aranır; tutar TL toplanıp **negatif düzeltme satırı** olarak veri tabanına eklenir (toplam tüketimden düşer).
 
 `tip` sütununda: `yiyecek` veya `icenek`. **CSV** eski dışa aktarımlarda `tutar_tl`, `pp_*` sütunları da bulunabilir; yüklerken doldurma için yalnızca **miktar ve birim fiyat yoksa** (veya 0) `tutar_tl` tüketim miktarsız satırlarda kullanılır, sonra türetim yine aynı kuralla yapılır.
 
