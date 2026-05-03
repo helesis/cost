@@ -315,7 +315,6 @@ app.get('/api/ozet', async (req, res) => {
         SUM(pp_tl)    AS toplam_pp_tl,
         SUM(pp_eur)   AS toplam_pp_eur
       FROM fb_cost.tuketim
-      WHERE tutar_tl > 0
       GROUP BY tarih_str, yil, ay_no, tip
       ORDER BY yil, ay_no, tip
     `);
@@ -329,7 +328,7 @@ app.get('/api/ozet', async (req, res) => {
 app.get('/api/kategoriler', async (req, res) => {
   const { tarih, tip } = req.query;
   try {
-    let where = 'WHERE tutar_tl > 0 AND kategori IS NOT NULL';
+    let where = 'WHERE kategori IS NOT NULL';
     const params = [];
     if (tarih) { where += ` AND tarih_str = $${params.length+1}`; params.push(tarih); }
     if (tip)   { where += ` AND tip = $${params.length+1}`; params.push(tip); }
@@ -418,7 +417,7 @@ app.get('/api/alarmlar', async (req, res) => {
     const tetiklenenler = [];
 
     for (const esik of esikler) {
-      let where = `WHERE tarih_str = $1 AND tutar_tl > 0`;
+      let where = `WHERE tarih_str = $1`;
       const params = [sonDonem];
       if (esik.tip) { where += ` AND tip = $${params.length+1}`; params.push(esik.tip); }
       if (esik.kategori) { where += ` AND kategori = $${params.length+1}`; params.push(esik.kategori); }
@@ -594,7 +593,7 @@ app.get('/api/yillik/yil-listesi', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT DISTINCT yil
       FROM fb_cost.tuketim
-      WHERE yil IS NOT NULL AND tutar_tl > 0
+      WHERE yil IS NOT NULL
       ORDER BY yil DESC
     `);
     res.json(rows.map(r => r.yil));
@@ -625,7 +624,7 @@ app.get('/api/yillik/ozet', async (req, res) => {
                  MAX(cost_pax)  AS cost_pax,
                  AVG(NULLIF(kur,0)) AS kur
           FROM fb_cost.tuketim
-          WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
+          WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
           GROUP BY ay_no
         )
         SELECT
@@ -699,7 +698,7 @@ app.get('/api/yillik/aylik', async (req, res) => {
           MAX(cost_pax)  AS cost_pax,
           AVG(NULLIF(kur, 0)) AS kur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
+        WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
         GROUP BY ay_no
         ORDER BY ay_no
       `, params);
@@ -734,7 +733,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
              SUM(tutar_tl)  AS toplam_tl,
              SUM(tutar_eur) AS toplam_eur
       FROM fb_cost.tuketim
-      WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
+      WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
       GROUP BY kategori
       ORDER BY toplam_tl DESC
     `, params);
@@ -744,7 +743,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
              SUM(tutar_tl)  AS tutar_tl,
              SUM(tutar_eur) AS tutar_eur
       FROM fb_cost.tuketim
-      WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
+      WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
       GROUP BY kategori, ay_no
       ORDER BY kategori, ay_no
     `, params);
@@ -755,7 +754,7 @@ app.get('/api/yillik/kategoriler', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori, ay_no
       ),
       siralanmis AS (
@@ -812,7 +811,8 @@ app.get('/api/yillik/urunler', async (req, res) => {
                SUM(tutar_eur) AS toplam_eur,
                SUM(tuk_miktar) AS tuk_miktar
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
+        WHERE yil = $1 AND tarih_str NOT LIKE '%-15g'
+          AND stok_no IS DISTINCT FROM '__DUZELTME__' ${tipFilter}
         GROUP BY stok_mali, kategori, tip
         ORDER BY ${sortField} DESC
         LIMIT $${params.length}
@@ -896,7 +896,7 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $1 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori
       ),
       onceki AS (
@@ -904,7 +904,7 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
                SUM(tutar_tl)  AS tl,
                SUM(tutar_eur) AS eur
         FROM fb_cost.tuketim
-        WHERE yil = $2 AND tutar_tl > 0 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
+        WHERE yil = $2 AND tarih_str NOT LIKE '%-15g' AND kategori IS NOT NULL ${tipFilter}
         GROUP BY kategori
       )
       SELECT
