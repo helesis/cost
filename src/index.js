@@ -25,7 +25,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || 'postgres',
 });
 
-/** __DUZELTME__ (düşüm) + __KDV_ILAVE__: tutar_tl/eur toplamlarında dahil; pax/miktar özetinde hariç */
+/** __DUZELTME__ / __KDV_ILAVE__: tutar toplamlarında dahil. Pax başı TL/EUR özetleri SUM(tutar)/pax (net). Gram/cl ve ürün sorgularında sanal tüketim yok. */
 const STOK_NO_DUZELTME = '__DUZELTME__';
 const STOK_NO_KDV_ILAVE = '__KDV_ILAVE__';
 const SQL_EXC_FINANS_PP = `(stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
@@ -323,8 +323,8 @@ app.get('/api/ozet', async (req, res) => {
              / NULLIF(MAX(cost_pax), 0))
           ELSE 0::numeric
         END AS toplam_pp_cl,
-        SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_tl ELSE 0 END) AS toplam_pp_tl,
-        SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_eur ELSE 0 END) AS toplam_pp_eur
+        (SUM(tutar_tl)  / NULLIF(MAX(cost_pax), 0)) AS toplam_pp_tl,
+        (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS toplam_pp_eur
       FROM fb_cost.tuketim
       GROUP BY tarih_str, yil, ay_no, tip
       ORDER BY yil, ay_no, tip
@@ -648,8 +648,8 @@ app.get('/api/yillik/ozet', async (req, res) => {
           SELECT ay_no,
                  SUM(tutar_tl)  AS tl,
                  SUM(tutar_eur) AS eur,
-                 SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_tl ELSE 0 END)  AS pp_tl,
-                 SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_eur ELSE 0 END) AS pp_eur,
+                 (SUM(tutar_tl)  / NULLIF(MAX(cost_pax), 0)) AS pp_tl,
+                 (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur,
                  MAX(cost_pax)  AS cost_pax,
                  AVG(NULLIF(kur,0)) AS kur
           FROM fb_cost.tuketim
@@ -722,8 +722,8 @@ app.get('/api/yillik/aylik', async (req, res) => {
           SUM(CASE WHEN tip = 'icenek'  THEN tutar_tl ELSE 0 END) AS icenek_tl,
           SUM(CASE WHEN tip = 'yiyecek' THEN tutar_eur ELSE 0 END) AS yiyecek_eur,
           SUM(CASE WHEN tip = 'icenek'  THEN tutar_eur ELSE 0 END) AS icenek_eur,
-          SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_tl ELSE 0 END)  AS pp_tl,
-          SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN pp_eur ELSE 0 END) AS pp_eur,
+          (SUM(tutar_tl)  / NULLIF(MAX(cost_pax), 0)) AS pp_tl,
+          (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur,
           MAX(cost_pax)  AS cost_pax,
           AVG(NULLIF(kur, 0)) AS kur
         FROM fb_cost.tuketim
