@@ -67,6 +67,9 @@
   .kat-tablo-master tbody tr[data-kategori] { cursor: pointer; transition: background .12s; }
   .kat-tablo-master tbody tr[data-kategori]:hover { background: var(--gold-bg); }
   .kat-tablo-master tbody tr.kat-row-active { background: rgba(138, 108, 46, 0.18); outline: 1px solid var(--gold-light); }
+  #kat-urun-tablo tr[data-stok] { cursor: pointer; transition: background .12s; }
+  #kat-urun-tablo tr[data-stok]:hover { background: var(--gold-bg); }
+  #kat-urun-tablo tr.kat-urun-stok-active { background: rgba(42, 77, 122, 0.14); outline: 1px solid rgba(42, 77, 122, 0.45); }
 
   .upload-zone {
     border: 2px dashed var(--border2);
@@ -294,6 +297,10 @@
               </thead>
               <tbody id="kat-urun-tablo"></tbody>
             </table>
+          </div>
+          <div id="kat-urun-chart-wrap" style="display:none;margin-top:16px">
+            <div class="card-title" style="font-size:13px;margin-bottom:8px" id="kat-urun-chart-baslik"></div>
+            <div class="chart-wrap" style="height:260px"><canvas id="chart-kat-urun-seri"></canvas></div>
           </div>
         </div>
       </div>
@@ -668,7 +675,7 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let ozetData = [], donemler = [];
-let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
+let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun, chartKatUrunSeri;
 /** @type {string|null} Tam kategori adı (DB); kategori sayfası sağ panel */
 let katSeciliKategori = null;
 
@@ -1017,7 +1024,105 @@ function renderTrend() {
   document.getElementById(id).addEventListener('change', renderTrend);
 });
 
+function resetKatUrunStokChart() {
+  if (chartKatUrunSeri) {
+    try { chartKatUrunSeri.destroy(); } catch (e) {}
+    chartKatUrunSeri = null;
+  }
+  const cw = document.getElementById('kat-urun-chart-wrap');
+  if (cw) cw.style.display = 'none';
+  const cb = document.getElementById('kat-urun-chart-baslik');
+  if (cb) cb.textContent = '';
+  document.querySelectorAll('#kat-urun-tablo tr.kat-urun-stok-active').forEach(tr => tr.classList.remove('kat-urun-stok-active'));
+}
+
+async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
+  const wrap = document.getElementById('kat-urun-chart-wrap');
+  const titleEl = document.getElementById('kat-urun-chart-baslik');
+  if (!wrap || !titleEl) return;
+
+  const icenek = tip === 'icenek' || tip === 'icecek';
+  titleEl.textContent = `${stok_mali} — ${icenek ? 'Kişi başı tüketim (cl)' : 'Kişi başı tüketim (gr)'} · tüm aylar`;
+
+  try {
+    const tipQ = icenek ? 'icenek' : 'yiyecek';
+    const u = `/api/urun/pax-hacim-seri?tip=${encodeURIComponent(tipQ)}&stok_mali=${encodeURIComponent(stok_mali)}`;
+    const res = await fetch(u);
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Seri alınamadı', 'error');
+      wrap.style.display = 'none';
+      return;
+    }
+    if (!Array.isArray(data) || data.length === 0) {
+      toast('Bu ürün için dönem verisi yok.', 'info');
+      wrap.style.display = 'none';
+      return;
+    }
+    const labels = data.map(d => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
+    const yKey = icenek ? 'pp_cl' : 'pp_gr';
+    const ys = data.map(d => {
+      const v = d[yKey];
+      return v != null && !isNaN(+v) ? +v : null;
+    });
+    const labelSeri = icenek ? 'P.P. cl' : 'P.P. gr';
+    const color = icenek ? '#2a5f8f' : '#8a6c2e';
+
+    if (chartKatUrunSeri) {
+      try { chartKatUrunSeri.destroy(); } catch (e) {}
+      chartKatUrunSeri = null;
+    }
+    wrap.style.display = '';
+    chartKatUrunSeri = new Chart(document.getElementById('chart-kat-urun-seri'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: labelSeri,
+          data: ys,
+          borderColor: color,
+          backgroundColor: color + '22',
+          tension: 0.3,
+          fill: true,
+          spanGaps: true,
+          pointRadius: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.y;
+                if (v == null || isNaN(v)) return `${ctx.dataset.label}: —`;
+                return icenek ? `${ctx.dataset.label}: ${fmtN(v, 1)} cl` : `${ctx.dataset.label}: ${fmtN(v, 0)} g`;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: false,
+            ticks: {
+              callback: (v) => fmtN(v, icenek ? 1 : 0)
+            },
+            title: { display: true, text: icenek ? 'cl / pax' : 'g / pax', color }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    toast('Grafik yüklenemedi', 'error');
+    wrap.style.display = 'none';
+  }
+}
+
 function resetKatUrunPanel() {
+  resetKatUrunStokChart();
   katSeciliKategori = null;
   document.querySelectorAll('#kat-tablo tr.kat-row-active').forEach(tr => tr.classList.remove('kat-row-active'));
   const hint = document.getElementById('kat-urun-hint');
@@ -1031,6 +1136,7 @@ function resetKatUrunPanel() {
 }
 
 async function loadKatUrunDetay(kategoriDb, tarih, tip) {
+  resetKatUrunStokChart();
   const hint = document.getElementById('kat-urun-hint');
   const wrap = document.getElementById('kat-urun-wrap');
   const baslik = document.getElementById('kat-urun-baslik');
@@ -1061,12 +1167,22 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     if (hint) hint.style.display = 'none';
     if (wrap) wrap.style.display = '';
     document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => `
-      <tr>
+      <tr data-stok="${encodeURIComponent(r.stok_mali)}">
         <td>${escapeHtml(r.stok_mali)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>
     `).join('');
+    document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
+      tr.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        document.querySelectorAll('#kat-urun-tablo tr.kat-urun-stok-active').forEach(x => x.classList.remove('kat-urun-stok-active'));
+        tr.classList.add('kat-urun-stok-active');
+        const raw = tr.getAttribute('data-stok');
+        const stok = raw ? decodeURIComponent(raw) : '';
+        if (stok) loadKatUrunPaxHacimSeri(stok, tip);
+      });
+    });
   } catch (e) {
     toast('Ürün listesi yüklenemedi', 'error');
     if (hint) { hint.textContent = 'Yüklenemedi.'; hint.style.display = ''; }
