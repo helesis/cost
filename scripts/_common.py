@@ -603,29 +603,8 @@ def _pn_val(parsed_numeric: dict[str, ParsedNumber], key: str) -> float:
 def is_group_header_row(
     stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber], tip: str
 ) -> bool:
-    if fixed_group_header_label(stok_mali, tip):
-        return True
-    if not stok_mali or not str(stok_mali).strip():
-        return False
-    sm = str(stok_mali).strip()
-    sn = (stok_no_str or "").strip().lower()
-    has_real_stok_no = bool(sn) and sn not in ("0", "nan")
-
-    tutar = _pn_val(parsed_numeric, "tutar_tl")
-    bf = _pn_val(parsed_numeric, "birim_fiyat")
-    tuk = _pn_val(parsed_numeric, "tuk_miktar")
-
-    if not has_real_stok_no and tutar == 0 and re.match(r"^\d+\s*-\s", sm):
-        return True
-
-    has_amount = tutar != 0 or tuk != 0 or bf != 0
-    if has_amount:
-        return False
-    if has_real_stok_no:
-        return False
-    starts_digit = bool(re.match(r"^\d", sm))
-    looks_section = " - " in sm or bool(re.match(r"^\d{4,}", sm))
-    return bool(starts_digit or looks_section)
+    """Grup başlığı yalnızca kiyas-group-headers.txt eşleşmesi; heuristik yok."""
+    return bool(fixed_group_header_label(stok_mali, tip))
 
 
 def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[str, int]) -> tuple[float, float]:

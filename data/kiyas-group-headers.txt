@@ -1,6 +1,8 @@
 # Kıyas Excel — sabit grup başlıkları (stok_mali sütunu)
 # Boş satırlar ve # ile başlayan satırlar yok sayılır.
 # Bölüm başlığı tam olarak [yiyecek] veya [icenek] olmalı.
+# Import: YALNIZCA buradaki satırlar grup başlığı sayılır (tabloya ürün yazılmaz); listede
+# olmayan kod–başlık veya benzeri satırlar ürün olarak eklenir — yeni grup satırı ekleyin.
 # Yeni grup: uygun bölümün altına bir satır ekleyin; sunucuda uygulamayı yeniden başlatın (veya upload sırasında dosya okunuyorsa yeter).
 
 [yiyecek]
@@ -28,6 +30,7 @@
 1011001 - UNLU MAMULLER
 1011002 - MAKARNALAR
 1012001 - TURSULAR
+1013001 - KURUYEMIS MALZEMELERI
 1014001 - BAL - RECELLER - MARMELATLAR
 1015001 - PASTANE MALZEMELERI
 1016001 - SUT - YOGURTLAR

@@ -350,32 +350,11 @@ function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
 const DIGER_GIDER = 'Diğer Giderler';
 
 /**
- * Ürün değil, grup/kategori başlığı (tabloya satır olarak yazılmaz).
- * Sabit liste (KNOWN_*_GROUP_HEADERS) veya stok_mali desenine göre tespit edilir.
+ * Ürün değil, grup/kategori başlığı: yalnızca data/kiyas-group-headers.txt ile
+ * normalizeText/normalize_text eşleşmesi (heuristik yok; listeye eklenmeyen satırlar ürün sayılır).
  */
 function isGroupHeaderRow(stokMali, stokNoStr, numVals, tip) {
-  if (fixedGroupHeaderLabel(stokMali, tip)) return true;
-  if (!stokMali || !String(stokMali).trim()) return false;
-  const sm = String(stokMali).trim();
-  const sn = (stokNoStr || '').toString().trim().toLowerCase();
-  const hasRealStokNo = !!sn && sn !== '0' && sn !== 'nan';
-
-  const tutar = numVals.tutar_tl || 0;
-  const birimFiyat = numVals.birim_fiyat || 0;
-  const tuk = numVals.tuk_miktar || 0;
-
-  if (!hasRealStokNo && tutar === 0 && /^\d+\s*-\s/.test(sm)) {
-    return true;
-  }
-
-  const hasAmount = tutar !== 0 || tuk !== 0 || birimFiyat !== 0;
-  if (hasAmount) return false;
-  if (hasRealStokNo) return false;
-
-  const startsWithDigit = /^\d/.test(sm);
-  const looksLikeSectionTitle = sm.includes(' - ') || /^\d{4,}/.test(sm);
-  if (startsWithDigit || looksLikeSectionTitle) return true;
-  return false;
+  return !!fixedGroupHeaderLabel(stokMali, tip);
 }
 
 /** Sayfa sonu: fiyat farkı + ödenmez tutarları (pozitif, TL); yalnızca son satırlarda ara */
