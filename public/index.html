@@ -94,8 +94,18 @@
   }
   .currency-toggle button:hover { background: var(--border); }
   .currency-toggle button.active { background: var(--gold-bg); color: var(--gold); border-color: var(--gold); }
-  #alarm-badge { display:none; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; font-size:10px; font-weight:700; align-items:center; justify-content:center; margin-left:auto; }
-  #alarm-badge.show { display:flex; }
+  .talep-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items:start; }
+  .talep-span-2 { grid-column: 1 / -1; }
+  @media (max-width: 1100px) { .talep-grid { grid-template-columns: 1fr; } }
+  .talep-kpi { display:flex; gap:12px; flex-wrap:wrap; margin-top:12px; }
+  .talep-kpi .kpi { background:var(--surface2); padding:12px 16px; border-radius:var(--radius); border:1px solid var(--border); min-width:100px; }
+  .talep-kpi .kpi strong { display:block; font-size:18px; color:var(--gold); font-weight:700; }
+  .talep-kpi .kpi span { font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.04em; }
+  .talep-note { font-size:12px; color:var(--text-dim); margin-top:10px; line-height:1.5; }
+  .talep-subcard { margin-top:14px; }
+  .talep-subcard h4 { margin:0 0 8px; font-size:13px; color:var(--text); }
+  .talep-two-col { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  @media (max-width: 900px) { .talep-two-col { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -118,6 +128,9 @@
     <div class="nav-section">Analiz</div>
     <a class="nav-item active" data-page="ozet" href="#">
       <i class="nav-icon" data-lucide="layout-dashboard"></i> Genel Özet
+    </a>
+    <a class="nav-item" data-page="tuketim-talep" href="#">
+      <i class="nav-icon" data-lucide="clipboard-list"></i> Tüketim ve Talep
     </a>
     <a class="nav-item" data-page="trend" href="#">
       <i class="nav-icon" data-lucide="trending-up"></i> Trend
@@ -179,6 +192,77 @@
           <div class="card-title">Pax Başına Maliyet (€)</div>
           <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TÜKETİM VE TALEP ─────────────────────────────────────────────────── -->
+  <div id="page-tuketim-talep" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Tüketim ve Talep</div>
+        <div class="page-sub" id="talep-subtitle">Yiyecek verisi; stok adı ve kategori metnine göre kural tabanlı analiz</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select class="form-select" id="talep-donem" style="width:220px"></select>
+        <button type="button" class="btn btn-primary" onclick="loadTalepAnaliz()">Yenile</button>
+      </div>
+    </div>
+    <div class="page-body talep-grid" id="talep-body">
+      <div class="card talep-span-2" id="talep-empty" style="display:none">
+        <p style="margin:0;color:var(--text-dim)">Bu görünüm için yiyecek tüketim verisi bulunamadı.</p>
+      </div>
+
+      <div class="card talep-block" data-talep-section style="display:none">
+        <div class="card-title">1. Protein talep yapısı</div>
+        <p class="talep-note">Dönem içi yiyecek tutarına göre tahmini pay (ana sürücü: dana / deniz / balık). Eşleşmeyen satırlar “Diğer”.</p>
+        <div class="chart-wrap" style="height:260px;max-width:400px;margin:0 auto"><canvas id="chart-talep-protein"></canvas></div>
+      </div>
+
+      <div class="card talep-block" data-talep-section style="display:none">
+        <div class="card-title">2. Premium vs standart</div>
+        <p class="talep-note"><strong>Premium:</strong> antrikot, bonfile, somon · <strong>Standart:</strong> tavuk, hindi, kıyma</p>
+        <div class="chart-wrap" style="height:240px"><canvas id="chart-talep-premium"></canvas></div>
+      </div>
+
+      <div class="card talep-block" data-talep-section style="display:none">
+        <div class="card-title">3. Kategori talep yoğunluğu</div>
+        <p class="talep-note">Kategori adına göre makro gruplar: et, sebze, şarküteri, süt, karbonhidrat — ortak veride “yer kaplama” (tutar payı).</p>
+        <div class="chart-wrap" style="height:280px;max-width:420px;margin:0 auto"><canvas id="chart-talep-density"></canvas></div>
+      </div>
+
+      <div class="card talep-block" data-talep-section style="display:none">
+        <div class="card-title">4. Düşük / sıfır tüketim</div>
+        <div class="talep-two-col">
+          <div class="talep-subcard">
+            <h4>Bu dönem kullanılmayan ürünler</h4>
+            <p class="talep-note">Geçmişte tüketimi olan, bu dönemde tutarı 0 olan SKUs (örnek liste).</p>
+            <ul class="talep-list" id="talep-pasif-list"></ul>
+          </div>
+          <div class="talep-subcard">
+            <h4>Çok düşük tutarlı tüketim</h4>
+            <p class="talep-note">Dönem içi pozitif ama toplamın ~%0,3’ünün altında kalan ürünler.</p>
+            <div class="table-wrap" style="max-height:240px;overflow:auto">
+              <table class="search-results" style="font-size:12px">
+                <thead><tr><th>Ürün</th><th style="text-align:right" id="talep-dusuk-th">Tutar</th></tr></thead>
+                <tbody id="talep-dusuk-tablo"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card talep-block" data-talep-section style="display:none">
+        <div class="card-title">5. Maliyet sürücüsü (dolaylı)</div>
+        <p class="talep-note" id="talep-cost-aciklama"></p>
+        <div class="talep-kpi" id="talep-cost-kpi"></div>
+      </div>
+
+      <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
+        <div class="card-title">6. Üretim karmaşıklığı (aktif SKU)</div>
+        <p class="talep-note">Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.</p>
+        <div class="talep-kpi" id="talep-komp-kpi"></div>
+        <div class="chart-wrap" style="height:300px;margin-top:16px"><canvas id="chart-talep-complexity"></canvas></div>
       </div>
     </div>
   </div>
@@ -743,6 +827,7 @@ function vcRerenderActive() {
     else if (id === 'page-urun')     { if (document.getElementById('urun-q').value.trim()) urunAra(); }
     else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyat(); }
     else if (id === 'page-yillik')   yillikAnalizYenile();
+    else if (id === 'page-tuketim-talep') loadTalepAnaliz();
   } catch (e) { /* sessiz */ }
 }
 
@@ -767,6 +852,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'yukle') loadYukluDonemler();
     if (page === 'fiyat') initFiyatPage();
     if (page === 'yillik') initYillikPage();
+    if (page === 'tuketim-talep') loadTalepAnaliz();
   });
 });
 
@@ -788,6 +874,186 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function destroyTalepCharts() {
+  ['chart-talep-protein','chart-talep-premium','chart-talep-density','chart-talep-complexity'].forEach(cid => {
+    const el = document.getElementById(cid);
+    if (!el) return;
+    const ch = Chart.getChart(el);
+    if (ch) ch.destroy();
+  });
+}
+
+function talepPremiumLabel(seg) {
+  if (seg === 'premium') return 'Premium (Antrikot, Bonfile, Somon)';
+  if (seg === 'standard') return 'Standart (Tavuk, Hindi, Kıyma)';
+  return 'Diğer';
+}
+
+function talepMacroLabel(m) {
+  const map = {
+    'et ürünleri': 'Et ürünleri', 'şarküteri': 'Şarküteri', 'sebze': 'Sebze',
+    'süt ürünleri': 'Süt ürünleri', 'karbonhidrat': 'Karbonhidrat', 'diğer': 'Diğer'
+  };
+  return map[m] || m;
+}
+
+async function loadTalepAnaliz() {
+  const sel = document.getElementById('talep-donem');
+  const tarih_str = sel && sel.value ? sel.value : '';
+  const empty = document.getElementById('talep-empty');
+  const blocks = document.querySelectorAll('[data-talep-section]');
+  try {
+    const u = '/api/talep-analiz' + (tarih_str ? '?tarih_str=' + encodeURIComponent(tarih_str) : '');
+    const r = await fetch(u);
+    const data = await r.json();
+    if (!r.ok) {
+      destroyTalepCharts();
+      toast(data.error || 'Talep analizi alınamadı', 'error');
+      return;
+    }
+    destroyTalepCharts();
+    if (!data.ok) {
+      if (empty) empty.style.display = 'block';
+      blocks.forEach(b => { b.style.display = 'none'; });
+      const sub = document.getElementById('talep-subtitle');
+      if (sub) sub.textContent = data.mesaj || 'Yiyecek verisi yok';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    blocks.forEach(b => { b.style.display = 'block'; });
+    const subEl = document.getElementById('talep-subtitle');
+    if (subEl) {
+      const top = vcIsEUR() ? (data.toplam && data.toplam.tutar_eur) : (data.toplam && data.toplam.tutar_tl);
+      subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam yiyecek ${fmtCur(top || 0)}`;
+    }
+
+    const pRows = data.protein_yapisi || [];
+    const pLabels = pRows.map(x => x.etiket || x.bucket);
+    const pAmt = pRows.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl);
+    new Chart(document.getElementById('chart-talep-protein'), {
+      type: 'doughnut',
+      data: {
+        labels: pLabels.map((l, i) => `${l} (${fmtN(pRows[i].pay_yuzde != null ? pRows[i].pay_yuzde : 0, 1)}%)`),
+        datasets: [{ data: pAmt, backgroundColor: COLORS, borderWidth: 1 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } } }
+      }
+    });
+
+    const pr = data.premium_vs_standard || [];
+    new Chart(document.getElementById('chart-talep-premium'), {
+      type: 'bar',
+      data: {
+        labels: pr.map(x => talepPremiumLabel(x.segment)),
+        datasets: [{
+          label: curLabel(),
+          data: pr.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl),
+          backgroundColor: pr.map(x => x.segment === 'premium' ? '#8a6c2e' : x.segment === 'standard' ? '#2d6a4f' : '#7a7369')
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: { x: { beginAtZero: true } }
+      }
+    });
+
+    const d = data.kategori_yogunluk || [];
+    new Chart(document.getElementById('chart-talep-density'), {
+      type: 'doughnut',
+      data: {
+        labels: d.map((x, i) => `${talepMacroLabel(x.macro)} (${fmtN(x.pay_yuzde != null ? x.pay_yuzde : 0, 1)}%)`),
+        datasets: [{ data: d.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl), backgroundColor: COLORS, borderWidth: 1 }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } }
+      }
+    });
+
+    const pasif = data.bu_donem_pasif_urunler || [];
+    const ul = document.getElementById('talep-pasif-list');
+    if (ul) {
+      ul.innerHTML = pasif.length
+        ? pasif.map(s => `<li>${escapeHtml(s)}</li>`).join('')
+        : '<li style="color:var(--text-dim)">Kayıt yok (önceki dönemde hareket görünmüyor veya hepsi bu ay da kullanıldı).</li>';
+    }
+    const dusukTh = document.getElementById('talep-dusuk-th');
+    if (dusukTh) dusukTh.textContent = 'Tutar (' + curLabel() + ')';
+    const dusuk = data.dusuk_tuketim_urunler || [];
+    const dusukTb = document.getElementById('talep-dusuk-tablo');
+    if (dusukTb) {
+      dusukTb.innerHTML = dusuk.length
+        ? dusuk.map(r => `<tr><td>${escapeHtml(r.stok_mali)}</td><td style="text-align:right">${fmtCur(vcIsEUR() ? r.tutar_eur : r.tutar_tl)}</td></tr>`).join('')
+        : '<tr><td colspan="2" style="color:var(--text-dim)">Eşik altı kayıt yok</td></tr>';
+    }
+
+    const cd = data.cost_driver || {};
+    const costAc = document.getElementById('talep-cost-aciklama');
+    if (costAc) costAc.textContent = cd.aciklama || '';
+    let kpiHtml = `
+      <div class="kpi"><span>Yüksek sürücü payı</span><strong>${cd.yuksek_maliyetli_pay != null ? fmtN(cd.yuksek_maliyetli_pay, 1) + '%' : '—'}</strong></div>
+      <div class="kpi"><span>Relatif düşük grup payı</span><strong>${cd.dusuk_maliyetli_pay != null ? fmtN(cd.dusuk_maliyetli_pay, 1) + '%' : '—'}</strong></div>`;
+    if (cd.onceki_yuksek_pay != null) {
+      kpiHtml += `<div class="kpi"><span>Önceki dönem yüksek pay</span><strong>${fmtN(cd.onceki_yuksek_pay, 1)}%</strong></div>`;
+    }
+    if (cd.yuksek_pay_delta_pp != null) {
+      const sign = cd.yuksek_pay_delta_pp > 0 ? '+' : '';
+      kpiHtml += `<div class="kpi"><span>Δ yüzde puan</span><strong>${sign}${fmtN(cd.yuksek_pay_delta_pp, 2)} pp</strong></div>`;
+    }
+    const costKpi = document.getElementById('talep-cost-kpi');
+    if (costKpi) costKpi.innerHTML = kpiHtml;
+
+    const uk = data.uretim_karmasikligi || {};
+    const kompKpi = document.getElementById('talep-komp-kpi');
+    if (kompKpi) {
+      kompKpi.innerHTML = `
+      <div class="kpi"><span>Bu dönem aktif SKU</span><strong>${uk.aktif_sku_bu_donem != null ? uk.aktif_sku_bu_donem : '—'}</strong></div>
+      <div class="kpi"><span>Tüm zaman katalog SKU</span><strong>${uk.katalog_sku_tum_zaman != null ? uk.katalog_sku_tum_zaman : '—'}</strong></div>
+      <div class="kpi"><span>Katalogda pasif pay (bu dönem)</span><strong>${uk.pasif_katalog_pay != null ? fmtN(uk.pasif_katalog_pay, 1) + '%' : '—'}</strong></div>
+    `;
+    }
+    const seri = (uk.seri_aylik || []).slice();
+    const compEl = document.getElementById('chart-talep-complexity');
+    if (compEl) {
+      if (seri.length) {
+        new Chart(compEl, {
+      type: 'line',
+      data: {
+        labels: seri.map(x => x.ay_etiket || x.tarih_str),
+        datasets: [{
+          label: 'Aktif SKU',
+          data: seri.map(x => x.aktif_sku),
+          borderColor: '#8a6c2e',
+          backgroundColor: 'rgba(138, 108, 46, 0.12)',
+          fill: true,
+          tension: 0.25
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: false } }
+      }
+        });
+      } else if (Chart.getChart(compEl)) {
+        Chart.getChart(compEl).destroy();
+      }
+    }
+    vcLucide();
+  } catch (e) {
+    toast('Talep analizi yüklenemedi', 'error');
+    console.error(e);
+  }
+}
+
 // ── Başlangıç ─────────────────────────────────────────────────────────────────
 async function init() {
   try {
@@ -804,9 +1070,16 @@ async function init() {
       const etiket = `${d.ay} ${d.yil}${kismi ? ' (15 gün)' : ''}`;
       return `<option value="${d.tarih_str}">${etiket}</option>`;
     }).join('');
-    ['ozet-donem','kat-donem'].forEach(id => {
+    ['ozet-donem','kat-donem','talep-donem'].forEach(id => {
       document.getElementById(id).innerHTML = donemOpts;
     });
+    const talepSel = document.getElementById('talep-donem');
+    if (talepSel && !talepSel.dataset.bound) {
+      talepSel.dataset.bound = '1';
+      talepSel.addEventListener('change', () => {
+        if (document.querySelector('.tab-content.active')?.id === 'page-tuketim-talep') loadTalepAnaliz();
+      });
+    }
 
     renderOzet();
     checkAlarmBadge();

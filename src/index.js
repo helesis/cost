@@ -8,7 +8,7 @@ const path = require('path');
 const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
-const { parseExcelToRows, normalizeTuketimRowForDb } = require('./excelImport');
+const { buildTalepAnaliz } = require('./talepAnaliz');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
@@ -910,6 +910,18 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
     res.json({ yil, onceki_yil: yil - 1, kategoriler: rows });
   } catch (err) {
     console.error('yillik/karsilastirma hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Tüketim & Talep analizleri (yiyecek, kural tabanlı) ─────────────────
+app.get('/api/talep-analiz', async (req, res) => {
+  try {
+    const tarih_str = (req.query.tarih_str || '').trim() || null;
+    const data = await buildTalepAnaliz(pool, { tarih_str });
+    res.json(data);
+  } catch (err) {
+    console.error('talep-analiz:', err);
     res.status(500).json({ error: err.message });
   }
 });
