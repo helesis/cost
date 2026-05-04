@@ -31,6 +31,54 @@ const SKIP_STOKLAR = [
 ];
 /* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
 
+/**
+ * Kıyas Excel'inde stok_mali sütununda sabit görünen grup başlıkları (yalnızca yiyecek şablonu).
+ * normalizeText ile eşleştirilir; tutar/miktar dolu gelse bile grup satırı sayılır.
+ */
+const KNOWN_YIYECEK_GROUP_HEADERS = [
+  '1001001 - DANA ETLERI',
+  '1001002 - KUZU ETLERI',
+  '1001004 - SAKATADLAR - KIRMIZI ET',
+  '1001005 - SARKUTERI - KIRMIZI ET',
+  '1002001 - KUMES HAYVANLARI - PILIC -',
+  '1002002 - KUMES HAYVANLARI - HINDI - DIGER',
+  '1002004 - SARKUTERI - BEYAZ ET -',
+  '1002005 - BALIKLAR',
+  '1002006 - DIGER SU URUNLERI',
+  '1003001 - KATI YAGLAR',
+  '1003002 - SIVI YAGLAR',
+  '1004001 - SOSLAR',
+  '1005001 - KONSERVELER',
+  '1006001 - BAHARATLAR',
+  '1006002 - BAKLIYATLAR',
+  '1007001 - ZEYTINLER',
+  '1008001 - PEYNIRLER',
+  '1009001 - SEKERLER',
+  '1010001 - CAYLAR',
+  '1010002 - CAYLAR -POSET-',
+  '1010003 - KAHVELER',
+  '1011001 - UNLU MAMULLER',
+  '1011002 - MAKARNALAR',
+  '1012001 - TURSULAR',
+  '1014001 - BAL - RECELLER - MARMELATLAR',
+  '1015001 - PASTANE MALZEMELERI',
+  '1016001 - SUT - YOGURTLAR',
+  '1017001 - YUMURTALAR',
+  '1018001 - KOMPOSTOLAR',
+  '1019001 - TAZE SEBZELER',
+  '1019002 - TAZE MEYVELER',
+  '1019003 - SOKLU SEBZELER',
+  '1019004 - SOKLU MEYVELER',
+  '1020001 - DONDURMALAR -DOKME-',
+  '1020002 - DONDURMALAR -CUBUKLU-CUP-',
+  '1021001 - SEKER - CIKOLATA - LOKUM',
+  '1022001 - DIGER YIYECEK MALZEMELERI',
+  '1023001 - BEBEK MAMALARI',
+];
+
+/** İçecek raporunda aynı yapıda sabit başlıklar eklenince buraya yazılır */
+const KNOWN_ICENEK_GROUP_HEADERS = [];
+
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -48,6 +96,26 @@ function normalizeText(value) {
     .replace(/[^a-z0-9 ]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+const FIXED_GROUP_HEADER_NORM_TO_LABEL = (() => {
+  const m = new Map();
+  for (const lab of KNOWN_YIYECEK_GROUP_HEADERS) {
+    const k = `yiyecek:${normalizeText(lab)}`;
+    if (k !== 'yiyecek:') m.set(k, lab);
+  }
+  for (const lab of KNOWN_ICENEK_GROUP_HEADERS) {
+    const k = `icenek:${normalizeText(lab)}`;
+    if (k !== 'icenek:') m.set(k, lab);
+  }
+  return m;
+})();
+
+function fixedGroupHeaderLabel(stokMali, tip) {
+  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  if (tipN !== 'yiyecek' && tipN !== 'icenek') return null;
+  const key = `${tipN}:${normalizeText(stokMali)}`;
+  return FIXED_GROUP_HEADER_NORM_TO_LABEL.get(key) ?? null;
 }
 
 const HEADER_ALIASES = {
@@ -291,10 +359,10 @@ const DIGER_GIDER = 'Diğer Giderler';
 
 /**
  * Ürün değil, grup/kategori başlığı (tabloya satır olarak yazılmaz).
- * Excel'de "1001001 - DANA ETLERI" ara toplam: stok no yok, tutar TL 0; birim fiyat/miktar dolu olabilir.
- * Kategori metni olarak tam `stok_mali` string'i (örn. 1001001 - DANA ETLERI) kullanılır.
+ * Sabit liste (KNOWN_*_GROUP_HEADERS) veya stok_mali desenine göre tespit edilir.
  */
-function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
+function isGroupHeaderRow(stokMali, stokNoStr, numVals, tip) {
+  if (fixedGroupHeaderLabel(stokMali, tip)) return true;
   if (!stokMali || !String(stokMali).trim()) return false;
   const sm = String(stokMali).trim();
   const sn = (stokNoStr || '').toString().trim().toLowerCase();
@@ -471,8 +539,8 @@ function parseExcelToRows(buffer, originalname) {
       numVals[f] = parseNumberTR(getCell(row, bestMap, f));
     }
 
-    if (isGroupHeaderRow(sm, stokNoStr, numVals)) {
-      const label = sm;
+    if (isGroupHeaderRow(sm, stokNoStr, numVals, tip)) {
+      const label = fixedGroupHeaderLabel(sm, tip) || sm;
       if (pending.length > 0) {
         flushPending(label);
         forwardKategori = null;

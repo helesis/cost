@@ -52,6 +52,50 @@ SKIP_SATIRLAR = [
 
 DIGER_GIDER = "Diğer Giderler"
 
+# Kıyas yiyecek Excel: stok_mali sabit grup başlıkları (normalize_text ile eşleşir)
+KNOWN_YIYECEK_GROUP_HEADERS: list[str] = [
+    "1001001 - DANA ETLERI",
+    "1001002 - KUZU ETLERI",
+    "1001004 - SAKATADLAR - KIRMIZI ET",
+    "1001005 - SARKUTERI - KIRMIZI ET",
+    "1002001 - KUMES HAYVANLARI - PILIC -",
+    "1002002 - KUMES HAYVANLARI - HINDI - DIGER",
+    "1002004 - SARKUTERI - BEYAZ ET -",
+    "1002005 - BALIKLAR",
+    "1002006 - DIGER SU URUNLERI",
+    "1003001 - KATI YAGLAR",
+    "1003002 - SIVI YAGLAR",
+    "1004001 - SOSLAR",
+    "1005001 - KONSERVELER",
+    "1006001 - BAHARATLAR",
+    "1006002 - BAKLIYATLAR",
+    "1007001 - ZEYTINLER",
+    "1008001 - PEYNIRLER",
+    "1009001 - SEKERLER",
+    "1010001 - CAYLAR",
+    "1010002 - CAYLAR -POSET-",
+    "1010003 - KAHVELER",
+    "1011001 - UNLU MAMULLER",
+    "1011002 - MAKARNALAR",
+    "1012001 - TURSULAR",
+    "1014001 - BAL - RECELLER - MARMELATLAR",
+    "1015001 - PASTANE MALZEMELERI",
+    "1016001 - SUT - YOGURTLAR",
+    "1017001 - YUMURTALAR",
+    "1018001 - KOMPOSTOLAR",
+    "1019001 - TAZE SEBZELER",
+    "1019002 - TAZE MEYVELER",
+    "1019003 - SOKLU SEBZELER",
+    "1019004 - SOKLU MEYVELER",
+    "1020001 - DONDURMALAR -DOKME-",
+    "1020002 - DONDURMALAR -CUBUKLU-CUP-",
+    "1021001 - SEKER - CIKOLATA - LOKUM",
+    "1022001 - DIGER YIYECEK MALZEMELERI",
+    "1023001 - BEBEK MAMALARI",
+]
+
+KNOWN_ICENEK_GROUP_HEADERS: list[str] = []
+
 HEADER_ALIASES = {
     "stok_mali": [
         "stok mali", "stok malı", "stok adi", "stok adı", "malzeme", "urun", "ürün", "aciklama", "açıklama"
@@ -135,6 +179,29 @@ ALIAS_TO_FIELD: dict[str, str] = {}
 for field, aliases in HEADER_ALIASES.items():
     for alias in aliases:
         ALIAS_TO_FIELD[normalize_text(alias)] = field
+
+
+def _build_fixed_group_header_labels() -> dict[tuple[str, str], str]:
+    m: dict[tuple[str, str], str] = {}
+    for lab in KNOWN_YIYECEK_GROUP_HEADERS:
+        n = normalize_text(lab)
+        if n:
+            m[("yiyecek", n)] = lab
+    for lab in KNOWN_ICENEK_GROUP_HEADERS:
+        n = normalize_text(lab)
+        if n:
+            m[("icenek", n)] = lab
+    return m
+
+
+FIXED_GROUP_HEADER_LABEL = _build_fixed_group_header_labels()
+
+
+def fixed_group_header_label(stok_mali: str, tip: str) -> Optional[str]:
+    t = "icenek" if tip in ("icecek", "içeçek") else tip
+    if t not in ("yiyecek", "icenek"):
+        return None
+    return FIXED_GROUP_HEADER_LABEL.get((t, normalize_text(stok_mali)))
 
 
 def kategori_bul(dosya_adi: str) -> Optional[str]:
@@ -546,7 +613,11 @@ def _pn_val(parsed_numeric: dict[str, ParsedNumber], key: str) -> float:
     return float(p.value)
 
 
-def is_group_header_row(stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber]) -> bool:
+def is_group_header_row(
+    stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber], tip: str
+) -> bool:
+    if fixed_group_header_label(stok_mali, tip):
+        return True
     if not stok_mali or not str(stok_mali).strip():
         return False
     sm = str(stok_mali).strip()
@@ -672,8 +743,8 @@ def sheet_isle(
         if any(skip.lower() in stok_mali.lower() for skip in SKIP_SATIRLAR):
             continue
 
-        if is_group_header_row(stok_mali, stok_no_str, parsed_numeric):
-            label = stok_mali
+        if is_group_header_row(stok_mali, stok_no_str, parsed_numeric, tip):
+            label = fixed_group_header_label(stok_mali, tip) or stok_mali
             if pending:
                 flush_pending(label)
                 forward_kategori = None
