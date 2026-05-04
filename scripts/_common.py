@@ -50,6 +50,8 @@ SKIP_SATIRLAR = [
     "TOPLAM", "Cost Pax", "Kur", "Stok Malı",
 ]
 
+DIGER_GIDER = "Diğer Giderler"
+
 HEADER_ALIASES = {
     "stok_mali": [
         "stok mali", "stok malı", "stok adi", "stok adı", "malzeme", "urun", "ürün", "aciklama", "açıklama"
@@ -544,14 +546,6 @@ def _pn_val(parsed_numeric: dict[str, ParsedNumber], key: str) -> float:
     return float(p.value)
 
 
-def grup_baslik_etiketi(stok_mali: str) -> str:
-    sm = str(stok_mali).strip()
-    m = re.match(r"^\d+\s*-\s*(.+)$", sm)
-    if m:
-        return m.group(1).strip()
-    return sm
-
-
 def is_group_header_row(stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber]) -> bool:
     if not stok_mali or not str(stok_mali).strip():
         return False
@@ -647,9 +641,18 @@ def sheet_isle(
     dosya_adi: str,
     candidate: SheetCandidate,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    current_kategori = None
+    pending: list[dict[str, Any]] = []
+    forward_kategori: Optional[str] = None
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+
+    def flush_pending(label: str) -> None:
+        lab = (label or "").strip()
+        for pr in pending:
+            pr["kategori"] = lab
+            pr["grup"] = lab
+        rows.extend(pending)
+        pending.clear()
 
     for i in range(candidate.header_row + 1, len(df_raw)):
         row = df_raw.iloc[i]
@@ -670,7 +673,12 @@ def sheet_isle(
             continue
 
         if is_group_header_row(stok_mali, stok_no_str, parsed_numeric):
-            current_kategori = grup_baslik_etiketi(stok_mali)
+            label = stok_mali
+            if pending:
+                flush_pending(label)
+                forward_kategori = None
+            else:
+                forward_kategori = label
             continue
 
         # satırı ürün olarak kabul etmek için minimum sinyal
@@ -706,7 +714,8 @@ def sheet_isle(
         d = derive_tutar_pp(tip, tuk0, bf0, meta.get("kur"), meta.get("cost_pax"))
         row_has_warning = any(not parsed_out.get(f"{f}_parse_ok", True) and parsed_out.get(f"{f}_raw", "") for f in NUMERIC_FIELDS)
 
-        rows.append({
+        fk = forward_kategori or ""
+        row_dict: dict[str, Any] = {
             "dosya": dosya_adi,
             "sheet": candidate.sheet_name,
             "header_row": candidate.header_row + 1,
@@ -721,8 +730,8 @@ def sheet_isle(
             "kur": meta["kur"],
             "cost_pax_raw": meta.get("cost_pax_raw", ""),
             "kur_raw": meta.get("kur_raw", ""),
-            "kategori": current_kategori,
-            "grup": current_kategori or "",
+            "kategori": fk,
+            "grup": fk,
             "stok_mali": stok_mali,
             "stok_no": stok_no_str,
             "birim": birim,
@@ -736,8 +745,14 @@ def sheet_isle(
             "pp_gr": round(d["pp_gr"], 4),
             "pp_cl": round(d["pp_cl"], 4),
             "satir_warning": row_has_warning,
-        })
+        }
+        if forward_kategori:
+            rows.append(row_dict)
+        else:
+            pending.append(row_dict)
 
+    if pending:
+        flush_pending(forward_kategori or "")
     ff, od = scan_footer_deductions(df_raw, candidate.header_row, candidate.column_map)
     meta_kur = meta.get("kur")
     meta_pax = meta.get("cost_pax")
@@ -777,8 +792,8 @@ def sheet_isle(
             "kur": meta.get("kur"),
             "cost_pax_raw": meta.get("cost_pax_raw", ""),
             "kur_raw": meta.get("kur_raw", ""),
-            "kategori": "",
-            "grup": "",
+            "kategori": DIGER_GIDER,
+            "grup": DIGER_GIDER,
             "stok_mali": label,
             "stok_no": "__DUZELTME__",
             "birim": birim_d,

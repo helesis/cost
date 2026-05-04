@@ -287,17 +287,12 @@ function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
   return { tuk_miktar: t, birim_fiyat: bf };
 }
 
-/** "1023001 - BEBEK MAMALARI" → "BEBEK MAMALARI" (grup / kategori hücresi) */
-function grupBaslikEtiketi(stokMali) {
-  const sm = String(stokMali).trim();
-  const m = sm.match(/^\d+\s*-\s*(.+)$/);
-  if (m) return m[1].trim();
-  return sm;
-}
+const DIGER_GIDER = 'Diğer Giderler';
 
 /**
- * Ürün değil, altındaki satırların grup başlığı (toplamda yer almaz).
- * Excel'de "1001001 - DANA ETLERI" ara toplam miktarı dolu, tutar/birim fiyat 0 — yine grup.
+ * Ürün değil, grup/kategori başlığı (tabloya satır olarak yazılmaz).
+ * Excel'de "1001001 - DANA ETLERI" ara toplam miktarı dolu, tutar/birim fiyat 0 — yine başlık.
+ * Kategori metni olarak tam `stok_mali` string'i (örn. 1001001 - DANA ETLERI) kullanılır.
  */
 function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
   if (!stokMali || !String(stokMali).trim()) return false;
@@ -370,8 +365,8 @@ function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur)
     gun: String(tarih.gun),
     cost_pax: costPax != null ? String(costPax) : '',
     kur: kur != null ? String(kur) : '',
-    kategori: '',
-    grup: '',
+    kategori: DIGER_GIDER,
+    grup: DIGER_GIDER,
     stok_mali: label,
     stok_no: '__DUZELTME__',
     birim,
@@ -452,7 +447,18 @@ function parseExcelToRows(buffer, originalname) {
   }
 
   const out = [];
-  let kategori = null;
+  const pending = [];
+  let forwardKategori = null;
+
+  function flushPending(label) {
+    const lab = label != null && String(label).trim() ? String(label).trim() : '';
+    for (const pr of pending) {
+      pr.kategori = lab;
+      pr.grup = lab;
+    }
+    out.push(...pending);
+    pending.length = 0;
+  }
 
   for (let r = headerRowIdx + 1; r < grid.length; r++) {
     const row = grid[r] || [];
@@ -471,14 +477,20 @@ function parseExcelToRows(buffer, originalname) {
     }
 
     if (isGroupHeaderRow(sm, stokNoStr, numVals)) {
-      kategori = grupBaslikEtiketi(sm);
+      const label = sm;
+      if (pending.length > 0) {
+        flushPending(label);
+        forwardKategori = null;
+      } else {
+        forwardKategori = label;
+      }
       continue;
     }
 
     const hasProduct = !!stokNoStr || numVals.tutar_tl > 0 || numVals.tuk_miktar > 0 || numVals.birim_fiyat > 0;
     if (!hasProduct) continue;
 
-    out.push({
+    const rowObj = {
       dosya: name,
       tip,
       tarih_str: tarih.tarih_str,
@@ -488,8 +500,8 @@ function parseExcelToRows(buffer, originalname) {
       gun: String(tarih.gun),
       cost_pax: costPax != null ? String(costPax) : '',
       kur: kur != null ? String(kur) : '',
-      kategori: kategori || '',
-      grup: kategori || '',
+      kategori: forwardKategori || '',
+      grup: forwardKategori || '',
       stok_mali: sm,
       stok_no: stokNoStr,
       birim,
@@ -502,9 +514,18 @@ function parseExcelToRows(buffer, originalname) {
       pp_cl: '0',
       pp_tl: String(numVals.pp_tl),
       pp_eur: String(numVals.pp_eur),
-    });
+    };
+
+    if (forwardKategori) {
+      out.push(rowObj);
+    } else {
+      pending.push(rowObj);
+    }
   }
 
+  if (pending.length > 0) {
+    flushPending(forwardKategori || '');
+  }
   const { fiyatFarki, odenmez } = scanFooterDeductions(grid, headerRowIdx + 1, bestMap);
   const dff = buildDeductionRow('— Excel: Fiyat farkı düşümü —', fiyatFarki, tip, tarih, name, costPax, kur);
   const dod = buildDeductionRow('— Excel: Ödenmez toplamı düşümü —', odenmez, tip, tarih, name, costPax, kur);
