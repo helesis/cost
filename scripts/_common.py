@@ -678,7 +678,7 @@ def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[
     fiyat_farki = 0.0
     odenmez = 0.0
     kdv_ilave = 0.0
-    start_r = max(header_row + 1, len(df_raw) - 45)
+    start_r = header_row + 1
     tut_idx = col_map.get("tutar_tl")
     st_idx = col_map.get("stok_mali")
     if tut_idx is None or st_idx is None:

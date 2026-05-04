@@ -421,13 +421,12 @@ function isFooterFinanceSummaryNormalized(smn) {
   return false;
 }
 
-/** Sayfa sonu: fiyat farkı + ödenmez (düşüm, TL), KDV ilave (toplama, TL) */
+/** Başlık satırından sonra tüm sheet: fiyat farkı + ödenmez (düşüm, TL), KDV ilave (toplama, TL) */
 function scanFooterDeductions(grid, startRow, colMap) {
   let fiyatFarki = 0;
   let odenmez = 0;
   let kdvIlave = 0;
-  const tailFrom = Math.max(startRow, grid.length - 45);
-  for (let r = tailFrom; r < grid.length; r++) {
+  for (let r = startRow; r < grid.length; r++) {
     const row = grid[r] || [];
     const raw = getCell(row, colMap, 'stok_mali');
     const smn = normalizeText(raw);
