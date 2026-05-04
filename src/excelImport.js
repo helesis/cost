@@ -27,10 +27,13 @@ const AY_CESITLERI = [
 
 const AY_GOSTER = { 1: 'OCAK', 2: 'ŞUBAT', 3: 'MART', 4: 'NİSAN', 5: 'MAYIS', 6: 'HAZİRAN', 7: 'TEMMUZ', 8: 'AĞUSTOS', 9: 'EYLÜL', 10: 'EKİM', 11: 'KASIM', 12: 'ARALIK' };
 
-const SKIP_STOKLAR = [
+/** Uzun özet ifadeler — includes; 'kur'/'toplam' tek başına satır için kelime sınırı (kuru ≠ kur) */
+const SKIP_STOKLAR_INCLUDES = [
   'brüt tüketim', 'net tüketim',
-  'toplam', 'cost pax', 'kur', 'stok malı',
+  'brut tuketim', 'net tuketim',
+  'cost pax', 'stok malı', 'stok mali',
 ];
+const SKIP_STOKLAR_WORD = ['toplam', 'kur'];
 /* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
 
 /** data/kiyas-group-headers.txt — [yiyecek] / [icenek] bölümleri */
@@ -70,6 +73,24 @@ function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function shouldSkipStokMaliLine(sm) {
+  const low = sm.toLowerCase();
+  if (SKIP_STOKLAR_INCLUDES.some((p) => low.includes(p))) return true;
+  for (const w of SKIP_STOKLAR_WORD) {
+    if (new RegExp(`\\b${escapeRe(w)}\\b`, 'i').test(sm)) return true;
+  }
+  return false;
+}
+
+/** Birleşik hücre: stok_mali boş ama satırda kod/bönim veya sıfır dışı sayı varsa doldurulur */
+function rowHasMeaningfulData(numVals, stokNoStr, birim) {
+  if (stokNoStr && String(stokNoStr).trim()) return true;
+  if (birim && String(birim).trim()) return true;
+  return NUMERIC_FIELDS.some((f) => {
+    const n = numVals[f];
+    return typeof n === 'number' && !Number.isNaN(n) && n !== 0;
+  });
+}
 
 function normalizeText(value) {
   if (value == null) return '';
@@ -483,6 +504,7 @@ function parseExcelToRows(buffer, originalname) {
   const out = [];
   const pending = [];
   let forwardKategori = null;
+  let lastStokMaliMerge = '';
 
   function flushPending(label) {
     const lab = label != null && String(label).trim() ? String(label).trim() : '';
@@ -497,9 +519,7 @@ function parseExcelToRows(buffer, originalname) {
   for (let r = headerRowIdx + 1; r < grid.length; r++) {
     const row = grid[r] || [];
     const stokMali = getCell(row, bestMap, 'stok_mali');
-    const sm = stokMali != null && String(stokMali).trim() ? String(stokMali).trim() : '';
-    if (!sm) continue;
-    if (SKIP_STOKLAR.some((s) => sm.toLowerCase().includes(s))) continue;
+    let sm = stokMali != null && String(stokMali).trim() ? String(stokMali).trim() : '';
 
     const stokNo = getCell(row, bestMap, 'stok_no');
     const stokNoStr = stokNo != null && String(stokNo).trim() ? String(stokNo).trim() : '';
@@ -510,7 +530,14 @@ function parseExcelToRows(buffer, originalname) {
       numVals[f] = parseNumberTR(getCell(row, bestMap, f));
     }
 
+    if (!sm && lastStokMaliMerge && rowHasMeaningfulData(numVals, stokNoStr, birim)) {
+      sm = lastStokMaliMerge;
+    }
+    if (!sm) continue;
+    if (shouldSkipStokMaliLine(sm)) continue;
+
     if (isGroupHeaderRow(sm, stokNoStr, numVals, tip)) {
+      lastStokMaliMerge = '';
       const label = fixedGroupHeaderLabel(sm, tip) || sm;
       if (pending.length > 0) {
         flushPending(label);
@@ -523,6 +550,8 @@ function parseExcelToRows(buffer, originalname) {
 
     /* stok_mali dolu, skip/grup başlığı değilse satırı atlamıyoruz (stok_no boş / tüm
      * sayılar 0 olsa bile kayıt oluşsun; aksi halde Excel’de görünen kalemler DB’de eksik kalıyordu). */
+
+    lastStokMaliMerge = sm;
 
     const rowObj = {
       dosya: name,

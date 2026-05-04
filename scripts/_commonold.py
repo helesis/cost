@@ -45,69 +45,19 @@ AYLAR = {
     "KASIM": 11, "ARALIK": 12,
 }
 
-# Uzun özet satırları: alt dize; Kur/Toplam yalnızca kelime sınırı (KURU ürünleri yanlış atlanmasın)
-_SKIP_STOK_PHRASE = (
-    "brüt tüketim", "net tüketim",
+_SKIP_STOK_PHRASE_OLD = (
+    "brüt tüketim", "net tüketim", "fiyat farkı", "fiyat farki", "ödenmez", "odenmez",
     "brut tuketim", "net tuketim",
     "cost pax", "stok malı", "stok mali",
 )
-_SKIP_STOK_WORD = re.compile(r"\b(toplam|kur)\b", re.I)
+_SKIP_STOK_WORD_OLD = re.compile(r"\b(toplam|kur)\b", re.I)
 
 
-def _should_skip_stok_mali(stok_mali: str) -> bool:
+def _should_skip_stok_mali_old(stok_mali: str) -> bool:
     low = stok_mali.lower()
-    if any(p in low for p in _SKIP_STOK_PHRASE):
+    if any(p in low for p in _SKIP_STOK_PHRASE_OLD):
         return True
-    return bool(_SKIP_STOK_WORD.search(stok_mali))
-
-
-def _row_has_meaningful_stok_context(
-    parsed_numeric: dict[str, Any],
-    stok_no_str: str,
-    birim: str,
-) -> bool:
-    if (stok_no_str or "").strip():
-        return True
-    if (birim or "").strip():
-        return True
-    for f in NUMERIC_FIELDS:
-        p = parsed_numeric.get(f)
-        if p and p.ok and p.value is not None and float(p.value) != 0:
-            return True
-    return False
-
-DIGER_GIDER = "Diğer Giderler"
-
-# Grup başlıkları: depo kökünde data/kiyas-group-headers.txt ([yiyecek] / [icenek])
-
-
-def _parse_kiyas_group_headers_text(content: str) -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {"yiyecek": [], "icenek": []}
-    section: Optional[str] = None
-    for line in content.splitlines():
-        t = line.strip()
-        if not t or t.startswith("#"):
-            continue
-        m = re.match(r"^\[(yiyecek|icenek)\]$", t, re.I)
-        if m:
-            section = m.group(1).lower()
-            continue
-        if section in out:
-            out[section].append(t)
-    return out
-
-
-def _load_kiyas_group_headers() -> dict[str, list[str]]:
-    root = Path(__file__).resolve().parent.parent
-    p = root / "data" / "kiyas-group-headers.txt"
-    if not p.is_file():
-        return {"yiyecek": [], "icenek": []}
-    return _parse_kiyas_group_headers_text(p.read_text(encoding="utf-8"))
-
-
-_KIYAS_GROUP_HEADERS = _load_kiyas_group_headers()
-KNOWN_YIYECEK_GROUP_HEADERS: list[str] = _KIYAS_GROUP_HEADERS["yiyecek"]
-KNOWN_ICENEK_GROUP_HEADERS: list[str] = _KIYAS_GROUP_HEADERS["icenek"]
+    return bool(_SKIP_STOK_WORD_OLD.search(stok_mali))
 
 HEADER_ALIASES = {
     "stok_mali": [
@@ -192,29 +142,6 @@ ALIAS_TO_FIELD: dict[str, str] = {}
 for field, aliases in HEADER_ALIASES.items():
     for alias in aliases:
         ALIAS_TO_FIELD[normalize_text(alias)] = field
-
-
-def _build_fixed_group_header_labels() -> dict[tuple[str, str], str]:
-    m: dict[tuple[str, str], str] = {}
-    for lab in KNOWN_YIYECEK_GROUP_HEADERS:
-        n = normalize_text(lab)
-        if n:
-            m[("yiyecek", n)] = lab
-    for lab in KNOWN_ICENEK_GROUP_HEADERS:
-        n = normalize_text(lab)
-        if n:
-            m[("icenek", n)] = lab
-    return m
-
-
-FIXED_GROUP_HEADER_LABEL = _build_fixed_group_header_labels()
-
-
-def fixed_group_header_label(stok_mali: str, tip: str) -> Optional[str]:
-    t = "icenek" if tip in ("icecek", "içeçek") else tip
-    if t not in ("yiyecek", "icenek"):
-        return None
-    return FIXED_GROUP_HEADER_LABEL.get((t, normalize_text(stok_mali)))
 
 
 def kategori_bul(dosya_adi: str) -> Optional[str]:
@@ -462,39 +389,6 @@ def detect_column_map(header_values: list[Any]) -> tuple[dict[str, int], list[st
     return column_map, matched_fields
 
 
-def sheet_name_score(sheet_name: str) -> int:
-    norm = normalize_text(sheet_name)
-    score = 0
-
-    # Güçlü negatifler: bunlar çoğu zaman referans / eski veri sayfaları
-    if "gecen yil" in norm or "gecenyil" in norm:
-        score -= 80
-    if "onceki yil" in norm or "oncekiyil" in norm:
-        score -= 60
-    if "gecen ay" in norm:
-        score -= 25
-    if "rapor" in norm:
-        score -= 20
-    if "ozet" in norm or "özet" in sheet_name.lower():
-        score -= 10
-    if "karsilastirma" in norm or "gramaj" in norm:
-        score -= 10
-
-    # Pozitifler: gerçek çalışma sayfası sinyalleri
-    if "analiz" in norm:
-        score += 35
-    if "yiyecek" in norm or "icecek" in norm or "içecek" in sheet_name.lower():
-        score += 20
-    if "cost" in norm:
-        score += 5
-
-    # Tarih geçen sayfalar genelde gerçek dönem sayfalarıdır
-    if re.search(r"\b(20\d{2}|ocak|subat|mart|nisan|mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik)\b", norm):
-        score += 8
-
-    return score
-
-
 def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
     candidates: list[SheetCandidate] = []
     for sheet_name in xl.sheet_names:
@@ -505,7 +399,6 @@ def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
         if df_raw.empty:
             continue
 
-        name_bonus = sheet_name_score(sheet_name)
         max_scan_rows = min(len(df_raw), 40)
         best: Optional[SheetCandidate] = None
         for i in range(max_scan_rows):
@@ -516,19 +409,9 @@ def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
             for j in range(i + 1, min(len(df_raw), i + 11)):
                 if row_nonempty_count(df_raw.iloc[j]) >= 3:
                     nonempty_after += 1
-
-            header_signal = len(matched_fields) * 10 + required_hits * 20 + nonempty_after
+            score = len(matched_fields) * 10 + required_hits * 20 + nonempty_after
             if required_hits == 0 and len(matched_fields) < 2:
                 continue
-
-            meta = meta_oku(df_raw)
-            meta_bonus = 0
-            if meta.get("cost_pax") is not None:
-                meta_bonus += 8
-            if meta.get("kur") is not None:
-                meta_bonus += 8
-
-            score = header_signal + name_bonus + meta_bonus
             cand = SheetCandidate(sheet_name, i, column_map, score, matched_fields, nonempty_after)
             if best is None or cand.score > best.score:
                 best = cand
@@ -541,74 +424,21 @@ def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
     return candidates[0]
 
 
-def _norm_tip(tip: str) -> str:
-    return "icenek" if tip in ("icecek", "içeçek") else tip
-
-
-def tutar_tl_from(tip: str, tuk: float, birim_fiyat: float) -> float:
-    t = tuk or 0.0
-    bf = birim_fiyat or 0.0
-    t0 = _norm_tip(tip)
-    if t0 == "yiyecek":
-        return (t / 1000.0) * bf
-    if t0 == "icenek":
-        return t * bf
-    return t * bf
-
-
-def normalize_tuk_miktar_yiyecek_kg_to_gr(tuk: float, birim: str) -> float:
-    b = normalize_text(birim).replace(" ", "")
-    if "kilo" in b or b in ("kg", "kgs"):
-        return tuk * 1000.0
-    if ("gram" in b and "kilo" not in b) or b in ("gr", "g") or b.endswith("gr"):
-        return tuk
-    return tuk * 1000.0
-
-
-def backfill_tuk_birim(tip: str, tuk: float, birim_fiyat: float, tutar_tl: float) -> tuple[float, float]:
-    t = tuk or 0.0
-    bf = birim_fiyat or 0.0
-    tt = tutar_tl or 0.0
-    t0 = _norm_tip(tip)
-    if t:
-        return t, bf
-    if bf and tt:
-        if t0 == "yiyecek":
-            return (tt / bf) * 1000.0, bf
-        if t0 == "icenek":
-            return tt / bf, bf
-    if tt and not t and not bf:
-        if t0 == "yiyecek":
-            return tt * 1000.0, 1.0
-        if t0 == "icenek":
-            return tt, 1.0
-    return t, bf
-
-
-def derive_tutar_pp(
-    tip: str,
-    tuk: float,
-    birim_fiyat: float,
-    kur: Optional[float],
-    cost_pax: Optional[float],
-) -> dict[str, float]:
-    t0 = _norm_tip(tip)
-    cp = cost_pax or 0.0
-    k = kur or 0.0
-    tt = tutar_tl_from(tip, tuk, birim_fiyat)
-    te = (tt / k) if k else 0.0
-    pp_tl = (tt / cp) if cp else 0.0
-    pp_eur = (te / cp) if (cp and k) else 0.0
-    pp_gr = (tuk / cp) if (t0 == "yiyecek" and cp) else 0.0
-    pp_cl = ((tuk * 100.0) / cp) if (t0 == "icenek" and cp) else 0.0
-    return {
-        "tutar_tl": tt,
-        "tutar_eur": te,
-        "pp_tl": pp_tl,
-        "pp_eur": pp_eur,
-        "pp_gr": pp_gr,
-        "pp_cl": pp_cl,
-    }
+def pp_gr_cl(birim: str, pp_miktar: float, tip: str) -> tuple[float, float]:
+    b = (birim or "").upper().strip()
+    if tip == "yiyecek":
+        if b in ("KG", "KGS", "KILO", "KİLO", "KILOGRAM", "KİLOGRAM"):
+            return (pp_miktar * 1000.0, 0.0)
+        if b in ("GR", "G", "GRAM"):
+            return (pp_miktar, 0.0)
+        return (0.0, 0.0)
+    if b in ("LT", "L", "LITRE", "LİTRE"):
+        return (0.0, pp_miktar * 100.0)
+    if b in ("CL", "SANTILITRE", "SANTİLİTRE"):
+        return (0.0, pp_miktar)
+    if b in ("ML", "MILILITRE", "MİLİLİTRE", "MLT"):
+        return (0.0, pp_miktar / 10.0)
+    return (0.0, 0.0)
 
 
 def get_cell(row: pd.Series, idx: Optional[int]) -> Any:
@@ -619,40 +449,14 @@ def get_cell(row: pd.Series, idx: Optional[int]) -> Any:
     return row.iloc[idx]
 
 
-def _pn_val(parsed_numeric: dict[str, ParsedNumber], key: str) -> float:
-    p = parsed_numeric.get(key)
-    if not p or p.value is None:
-        return 0.0
-    return float(p.value)
-
-
-def is_group_header_row(
-    stok_mali: str, stok_no_str: str, parsed_numeric: dict[str, ParsedNumber], tip: str
-) -> bool:
-    """Grup başlığı yalnızca kiyas-group-headers.txt eşleşmesi; heuristik yok."""
-    return bool(fixed_group_header_label(stok_mali, tip))
-
-
-def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[str, int]) -> tuple[float, float]:
-    fiyat_farki = 0.0
-    odenmez = 0.0
-    start_r = max(header_row + 1, len(df_raw) - 45)
-    tut_idx = col_map.get("tutar_tl")
-    st_idx = col_map.get("stok_mali")
-    if tut_idx is None or st_idx is None:
-        return 0.0, 0.0
-    for i in range(start_r, len(df_raw)):
-        row = df_raw.iloc[i]
-        sm = get_cell(row, st_idx)
-        nsm = normalize_text(sm)
-        if not nsm:
-            continue
-        tut = parse_number(get_cell(row, tut_idx)).value or 0.0
-        if "fiyat fark" in nsm:
-            fiyat_farki += abs(float(tut))
-        elif "odenmez" in nsm:
-            odenmez += abs(float(tut))
-    return fiyat_farki, odenmez
+def is_category_row(stok_mali: str, stok_no: str, numeric_values: list[Optional[float]]) -> bool:
+    if not stok_mali:
+        return False
+    if stok_no not in ("", "0", "nan"):
+        return False
+    if any(v not in (None, 0, 0.0) for v in numeric_values):
+        return False
+    return bool(re.match(r"^\d{3,}", stok_mali) or " - " in stok_mali or len(stok_mali) > 3)
 
 
 def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: Optional[SheetCandidate]) -> tuple[str, list[str]]:
@@ -665,17 +469,15 @@ def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: 
         warnings_list.append("cost_pax bulunamadı")
     if meta.get("kur") is None:
         warnings_list.append("kur bulunamadı")
-    if candidate and "gecen yil" in normalize_text(candidate.sheet_name):
-        warnings_list.append("GEÇEN YIL sheet seçildi; kontrol et")
 
     parse_fail_count = 0
     category_empty = 0
-    no_pax_tutar = 0
+    unit_unknown = 0
     for r in rows:
-        if not r.get("kategori") and not r.get("grup"):
+        if not r.get("kategori"):
             category_empty += 1
-        if (r.get("tutar_tl") or 0) > 0 and not (r.get("cost_pax") or 0):
-            no_pax_tutar += 1
+        if r.get("pp_miktar_parse_ok") and r.get("pp_miktar", 0) > 0 and r.get("pp_gr", 0) == 0 and r.get("pp_cl", 0) == 0:
+            unit_unknown += 1
         for f in NUMERIC_FIELDS:
             if not r.get(f"{f}_parse_ok", True) and r.get(f"{f}_raw", ""):
                 parse_fail_count += 1
@@ -684,8 +486,8 @@ def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: 
         warnings_list.append(f"yüksek parse hata sayısı: {parse_fail_count}")
     if category_empty > max(5, len(rows) * 0.3):
         warnings_list.append(f"kategori boş satır fazla: {category_empty}")
-    if no_pax_tutar > max(5, len(rows) * 0.3):
-        warnings_list.append(f"cost_pax yok iken tutar>0 satır sayısı yüksek: {no_pax_tutar}")
+    if unit_unknown > max(5, len(rows) * 0.3):
+        warnings_list.append(f"birim normalize edilemeyen pp satırı fazla: {unit_unknown}")
 
     status = "OK"
     if warnings_list:
@@ -704,19 +506,10 @@ def sheet_isle(
     dosya_adi: str,
     candidate: SheetCandidate,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    pending: list[dict[str, Any]] = []
-    forward_kategori: Optional[str] = None
+    current_kategori = None
     rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     last_stok_mali_merge = ""
-
-    def flush_pending(label: str) -> None:
-        lab = (label or "").strip()
-        for pr in pending:
-            pr["kategori"] = lab
-            pr["grup"] = lab
-        rows.extend(pending)
-        pending.clear()
 
     for i in range(candidate.header_row + 1, len(df_raw)):
         row = df_raw.iloc[i]
@@ -731,27 +524,28 @@ def sheet_isle(
         raw_numeric_cells = {f: get_cell(row, candidate.column_map.get(f)) for f in NUMERIC_FIELDS}
         parsed_numeric = {f: parse_number(v) for f, v in raw_numeric_cells.items()}
 
-        if not stok_mali and last_stok_mali_merge and _row_has_meaningful_stok_context(
-            parsed_numeric, stok_no_str, birim
-        ):
-            stok_mali = last_stok_mali_merge
+        if not stok_mali and last_stok_mali_merge:
+            _sig = bool(stok_no_str) or any(
+                (p.ok and (p.value or 0) != 0) for p in parsed_numeric.values()
+            ) or bool(birim)
+            if _sig:
+                stok_mali = last_stok_mali_merge
 
         if not stok_mali:
             continue
-        if _should_skip_stok_mali(stok_mali):
+        if _should_skip_stok_mali_old(stok_mali):
             continue
 
-        if is_group_header_row(stok_mali, stok_no_str, parsed_numeric, tip):
+        numeric_values = [p.value for p in parsed_numeric.values()]
+        if is_category_row(stok_mali, stok_no_str.lower(), numeric_values):
+            current_kategori = stok_mali
             last_stok_mali_merge = ""
-            label = fixed_group_header_label(stok_mali, tip) or stok_mali
-            if pending:
-                flush_pending(label)
-                forward_kategori = None
-            else:
-                forward_kategori = label
             continue
 
-        # stok_mali dolu ve grup/skip değilse satırı atlamıyoruz (stok_no boş / tüm sayılar 0 olsa bile)
+        # satırı ürün olarak kabul etmek için minimum sinyal
+        has_product_signal = bool(stok_no_str) or any((p.ok and (p.value or 0) != 0) for p in parsed_numeric.values()) or bool(birim)
+        if not has_product_signal:
+            continue
 
         last_stok_mali_merge = stok_mali
 
@@ -774,17 +568,10 @@ def sheet_isle(
                     "stok_no": stok_no_str,
                 })
 
-        tuk0 = float(parsed_out.get("tuk_miktar") or 0)
-        bf0 = float(parsed_out.get("birim_fiyat") or 0)
-        tut0 = float(parsed_out.get("tutar_tl") or 0)
-        if _norm_tip(tip) == "yiyecek":
-            tuk0 = normalize_tuk_miktar_yiyecek_kg_to_gr(tuk0, birim)
-        tuk0, bf0 = backfill_tuk_birim(tip, tuk0, bf0, tut0)
-        d = derive_tutar_pp(tip, tuk0, bf0, meta.get("kur"), meta.get("cost_pax"))
+        pp_gr, pp_cl = pp_gr_cl(birim, parsed_out["pp_miktar"], tip)
         row_has_warning = any(not parsed_out.get(f"{f}_parse_ok", True) and parsed_out.get(f"{f}_raw", "") for f in NUMERIC_FIELDS)
 
-        fk = forward_kategori or ""
-        row_dict: dict[str, Any] = {
+        rows.append({
             "dosya": dosya_adi,
             "sheet": candidate.sheet_name,
             "header_row": candidate.header_row + 1,
@@ -799,83 +586,14 @@ def sheet_isle(
             "kur": meta["kur"],
             "cost_pax_raw": meta.get("cost_pax_raw", ""),
             "kur_raw": meta.get("kur_raw", ""),
-            "kategori": fk,
-            "grup": fk,
+            "kategori": current_kategori,
             "stok_mali": stok_mali,
             "stok_no": stok_no_str,
             "birim": birim,
             **parsed_out,
-            "tuk_miktar": tuk0,
-            "birim_fiyat": bf0,
-            "tutar_tl": round(d["tutar_tl"], 4),
-            "tutar_eur": round(d["tutar_eur"], 4),
-            "pp_tl": round(d["pp_tl"], 4),
-            "pp_eur": round(d["pp_eur"], 4),
-            "pp_gr": round(d["pp_gr"], 4),
-            "pp_cl": round(d["pp_cl"], 4),
+            "pp_gr": round(pp_gr, 4),
+            "pp_cl": round(pp_cl, 4),
             "satir_warning": row_has_warning,
-        }
-        if forward_kategori:
-            rows.append(row_dict)
-        else:
-            pending.append(row_dict)
-
-    if pending:
-        flush_pending(forward_kategori or "")
-    ff, od = scan_footer_deductions(df_raw, candidate.header_row, candidate.column_map)
-    meta_kur = meta.get("kur")
-    meta_pax = meta.get("cost_pax")
-    tipn2 = _norm_tip(tip)
-    for label, amt in (
-        ("— Excel: Fiyat farkı düşümü —", ff),
-        ("— Excel: Ödenmez toplamı düşümü —", od),
-    ):
-        if amt is None or float(amt) <= 0:
-            continue
-        amt_f = float(amt)
-        if tipn2 == "yiyecek":
-            tuk_d = -amt_f * 1000.0
-            birim_d = "Gram"
-        else:
-            tuk_d = -amt_f
-            birim_d = "Litre"
-        d_adj = derive_tutar_pp(tip, tuk_d, 1.0, meta_kur, meta_pax)
-        parsed_base: dict[str, Any] = {}
-        for f in NUMERIC_FIELDS:
-            parsed_base[f] = 0.0
-            parsed_base[f"{f}_raw"] = ""
-            parsed_base[f"{f}_parse_ok"] = True
-            parsed_base[f"{f}_parse_reason"] = ""
-        rows.append({
-            "dosya": dosya_adi,
-            "sheet": candidate.sheet_name,
-            "header_row": candidate.header_row + 1,
-            "tip": tip,
-            "tarih_str": tarih["tarih_str"],
-            "tarih_iso": tarih["tarih_iso"],
-            "yil": tarih["yil"],
-            "ay_no": tarih["ay_no"],
-            "ay": tarih["ay"],
-            "gun": tarih["gun"],
-            "cost_pax": meta.get("cost_pax"),
-            "kur": meta.get("kur"),
-            "cost_pax_raw": meta.get("cost_pax_raw", ""),
-            "kur_raw": meta.get("kur_raw", ""),
-            "kategori": DIGER_GIDER,
-            "grup": DIGER_GIDER,
-            "stok_mali": label,
-            "stok_no": "__DUZELTME__",
-            "birim": birim_d,
-            **parsed_base,
-            "tuk_miktar": tuk_d,
-            "birim_fiyat": 1.0,
-            "tutar_tl": round(d_adj["tutar_tl"], 4),
-            "tutar_eur": round(d_adj["tutar_eur"], 4),
-            "pp_tl": round(d_adj["pp_tl"], 4),
-            "pp_eur": round(d_adj["pp_eur"], 4),
-            "pp_gr": round(d_adj["pp_gr"], 4),
-            "pp_cl": round(d_adj["pp_cl"], 4),
-            "satir_warning": False,
         })
 
     return rows, errors
