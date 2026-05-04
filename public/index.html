@@ -61,6 +61,13 @@
   .search-results th.sortable.asc .sort-ind,
   .search-results th.sortable.desc .sort-ind { opacity: 1; color: var(--gold); }
 
+  @media (max-width: 1100px) {
+    .kat-grid-3 { grid-template-columns: 1fr !important; }
+  }
+  .kat-tablo-master tbody tr[data-kategori] { cursor: pointer; transition: background .12s; }
+  .kat-tablo-master tbody tr[data-kategori]:hover { background: var(--gold-bg); }
+  .kat-tablo-master tbody tr.kat-row-active { background: rgba(138, 108, 46, 0.18); outline: 1px solid var(--gold-light); }
+
   .upload-zone {
     border: 2px dashed var(--border2);
     border-radius: var(--radius-lg);
@@ -259,17 +266,33 @@
       </div>
     </div>
     <div class="page-body">
-      <div class="grid-2" style="gap:20px">
+      <div class="kat-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:20px;align-items:start">
         <div class="card">
           <div class="card-title">Kategori Pasta Grafik</div>
           <div class="chart-wrap"><canvas id="chart-kat-pasta"></canvas></div>
         </div>
         <div class="card">
           <div class="card-title">Kategori Detay</div>
-          <div class="table-wrap">
-            <table>
+          <div class="table-wrap" style="max-height:min(420px,55vh);overflow:auto">
+            <table class="kat-tablo-master">
               <thead><tr><th>Kategori</th><th style="text-align:right" id="kat-tablo-th-deger">Tutar</th><th style="text-align:right">Pay %</th></tr></thead>
               <tbody id="kat-tablo"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" id="kat-urun-card">
+          <div class="card-title" id="kat-urun-baslik">Ürün — pax başı</div>
+          <p id="kat-urun-hint" style="margin:0;color:var(--text-dim);font-size:13px">Bir kategori seçin.</p>
+          <div class="table-wrap" id="kat-urun-wrap" style="display:none;margin-top:12px;max-height:min(480px,60vh);overflow:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ürün (stok)</th>
+                  <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
+                  <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
+                </tr>
+              </thead>
+              <tbody id="kat-urun-tablo"></tbody>
             </table>
           </div>
         </div>
@@ -646,6 +669,8 @@
 // ── State ──────────────────────────────────────────────────────────────────────
 let ozetData = [], donemler = [];
 let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun;
+/** @type {string|null} Tam kategori adı (DB); kategori sayfası sağ panel */
+let katSeciliKategori = null;
 
 // ── Lucide refresh helper ─────────────────────────────────────────────────────
 function vcLucide() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
@@ -789,6 +814,10 @@ function toast(msg, tip = 'info') {
 const fmtTL  = n => new Intl.NumberFormat('tr-TR', { style:'currency', currency:'TRY', maximumFractionDigits:0 }).format(n);
 const fmtEUR = n => new Intl.NumberFormat('tr-TR', { style:'currency', currency:'EUR', minimumFractionDigits:2, maximumFractionDigits:2 }).format(n);
 const fmtN   = (n, d=1) => new Intl.NumberFormat('tr-TR', { maximumFractionDigits:d }).format(n);
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 // ── Başlangıç ─────────────────────────────────────────────────────────────────
 async function init() {
@@ -988,14 +1017,70 @@ function renderTrend() {
   document.getElementById(id).addEventListener('change', renderTrend);
 });
 
+function resetKatUrunPanel() {
+  katSeciliKategori = null;
+  document.querySelectorAll('#kat-tablo tr.kat-row-active').forEach(tr => tr.classList.remove('kat-row-active'));
+  const hint = document.getElementById('kat-urun-hint');
+  const wrap = document.getElementById('kat-urun-wrap');
+  const baslik = document.getElementById('kat-urun-baslik');
+  if (hint) { hint.style.display = ''; hint.textContent = 'Bir kategori seçin.'; }
+  if (wrap) wrap.style.display = 'none';
+  if (baslik) baslik.textContent = 'Ürün — pax başı';
+  const tb = document.getElementById('kat-urun-tablo');
+  if (tb) tb.innerHTML = '';
+}
+
+async function loadKatUrunDetay(kategoriDb, tarih, tip) {
+  const hint = document.getElementById('kat-urun-hint');
+  const wrap = document.getElementById('kat-urun-wrap');
+  const baslik = document.getElementById('kat-urun-baslik');
+  const thPp = document.getElementById('kat-urun-th-pp');
+  const thTut = document.getElementById('kat-urun-th-tutar');
+  const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
+  if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
+  if (thPp) thPp.textContent = `Pax başı (${curLabel()})`;
+  if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
+  if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
+  if (wrap) wrap.style.display = 'none';
+
+  try {
+    const u = `/api/kategoriler/urunler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}&kategori=${encodeURIComponent(kategoriDb)}`;
+    const res = await fetch(u);
+    const list = await res.json();
+    if (!res.ok) {
+      toast(list.error || 'Ürün listesi alınamadı', 'error');
+      if (hint) hint.textContent = list.error || 'Hata.';
+      return;
+    }
+    if (!Array.isArray(list) || list.length === 0) {
+      if (hint) { hint.textContent = 'Bu kategoride ürün satırı yok.'; hint.style.display = ''; }
+      if (wrap) wrap.style.display = 'none';
+      return;
+    }
+    const sorted = [...list].sort((a, b) => (pickCur(b, 'pp') || 0) - (pickCur(a, 'pp') || 0));
+    if (hint) hint.style.display = 'none';
+    if (wrap) wrap.style.display = '';
+    document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => `
+      <tr>
+        <td>${escapeHtml(r.stok_mali)}</td>
+        <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
+        <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    toast('Ürün listesi yüklenemedi', 'error');
+    if (hint) { hint.textContent = 'Yüklenemedi.'; hint.style.display = ''; }
+  }
+}
+
 // ── Kategoriler ────────────────────────────────────────────────────────────────
 async function renderKategori() {
   const tarih = document.getElementById('kat-donem').value;
   const tip   = document.getElementById('kat-tip').value;
   if (!tarih) return;
 
-  const rows = await fetch(`/api/kategoriler?tarih=${tarih}&tip=${tip}`).then(r => r.json());
-  const toplam = rows.reduce((s,r) => s + pickCur(r, 'tutar'), 0);
+  const rows = await fetch(`/api/kategoriler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}`).then(r => r.json());
+  const toplam = rows.reduce((s, r) => s + pickCur(r, 'tutar'), 0);
 
   if (chartKatPasta) chartKatPasta.destroy();
   chartKatPasta = new Chart(document.getElementById('chart-kat-pasta'), {
@@ -1015,16 +1100,45 @@ async function renderKategori() {
 
   document.getElementById('kat-tablo-th-deger').textContent = `Tutar (${curLabel()})`;
   document.getElementById('kat-tablo').innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.kategori?.split(' - ').slice(1).join(' ') || r.kategori}</td>
+    <tr data-kategori="${encodeURIComponent(r.kategori || '')}">
+      <td>${escapeHtml(r.kategori?.split(' - ').slice(1).join(' ') || r.kategori)}</td>
       <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       <td style="text-align:right">${toplam > 0 ? fmtN((pickCur(r, 'tutar')/toplam)*100, 1) : '0'}%</td>
     </tr>
   `).join('');
+
+  document.querySelectorAll('#kat-tablo tr[data-kategori]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('#kat-tablo tr.kat-row-active').forEach(x => x.classList.remove('kat-row-active'));
+      tr.classList.add('kat-row-active');
+      const raw = tr.getAttribute('data-kategori');
+      katSeciliKategori = raw ? decodeURIComponent(raw) : null;
+      if (katSeciliKategori) loadKatUrunDetay(katSeciliKategori, tarih, tip);
+    });
+  });
+
+  if (katSeciliKategori) {
+    const still = rows.some(r => r.kategori === katSeciliKategori);
+    if (still) {
+      document.querySelectorAll('#kat-tablo tr[data-kategori]').forEach(tr => {
+        const raw = tr.getAttribute('data-kategori');
+        const k = raw ? decodeURIComponent(raw) : '';
+        tr.classList.toggle('kat-row-active', k === katSeciliKategori);
+      });
+      await loadKatUrunDetay(katSeciliKategori, tarih, tip);
+    } else {
+      resetKatUrunPanel();
+    }
+  } else {
+    resetKatUrunPanel();
+  }
 }
 
 ['kat-donem','kat-tip'].forEach(id => {
-  document.getElementById(id).addEventListener('change', renderKategori);
+  document.getElementById(id).addEventListener('change', () => {
+    katSeciliKategori = null;
+    renderKategori();
+  });
 });
 
 // ── Ürün Arama ────────────────────────────────────────────────────────────────

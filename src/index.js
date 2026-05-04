@@ -335,6 +335,35 @@ app.get('/api/ozet', async (req, res) => {
   }
 });
 
+// ── API: Kategori içi ürünler (pax başı TL/EUR, dönem + tip + tam kategori adı) ─
+app.get('/api/kategoriler/urunler', async (req, res) => {
+  const { tarih, tip, kategori } = req.query;
+  if (!tarih || !tip || kategori == null || String(kategori).trim() === '') {
+    return res.status(400).json({ error: 'tarih, tip ve kategori parametreleri gerekli' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT
+        stok_mali,
+        SUM(tutar_tl) AS tutar_tl,
+        SUM(tutar_eur) AS tutar_eur,
+        (SUM(tutar_tl) / NULLIF(MAX(cost_pax), 0)) AS pp_tl,
+        (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur
+      FROM fb_cost.tuketim
+      WHERE tarih_str = $1 AND tip = $2 AND kategori = $3 AND (${SQL_EXC_FINANS_PP})
+      GROUP BY stok_mali
+      HAVING COALESCE(ABS(SUM(tutar_tl)), 0) + COALESCE(ABS(SUM(tutar_eur)), 0) > 0
+      ORDER BY (SUM(tutar_tl) / NULLIF(MAX(cost_pax), 0)) DESC NULLS LAST
+      `,
+      [tarih, tip, kategori]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── API: Kategori Dağılımı ────────────────────────────────────────────────────
 app.get('/api/kategoriler', async (req, res) => {
   const { tarih, tip } = req.query;
