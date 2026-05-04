@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const { normalizeTipInput } = require('./tipLabels');
 
 const CONFIG_PATH = path.join(__dirname, '../config/menu-engineering-cost-proxy.json');
 
@@ -210,9 +211,13 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
   let threshold_pct = parseInt(String(query.threshold_pct || '30'), 10);
   if (!ALLOWED_THRESHOLDS.has(threshold_pct)) threshold_pct = 30;
 
-  const tip = String(query.tip || '').trim();
+  const tipRaw = String(query.tip || '').trim();
+  const tip = tipRaw ? normalizeTipInput(tipRaw) : null;
+  if (tipRaw && !tip) {
+    throw new Error('tip parametresi geçersiz (yiyecek veya içecek)');
+  }
 
-  const raw = await fetchAggregates(pool, baslangic, bitis, tip, sqlExcFinans);
+  const raw = await fetchAggregates(pool, baslangic, bitis, tip || '', sqlExcFinans);
   const cfg = getCostProxyConfig();
   const itemsFull = buildAnalyzedItems(raw, threshold_pct, cfg);
 

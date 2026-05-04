@@ -17,6 +17,7 @@ const {
   requestPause
 } = require('./classifyWorker');
 const menuEngineering = require('./menuEngineering');
+const { normalizeTipInput, tipFilterSql } = require('./tipLabels');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
@@ -227,7 +228,22 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
   if (!tarih || !tip || kategori == null || String(kategori).trim() === '') {
     return res.status(400).json({ error: 'tarih, tip ve kategori parametreleri gerekli' });
   }
+  const tipN = normalizeTipInput(String(tip).trim());
+  if (!tipN) {
+    return res.status(400).json({ error: 'tip: yiyecek veya içecek olmalı' });
+  }
   try {
+    const params = [tarih];
+    let tipCond = '';
+    if (tipN === 'yiyecek') {
+      tipCond = 'tip = $2';
+      params.push('yiyecek');
+    } else {
+      tipCond = 'tip IN ($2, $3)';
+      params.push('icenek', 'icecek');
+    }
+    const kPar = params.length + 1;
+    params.push(kategori);
     const { rows } = await pool.query(
       `
       SELECT
@@ -242,12 +258,12 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
               THEN (COALESCE(birim_fiyat, 0) / NULLIF(kur, 0)) * COALESCE(tuk_miktar, 0) ELSE 0 END)
           / NULLIF(SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN COALESCE(tuk_miktar, 0) ELSE 0 END), 0))::numeric AS birim_fiyat_ort_eur
       FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND tip = $2 AND kategori = $3 AND (${SQL_EXC_FINANS_PP})
+      WHERE tarih_str = $1 AND ${tipCond} AND kategori = $${kPar} AND (${SQL_EXC_FINANS_PP})
       GROUP BY stok_mali
       HAVING COALESCE(ABS(SUM(tutar_tl)), 0) + COALESCE(ABS(SUM(tutar_eur)), 0) > 0
       ORDER BY (SUM(tutar_tl) / NULLIF(MAX(cost_pax), 0)) DESC NULLS LAST
       `,
-      [tarih, tip, kategori]
+      params
     );
     res.json(rows);
   } catch (err) {
@@ -262,7 +278,8 @@ app.get('/api/kategoriler', async (req, res) => {
     let where = 'WHERE kategori IS NOT NULL';
     const params = [];
     if (tarih) { where += ` AND tarih_str = $${params.length+1}`; params.push(tarih); }
-    if (tip)   { where += ` AND tip = $${params.length+1}`; params.push(tip); }
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
 
     const { rows } = await pool.query(`
       SELECT kategori, SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur
@@ -277,11 +294,10 @@ app.get('/api/kategoriler', async (req, res) => {
 
 // ── API: Ürün — tüm aylar kişi başı hacim (içecek: cl, yiyecek: gr) ───────────
 app.get('/api/urun/pax-hacim-seri', async (req, res) => {
-  let tip = String(req.query.tip || '').toLowerCase();
+  const tip = normalizeTipInput(String(req.query.tip || '').trim());
   const stok_mali = String(req.query.stok_mali || '').trim();
-  if (tip === 'icecek') tip = 'icenek';
-  if (!stok_mali || (tip !== 'yiyecek' && tip !== 'icenek')) {
-    return res.status(400).json({ error: 'tip (yiyecek|icenek) ve stok_mali gerekli' });
+  if (!stok_mali || !tip) {
+    return res.status(400).json({ error: 'tip (yiyecek veya içecek) ve stok_mali gerekli' });
   }
   try {
     const { rows } = await pool.query(
@@ -326,16 +342,18 @@ app.get('/api/urun', async (req, res) => {
   const { q, tip } = req.query;
   if (!q) return res.json([]);
   try {
+    const params = [`%${q}%`];
+    const tipF = tipFilterSql(params, tip);
     const { rows } = await pool.query(`
       SELECT tarih_str, yil, ay_no, tip, stok_mali, kategori, grup,
              tuk_miktar, birim, birim_fiyat, tutar_tl, tutar_eur,
              pp_gr, pp_cl, pp_tl, pp_eur, cost_pax, kur
       FROM fb_cost.tuketim
-      WHERE stok_mali ILIKE $1 ${tip ? 'AND tip = $2' : ''}
+      WHERE stok_mali ILIKE $1 ${tipF.clause}
         AND tutar_tl > 0
       ORDER BY yil DESC, ay_no DESC
       LIMIT 200
-    `, tip ? [`%${q}%`, tip] : [`%${q}%`]);
+    `, params);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -363,28 +381,29 @@ app.get('/api/donemler', async (req, res) => {
 // Belirli dönem (tarih_str) için satırları siler. tip=yiyecek|icenek → yalnız o veri seti; tip yok → tümü
 app.delete('/api/donemler', async (req, res) => {
   const tarih_str = (req.query.tarih_str || '').trim();
-  const tipRaw = (req.query.tip || '').trim().toLowerCase();
+  const tipQ = String(req.query.tip || '').trim();
+  const tipN = tipQ ? normalizeTipInput(tipQ) : null;
   if (!tarih_str) {
     return res.status(400).json({ error: 'tarih_str parametresi gerekli' });
   }
   if (!/^\d{4}-\d{2}(-15g)?$/.test(tarih_str)) {
     return res.status(400).json({ error: 'Geçersiz tarih_str' });
   }
-  if (tipRaw && tipRaw !== 'yiyecek' && tipRaw !== 'icenek' && tipRaw !== 'icecek') {
-    return res.status(400).json({ error: 'tip: yiyecek veya icenek olmalı' });
+  if (tipQ && !tipN) {
+    return res.status(400).json({ error: 'tip: yiyecek veya içecek olmalı' });
   }
   try {
     let sql = 'DELETE FROM fb_cost.tuketim WHERE tarih_str = $1';
     const params = [tarih_str];
-    if (tipRaw === 'yiyecek') {
+    if (tipN === 'yiyecek') {
       sql += ' AND tip = $2';
       params.push('yiyecek');
-    } else if (tipRaw === 'icenek' || tipRaw === 'icecek') {
+    } else if (tipN === 'icenek') {
       sql += ' AND tip IN ($2, $3)';
       params.push('icenek', 'icecek');
     }
     const { rowCount } = await pool.query(sql, params);
-    return res.json({ ok: true, silinen: rowCount, tarih_str, tip: tipRaw || null });
+    return res.json({ ok: true, silinen: rowCount, tarih_str, tip: tipN || null });
   } catch (err) {
     console.error('donemler DELETE:', err);
     return res.status(500).json({ error: err.message });
@@ -477,16 +496,53 @@ app.delete('/api/alarmlar/esikler/:id', async (req, res) => {
   }
 });
 
+// ── API: Fiyat Analizi — arama kutusu için ürün adayları (chip) ───────────────
+app.get('/api/fiyat-analizi/urun-adaylari', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  const tip = req.query.tip;
+  if (!q) return res.json([]);
+  try {
+    const params = [`%${q}%`];
+    let where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0 AND (${SQL_EXC_FINANS_PP})`;
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
+    const { rows } = await pool.query(
+      `
+      SELECT DISTINCT ON (stok_mali) stok_mali, tip, kategori
+      FROM fb_cost.tuketim
+      ${where}
+      ORDER BY stok_mali, yil DESC, ay_no DESC
+      LIMIT 35
+      `,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('fiyat-analizi/urun-adaylari:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── API: Fiyat Analizi — ürün bazında dönemsel birim fiyat serisi ────────────
 app.get('/api/fiyat-analizi', async (req, res) => {
   const { stok_mali, tip } = req.query;
+  const tam = req.query.tam === '1' || req.query.tam === 'true';
   if (!stok_mali || !stok_mali.trim()) {
     return res.status(400).json({ error: 'stok_mali parametresi zorunlu' });
   }
   try {
-    const params = [`%${stok_mali.trim()}%`];
-    let where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0 AND (${SQL_EXC_FINANS_PP})`;
-    if (tip) { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
+    const raw = stok_mali.trim();
+    const params = [];
+    let where = '';
+    if (tam) {
+      params.push(raw);
+      where = `WHERE stok_mali = $1 AND birim_fiyat > 0 AND (${SQL_EXC_FINANS_PP})`;
+    } else {
+      params.push(`%${raw}%`);
+      where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0 AND (${SQL_EXC_FINANS_PP})`;
+    }
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
 
     const { rows } = await pool.query(`
       SELECT
@@ -519,7 +575,8 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
     let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
     if (tarih_baslangic) { where += ` AND tarih_str >= $${params.length + 1}`; params.push(tarih_baslangic); }
     if (tarih_bitis)     { where += ` AND tarih_str <= $${params.length + 1}`; params.push(tarih_bitis); }
-    if (tip)             { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
 
     // Her kategori için ilk ve son dönemi (yil, ay_no sıralı) bul,
     // o dönemlerdeki ortalama birim_fiyat ve birim_fiyat_eur üzerinden yüzde değişim hesapla.
@@ -575,11 +632,10 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
 // YILLIK ANALİZ API'LERİ
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Yardımcı: opsiyonel tip filtresi SQL parça üretir
+// Yardımcı: opsiyonel tip filtresi (icenek + legacy icecek)
 function tipWhere(params, tip, base = '') {
-  let where = base;
-  if (tip) { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
-  return where;
+  const { clause } = tipFilterSql(params, tip);
+  return base + clause;
 }
 
 // ── API: Yıllık — veride mevcut yıllar ────────────────────────────────────────
@@ -685,9 +741,9 @@ app.get('/api/yillik/aylik', async (req, res) => {
           SUM(tutar_tl)  AS toplam_tl,
           SUM(tutar_eur) AS toplam_eur,
           SUM(CASE WHEN tip = 'yiyecek' THEN tutar_tl ELSE 0 END) AS yiyecek_tl,
-          SUM(CASE WHEN tip = 'icenek'  THEN tutar_tl ELSE 0 END) AS icenek_tl,
+          SUM(CASE WHEN tip IN ('icenek', 'icecek') THEN tutar_tl ELSE 0 END) AS icenek_tl,
           SUM(CASE WHEN tip = 'yiyecek' THEN tutar_eur ELSE 0 END) AS yiyecek_eur,
-          SUM(CASE WHEN tip = 'icenek'  THEN tutar_eur ELSE 0 END) AS icenek_eur,
+          SUM(CASE WHEN tip IN ('icenek', 'icecek') THEN tutar_eur ELSE 0 END) AS icenek_eur,
           (SUM(tutar_tl)  / NULLIF(MAX(cost_pax), 0)) AS pp_tl,
           (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur,
           MAX(cost_pax)  AS cost_pax,
@@ -1049,13 +1105,13 @@ app.get('/api/talep-analiz', async (req, res) => {
 app.get('/api/talep-pareto-detay', async (req, res) => {
   try {
     const tarih_str = (req.query.tarih_str || '').trim() || null;
-    const tip = (req.query.tip || '').trim().toLowerCase();
+    const tip = normalizeTipInput(String(req.query.tip || '').trim());
     const esik = parseInt(req.query.esik, 10);
     if (!tarih_str) {
       return res.status(400).json({ error: 'tarih_str gerekli' });
     }
-    if (tip !== 'yiyecek' && tip !== 'icenek') {
-      return res.status(400).json({ error: 'tip: yiyecek veya icenek' });
+    if (!tip) {
+      return res.status(400).json({ error: 'tip: yiyecek veya içecek gerekli' });
     }
     if (!PARETO_ESIK_ALLOWED.has(esik)) {
       return res.status(400).json({ error: 'esik: 50, 70, 80 veya 90' });

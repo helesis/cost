@@ -215,18 +215,18 @@ FIXED_GROUP_HEADER_LABEL = _build_fixed_group_header_labels()
 
 
 def fixed_group_header_label(stok_mali: str, tip: str) -> Optional[str]:
-    t = "icenek" if tip in ("icecek", "içeçek") else tip
-    if t not in ("yiyecek", "icenek"):
+    t0 = _norm_tip(tip)
+    if t0 not in ("yiyecek", "icenek"):
         return None
-    return FIXED_GROUP_HEADER_LABEL.get((t, normalize_text(stok_mali)))
+    return FIXED_GROUP_HEADER_LABEL.get((t0, normalize_text(stok_mali)))
 
 
 def kategori_bul(dosya_adi: str) -> Optional[str]:
     s = dosya_adi.upper()
     if "YİYECEK" in s or "YIYECEK" in s:
         return "yiyecek"
-    if "İÇECEK" in s or "ICECEK" in s:
-        return "icecek"
+    if "İÇECEK" in s or "IÇECEK" in s or "ICECEK" in s or "İCENEK" in s or "ICENEK" in s:
+        return "icenek"
     return None
 
 
@@ -546,7 +546,23 @@ def discover_best_sheet(xl: pd.ExcelFile) -> Optional[SheetCandidate]:
 
 
 def _norm_tip(tip: str) -> str:
-    return "icenek" if tip in ("icecek", "içeçek") else tip
+    if tip is None or str(tip).strip() == "":
+        return tip  # type: ignore[return-value]
+    s = str(tip).strip().replace("İ", "i").replace("I", "ı").lower()
+    key = re.sub(r"\s+", "", s)
+    key = (
+        key.replace("ç", "c")
+        .replace("ğ", "g")
+        .replace("ı", "i")
+        .replace("ö", "o")
+        .replace("ş", "s")
+        .replace("ü", "u")
+    )
+    if key == "yiyecek":
+        return "yiyecek"
+    if key in ("icenek", "icecek"):
+        return "icenek"
+    return tip
 
 
 def tutar_tl_from(tip: str, tuk: float, birim_fiyat: float) -> float:

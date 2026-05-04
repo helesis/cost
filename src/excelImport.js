@@ -8,6 +8,7 @@
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+const { normalizeTipInput } = require('./tipLabels');
 
 /** Ay: birden çok isim (ASCII / Türkçe) aynı ay_no */
 const AY_CESITLERI = [
@@ -125,7 +126,7 @@ const FIXED_GROUP_HEADER_NORM_TO_LABEL = (() => {
 })();
 
 function fixedGroupHeaderLabel(stokMali, tip) {
-  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  const tipN = normalizeTipInput(tip);
   if (tipN !== 'yiyecek' && tipN !== 'icenek') return null;
   const key = `${tipN}:${normalizeText(stokMali)}`;
   return FIXED_GROUP_HEADER_NORM_TO_LABEL.get(key) ?? null;
@@ -373,7 +374,7 @@ function backfillTukBirim(tip, tuk, birimFiyat, tutarTl) {
   let t = +tuk || 0;
   let bf = +birimFiyat || 0;
   const tt = +tutarTl || 0;
-  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  const tipN = normalizeTipInput(tip) || tip;
   if (t !== 0) {
     return { tuk_miktar: t, birim_fiyat: bf };
   }
@@ -445,7 +446,7 @@ function scanFooterDeductions(grid, startRow, colMap) {
 
 function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur) {
   if (!(amountTl > 0)) return null;
-  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  const tipN = normalizeTipInput(tip) || tip;
   let tuk;
   let birim;
   if (tipN === 'yiyecek') {
@@ -457,7 +458,7 @@ function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur)
   }
   return {
     dosya: dosyaName,
-    tip,
+    tip: tipN,
     tarih_str: tarih.tarih_str,
     yil: String(tarih.yil),
     ay_no: String(tarih.ay_no),
@@ -478,7 +479,7 @@ function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur)
 /** KDV ilave: tutara pozitif ekler (__KDV_ILAVE__); pp metrikleri API’de hariç */
 function buildKdvIlaveRow(amountTl, tip, tarih, dosyaName, costPax, kur) {
   if (!(amountTl > 0)) return null;
-  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  const tipN = normalizeTipInput(tip) || tip;
   let tuk;
   let birim;
   if (tipN === 'yiyecek') {
@@ -490,7 +491,7 @@ function buildKdvIlaveRow(amountTl, tip, tarih, dosyaName, costPax, kur) {
   }
   return {
     dosya: dosyaName,
-    tip,
+    tip: tipN,
     tarih_str: tarih.tarih_str,
     yil: String(tarih.yil),
     ay_no: String(tarih.ay_no),
@@ -722,7 +723,8 @@ function parseExcelToRows(buffer, originalname) {
  */
 function normalizeTuketimRowForDb(r) {
   const o = { ...r };
-  o.tip = o.tip === 'icecek' ? 'icenek' : o.tip;
+  const nt = normalizeTipInput(o.tip);
+  if (nt) o.tip = nt;
   const birim = o.birim || '';
   let tuk = parseFloat(o.tuk_miktar) || 0;
   let birimF = parseFloat(o.birim_fiyat) || 0;
