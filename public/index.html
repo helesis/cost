@@ -152,6 +152,9 @@
       <i class="nav-icon" data-lucide="bell"></i> Alarmlar
       <span id="alarm-badge">0</span>
     </a>
+    <a class="nav-item" data-page="siniflandirma" href="#">
+      <i class="nav-icon" data-lucide="tags"></i> Ürün Sınıflandırma
+    </a>
     <a class="nav-item" data-page="yukle" href="#">
       <i class="nav-icon" data-lucide="upload-cloud"></i> Veri Yükle
     </a>
@@ -632,6 +635,59 @@
     </div>
   </div>
 
+  <!-- ── ÜRÜN SINIFLANDIRMA (Ollama) ─────────────────────────────────────── -->
+  <div id="page-siniflandirma" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Ürün Sınıflandırma</div>
+        <div class="page-sub">Ollama (gemma2:27b) ile protein_bucket ve food_group; Tüketim ve Talep analizinde kullanılır</div>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="card mb-20" style="max-width:960px">
+        <div class="card-title">İlerleme</div>
+        <div class="talep-kpi" id="classify-kpi">
+          <div class="kpi"><span>Toplam tekil çift</span><strong id="classify-total">—</strong></div>
+          <div class="kpi"><span>Sınıflanmamış</span><strong id="classify-unclassified">—</strong></div>
+          <div class="kpi"><span>Kayıtlı satır</span><strong id="classify-saved">—</strong></div>
+          <div class="kpi"><span>Bu çalışmada işlenen</span><strong id="classify-processed">—</strong></div>
+          <div class="kpi"><span>Başarılı</span><strong id="classify-success">—</strong></div>
+          <div class="kpi"><span>Hatalı</span><strong id="classify-failed">—</strong></div>
+          <div class="kpi"><span>Ort. süre (ms)</span><strong id="classify-avgms">—</strong></div>
+        </div>
+        <p style="font-size:12px;color:var(--text-dim);margin:12px 0" id="classify-job-hint"></p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+          <button type="button" class="btn btn-primary" onclick="classifyRun(true)">Sınıflandırmayı başlat (yalnız eksikler)</button>
+          <button type="button" class="btn btn-secondary" onclick="classifyRun(false)">Tümünü yeniden sınıflandır</button>
+          <button type="button" class="btn btn-secondary" onclick="classifyPause()">Duraklat</button>
+          <button type="button" class="btn btn-secondary" onclick="classifyRefreshStats()">Yenile</button>
+        </div>
+      </div>
+      <div class="card mb-20" style="max-width:960px">
+        <div class="card-title">CSV ile kuyruk</div>
+        <p style="font-size:13px;color:var(--text-dim);margin:0 0 12px">Sütunlar: <code>stok_mali</code>, <code>kategori</code> (opsiyonel). Tüketimde olmayan ürünleri kuyruğa ekler.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="classify-csv-input" accept=".csv,.txt" class="form-input" style="max-width:280px;padding:6px">
+          <button type="button" class="btn btn-primary" onclick="classifyUploadCsv()">Kuyruğa yükle</button>
+        </div>
+        <div id="classify-upload-msg" style="margin-top:10px;font-size:13px;color:var(--text-dim)"></div>
+      </div>
+      <div class="card" style="max-width:1100px">
+        <div class="card-title">Son kayıtlar</div>
+        <div class="table-wrap" style="max-height:420px;overflow:auto">
+          <table class="search-results" style="font-size:12px">
+            <thead>
+              <tr>
+                <th>stok_mali</th><th>kategori</th><th>protein</th><th>food_group</th><th>güven</th><th>güncellendi</th>
+              </tr>
+            </thead>
+            <tbody id="classify-results-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── VERİ YÜKLE ─────────────────────────────────────────────────────── -->
   <div id="page-yukle" class="tab-content">
     <div class="page-header">
@@ -853,8 +909,90 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'fiyat') initFiyatPage();
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
+    if (page === 'siniflandirma') { classifyRefreshStats(); classifyLoadResults(); }
   });
 });
+
+async function classifyRefreshStats() {
+  try {
+    const s = await fetch('/api/classify/stats?skip_existing=true').then(r => r.json());
+    if (s.error) return;
+    const j = s.job || {};
+    document.getElementById('classify-total').textContent = s.total_pairs ?? '—';
+    document.getElementById('classify-unclassified').textContent = s.unclassified_pairs ?? '—';
+    document.getElementById('classify-saved').textContent = s.saved_rows ?? '—';
+    document.getElementById('classify-processed').textContent = j.processed != null ? j.processed : '—';
+    document.getElementById('classify-success').textContent = j.success != null ? j.success : '—';
+    document.getElementById('classify-failed').textContent = j.failed != null ? j.failed : '—';
+    document.getElementById('classify-avgms').textContent = j.avgMs != null ? j.avgMs : '—';
+    const hint = [];
+    if (j.running) hint.push('Çalışıyor…');
+    if (j.lastStokMali) hint.push('Son: ' + j.lastStokMali);
+    if (j.lastError) hint.push('Uyarı: ' + j.lastError);
+    if (j.pauseReason) hint.push(j.pauseReason);
+    document.getElementById('classify-job-hint').textContent = hint.join(' · ') || (j.running ? '' : 'Beklemede');
+    if (j.running) classifyLoadResults();
+  } catch (e) { /* tablo yok vb. */ }
+}
+
+async function classifyRun(skipExisting) {
+  try {
+    const r = await fetch('/api/classify/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skip_existing: !!skipExisting, force: !skipExisting })
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Başlatılamadı', 'error'); return; }
+    toast('Sınıflandırma arka planda başladı', 'info');
+    classifyRefreshStats();
+  } catch (e) {
+    toast('İstek hatası', 'error');
+  }
+}
+
+async function classifyPause() {
+  await fetch('/api/classify/pause', { method: 'POST' });
+  toast('Duraklatma istendi', 'info');
+  classifyRefreshStats();
+}
+
+async function classifyLoadResults() {
+  try {
+    const rows = await fetch('/api/classify/results?limit=100').then(r => r.json());
+    if (!Array.isArray(rows)) return;
+    const tb = document.getElementById('classify-results-tablo');
+    tb.innerHTML = rows.map(x => {
+      const u = x.updated_at ? new Date(x.updated_at).toLocaleString('tr-TR') : '';
+      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.protein_bucket)}</td><td>${escapeHtml(x.food_group)}</td><td>${escapeHtml(x.confidence)}</td><td>${u}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" style="color:var(--text-dim)">Kayıt yok — migrasyon çalıştırıldı mı?</td></tr>';
+    vcLucide();
+  } catch (e) { /* */ }
+}
+
+async function classifyUploadCsv() {
+  const inp = document.getElementById('classify-csv-input');
+  const msg = document.getElementById('classify-upload-msg');
+  if (!inp.files || !inp.files[0]) {
+    msg.textContent = 'Dosya seçin.';
+    return;
+  }
+  msg.textContent = 'Yükleniyor…';
+  try {
+    const fd = new FormData();
+    fd.append('file', inp.files[0]);
+    const r = await fetch('/api/classify/upload', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) {
+      msg.textContent = d.error || 'Hata';
+      return;
+    }
+    msg.textContent = `Kuyruk: ${d.yeni_satir} yeni, ${d.atlanan} mükerrer/atlanan (${d.okunan} satır okundu)`;
+    classifyRefreshStats();
+  } catch (e) {
+    msg.textContent = 'Yükleme hatası';
+  }
+}
 
 // ── Toast ──────────────────────────────────────────────────────────────────────
 function toast(msg, tip = 'info') {
@@ -892,7 +1030,9 @@ function talepPremiumLabel(seg) {
 function talepMacroLabel(m) {
   const map = {
     'et ürünleri': 'Et ürünleri', 'şarküteri': 'Şarküteri', 'sebze': 'Sebze',
-    'süt ürünleri': 'Süt ürünleri', 'karbonhidrat': 'Karbonhidrat', 'diğer': 'Diğer'
+    'süt ürünleri': 'Süt ürünleri', 'karbonhidrat': 'Karbonhidrat', 'diğer': 'Diğer',
+    'Karbonhidrat': 'Karbonhidrat', 'Et ürünleri': 'Et ürünleri', 'Süt ürünleri': 'Süt ürünleri',
+    'Meyve/Sebze': 'Meyve/Sebze', 'Şarküteri': 'Şarküteri', 'Yağ': 'Yağ', 'Diğer': 'Diğer'
   };
   return map[m] || m;
 }
@@ -1083,6 +1223,11 @@ async function init() {
 
     renderOzet();
     checkAlarmBadge();
+    setInterval(() => {
+      if (document.querySelector('.tab-content.active')?.id === 'page-siniflandirma') {
+        classifyRefreshStats();
+      }
+    }, 1500);
   } catch (e) {
     toast('Veri yüklenemedi. Dosya yüklü mü?', 'error');
   }

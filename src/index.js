@@ -9,6 +9,12 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
 const { buildTalepAnaliz } = require('./talepAnaliz');
+const {
+  countPairStats,
+  getJobState,
+  runJobLoop,
+  requestPause
+} = require('./classifyWorker');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
@@ -910,6 +916,113 @@ app.get('/api/yillik/karsilastirma', async (req, res) => {
     res.json({ yil, onceki_yil: yil - 1, kategoriler: rows });
   } catch (err) {
     console.error('yillik/karsilastirma hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const classifyCsvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const n = (file.originalname || '').toLowerCase();
+    if (!/\.(csv|txt)$/i.test(n)) return cb(new Error('Sadece .csv yükleyin'));
+    cb(null, true);
+  }
+});
+
+// ── API: Ürün sınıflandırma (Ollama) ───────────────────────────────────────────
+app.get('/api/classify/stats', async (req, res) => {
+  try {
+    const skipExisting = String(req.query.skip_existing || 'true') !== 'false';
+    const stats = await countPairStats(pool, { skipExisting });
+    const job = getJobState();
+    res.json({ ...stats, job });
+  } catch (err) {
+    console.error('classify/stats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/classify/status', (req, res) => {
+  res.json(getJobState());
+});
+
+app.post('/api/classify/run', async (req, res) => {
+  try {
+    const j = getJobState();
+    if (j.running) {
+      return res.status(409).json({ error: 'Sınıflandırma zaten çalışıyor' });
+    }
+    const skipExisting = req.body?.skip_existing !== false && req.body?.force !== true;
+    runJobLoop(pool, { skipExisting }).catch(e => console.error('classify job:', e));
+    res.json({ ok: true, skip_existing: skipExisting });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/classify/pause', (req, res) => {
+  requestPause();
+  res.json({ ok: true });
+});
+
+app.get('/api/classify/results', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 80, 500);
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const { rows } = await pool.query(
+      `SELECT id, stok_mali, kategori, protein_bucket, food_group, confidence, gerekce, notes,
+              model_name, prompt_version, created_at, updated_at
+       FROM fb_cost.product_classifications
+       ORDER BY updated_at DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('classify/results:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/classify/upload', (req, res, next) => {
+  classifyCsvUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Yükleme hatası' });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'Dosya gerekli (file)' });
+    }
+    const text = req.file.buffer.toString('utf8');
+    const rows = parseCsvSync(text, { columns: true, skip_empty_lines: true, bom: true });
+    let inserted = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      const sm = String(r.stok_mali ?? r.STOK_MALI ?? r['Stok Malı'] ?? '').trim();
+      if (!sm) continue;
+      let kat = r.kategori ?? r.Kategori ?? r.kategori ?? null;
+      if (kat !== null && kat !== undefined) {
+        kat = String(kat).trim();
+        if (kat === '') kat = null;
+      }
+      try {
+        const ins = await pool.query(
+          `INSERT INTO fb_cost.product_classify_queue (stok_mali, kategori) VALUES ($1, $2)
+           ON CONFLICT (stok_mali, kategori_norm) DO NOTHING
+           RETURNING id`,
+          [sm, kat]
+        );
+        if (ins.rowCount) inserted++;
+        else skipped++;
+      } catch (e) {
+        skipped++;
+      }
+    }
+    res.json({ ok: true, yeni_satir: inserted, atlanan: skipped, okunan: rows.length });
+  } catch (err) {
+    console.error('classify/upload:', err);
     res.status(500).json({ error: err.message });
   }
 });

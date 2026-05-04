@@ -71,6 +71,34 @@ const SQL_MACRO_KATEGORI = `
 const SQL_YIYECEK_BASE = `tip = 'yiyecek' AND ${SQL_EXC_FINANS}`;
 const SQL_YIYECEK_BASE_T = `t.tip = 'yiyecek' AND (t.stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND t.stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
 
+const SQL_PROTEIN_BUCKET_T = SQL_PROTEIN_BUCKET.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
+const SQL_MACRO_KATEGORI_T = SQL_MACRO_KATEGORI.replace(/\bkategori\b/g, 't.kategori');
+const SQL_PREMIUM_STD_T = SQL_PREMIUM_STD.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
+
+/** LLM food_group → grafik etiketi (yoğunluk kartı) */
+const SQL_FOOD_MACRO_PC = `
+  CASE pc.food_group
+    WHEN 'karbonhidrat' THEN 'Karbonhidrat'
+    WHEN 'et_urunleri' THEN 'Et ürünleri'
+    WHEN 'sut_urunleri' THEN 'Süt ürünleri'
+    WHEN 'meyve_sebze' THEN 'Meyve/Sebze'
+    WHEN 'sarkuteri' THEN 'Şarküteri'
+    WHEN 'yag' THEN 'Yağ'
+    WHEN 'diger' THEN 'Diğer'
+  END`;
+
+const SQL_COST_LOW_JOINED = `(
+  COALESCE(pc.protein_bucket, ${SQL_PROTEIN_BUCKET_T}) IN ('tavuk','hindi')
+  OR t.kategori ILIKE '%SEBZE%'
+  OR COALESCE(pc.food_group, '') IN ('karbonhidrat','sarkuteri','sut_urunleri','meyve_sebze')
+  OR (${SQL_MACRO_KATEGORI_T}) IN ('karbonhidrat','şarküteri','süt ürünleri')
+)`;
+
+const JOIN_CLASSIFICATION = `
+LEFT JOIN fb_cost.product_classifications pc
+  ON pc.stok_mali = t.stok_mali AND (pc.kategori IS NOT DISTINCT FROM t.kategori)
+`;
+
 function pct(part, total) {
   const t = parseFloat(total) || 0;
   if (t <= 0) return null;
@@ -139,33 +167,36 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
   ] = await Promise.all([
     pool.query(
       `
-      SELECT ${SQL_PROTEIN_BUCKET} AS bucket,
-             SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur
-      FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE}
+      SELECT COALESCE(pc.protein_bucket, ${SQL_PROTEIN_BUCKET_T}) AS bucket,
+             SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim t
+      ${JOIN_CLASSIFICATION}
+      WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
       GROUP BY 1
-      ORDER BY SUM(tutar_tl) DESC
+      ORDER BY SUM(t.tutar_tl) DESC
       `,
       paramsCur
     ),
     pool.query(
       `
-      SELECT ${SQL_PREMIUM_STD} AS segment,
-             SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur
-      FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE}
+      SELECT ${SQL_PREMIUM_STD_T} AS segment,
+             SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim t
+      WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
       GROUP BY 1
       `,
       paramsCur
     ),
     pool.query(
       `
-      SELECT ${SQL_MACRO_KATEGORI} AS macro,
-             SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur
-      FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE} AND kategori IS NOT NULL
+      SELECT COALESCE((${SQL_FOOD_MACRO_PC}), (${SQL_MACRO_KATEGORI_T})) AS macro,
+             SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim t
+      ${JOIN_CLASSIFICATION}
+      WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
+        AND (t.kategori IS NOT NULL OR pc.id IS NOT NULL)
       GROUP BY 1
-      ORDER BY SUM(tutar_tl) DESC
+      ORDER BY SUM(t.tutar_tl) DESC
       `,
       paramsCur
     ),
@@ -231,12 +262,12 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
     pool.query(
       `
       SELECT
-        SUM(CASE WHEN ${SQL_PROTEIN_BUCKET} IN ('dana','kuzu','deniz','balik') THEN tutar_tl ELSE 0 END) AS yuksek_tl,
-        SUM(CASE WHEN ${SQL_PROTEIN_BUCKET} IN ('tavuk','hindi') OR kategori ILIKE '%SEBZE%'
-                 OR ${SQL_MACRO_KATEGORI} IN ('karbonhidrat','şarküteri','süt ürünleri') THEN tutar_tl ELSE 0 END) AS dusuk_tl,
-        SUM(tutar_tl) AS toplam_tl
-      FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE}
+        SUM(CASE WHEN COALESCE(pc.protein_bucket, ${SQL_PROTEIN_BUCKET_T}) IN ('dana','kuzu','deniz','balik') THEN t.tutar_tl ELSE 0 END) AS yuksek_tl,
+        SUM(CASE WHEN ${SQL_COST_LOW_JOINED} THEN t.tutar_tl ELSE 0 END) AS dusuk_tl,
+        SUM(t.tutar_tl) AS toplam_tl
+      FROM fb_cost.tuketim t
+      ${JOIN_CLASSIFICATION}
+      WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
       `,
       paramsCur
     ).then(r => r.rows[0] || {}),
@@ -244,12 +275,12 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
       ? pool.query(
           `
           SELECT
-            SUM(CASE WHEN ${SQL_PROTEIN_BUCKET} IN ('dana','kuzu','deniz','balik') THEN tutar_tl ELSE 0 END) AS yuksek_tl,
-            SUM(CASE WHEN ${SQL_PROTEIN_BUCKET} IN ('tavuk','hindi') OR kategori ILIKE '%SEBZE%'
-                     OR ${SQL_MACRO_KATEGORI} IN ('karbonhidrat','şarküteri','süt ürünleri') THEN tutar_tl ELSE 0 END) AS dusuk_tl,
-            SUM(tutar_tl) AS toplam_tl
-          FROM fb_cost.tuketim
-          WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE}
+            SUM(CASE WHEN COALESCE(pc.protein_bucket, ${SQL_PROTEIN_BUCKET_T}) IN ('dana','kuzu','deniz','balik') THEN t.tutar_tl ELSE 0 END) AS yuksek_tl,
+            SUM(CASE WHEN ${SQL_COST_LOW_JOINED} THEN t.tutar_tl ELSE 0 END) AS dusuk_tl,
+            SUM(t.tutar_tl) AS toplam_tl
+          FROM fb_cost.tuketim t
+          ${JOIN_CLASSIFICATION}
+          WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
           `,
           paramsPrev
         ).then(r => r.rows[0] || {})
