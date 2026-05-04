@@ -106,6 +106,27 @@
   .talep-subcard h4 { margin:0 0 8px; font-size:13px; color:var(--text); }
   .talep-two-col { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
   @media (max-width: 900px) { .talep-two-col { grid-template-columns: 1fr; } }
+  .talep-pareto-esik-row { cursor: help; }
+  .talep-pareto-tooltip {
+    position: fixed;
+    z-index: 10000;
+    max-width: min(440px, 94vw);
+    max-height: min(440px, 58vh);
+    overflow: auto;
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.35;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 28px rgba(0,0,0,.38);
+  }
+  .talep-pareto-tooltip .tt-title { font-weight: 600; margin-bottom: 8px; color: var(--gold); font-size: 12px; }
+  .talep-pareto-tooltip table { width: 100%; border-collapse: collapse; }
+  .talep-pareto-tooltip th { text-align: left; padding: 4px 6px; color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .talep-pareto-tooltip td { padding: 4px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+  .talep-pareto-tooltip td:last-child { text-align: right; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -236,7 +257,7 @@
 
       <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
         <div class="card-title">4. Pareto analizi (80/20)</div>
-        <p class="talep-note">Aynı dönemde tutar bazında sıralı SKU’lar: toplam tüketim cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?</p>
+        <p class="talep-note">Aynı dönemde tutar bazında sıralı SKU’lar: toplam tüketim cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Tablo satırının üzerine gelince o eşiğe dahil ürünler tutara göre azalan sırada listelenir. Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?</p>
         <div class="talep-two-col" id="talep-pareto-host"></div>
       </div>
 
@@ -783,6 +804,9 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let ozetData = [], donemler = [];
+const talepParetoDetailCache = new Map();
+let talepParetoTooltipHideTimer = null;
+let talepParetoTooltipEl = null;
 let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun, chartKatUrunSeri;
 /** @type {string|null} Tam kategori adı (DB); kategori sayfası sağ panel */
 let katSeciliKategori = null;
@@ -1052,7 +1076,108 @@ function talepMacroLabel(m) {
   return map[m] || m;
 }
 
-function talepRenderParetoSide(title, p) {
+function talepGetParetoTooltip() {
+  if (!talepParetoTooltipEl) {
+    talepParetoTooltipEl = document.createElement('div');
+    talepParetoTooltipEl.id = 'talep-pareto-tooltip';
+    talepParetoTooltipEl.className = 'talep-pareto-tooltip';
+    talepParetoTooltipEl.style.display = 'none';
+    talepParetoTooltipEl.addEventListener('mouseenter', () => {
+      if (talepParetoTooltipHideTimer) {
+        clearTimeout(talepParetoTooltipHideTimer);
+        talepParetoTooltipHideTimer = null;
+      }
+    });
+    talepParetoTooltipEl.addEventListener('mouseleave', () => {
+      talepParetoTooltipHideTimer = setTimeout(() => {
+        talepHideParetoTooltip();
+        talepParetoTooltipHideTimer = null;
+      }, 120);
+    });
+    document.body.appendChild(talepParetoTooltipEl);
+  }
+  return talepParetoTooltipEl;
+}
+
+function talepHideParetoTooltip() {
+  if (talepParetoTooltipEl) talepParetoTooltipEl.style.display = 'none';
+}
+
+function talepPositionParetoTooltip(el, clientX, clientY) {
+  const pad = 14;
+  let left = clientX + pad;
+  let top = clientY + pad;
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+  const r = el.getBoundingClientRect();
+  if (r.right > window.innerWidth - 8) left = Math.max(8, window.innerWidth - r.width - 8);
+  if (r.bottom > window.innerHeight - 8) top = Math.max(8, clientY - r.height - pad);
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+async function talepFillParetoTooltip(tr, clientX, clientY) {
+  const tarih = tr.dataset.talepParetoTarih;
+  const tip = tr.dataset.talepParetoTip;
+  const esik = tr.dataset.talepParetoEsik;
+  const key = `${tarih}|${tip}|${esik}`;
+  const el = talepGetParetoTooltip();
+  el.style.display = 'block';
+  el.innerHTML = '<div class="tt-title">Yükleniyor…</div>';
+  talepPositionParetoTooltip(el, clientX, clientY);
+  try {
+    let rows = talepParetoDetailCache.get(key);
+    if (!rows) {
+      const u = '/api/talep-pareto-detay?' + new URLSearchParams({ tarih_str: tarih, tip, esik });
+      const r = await fetch(u);
+      const d = await r.json();
+      if (!r.ok || !d.ok) throw new Error(d.error || 'Hata');
+      rows = d.urunler || [];
+      talepParetoDetailCache.set(key, rows);
+    }
+    const isEur = vcIsEUR();
+    const titleTip = tip === 'icenek' ? 'İçecek' : 'Yiyecek';
+    let html = `<div class="tt-title">${escapeHtml(titleTip)} · kümülatif ≥ %${escapeHtml(esik)} tutar · ${rows.length} ürün (tutar ↓)</div>`;
+    html += '<table><thead><tr><th>Ürün</th><th>Tutar</th></tr></thead><tbody>';
+    html += rows.map(u =>
+      `<tr><td>${escapeHtml(u.stok_mali)}</td><td>${escapeHtml(String(fmtCur(isEur ? u.tutar_eur : u.tutar_tl)))}</td></tr>`
+    ).join('');
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch (err) {
+    el.innerHTML = '<div class="tt-title" style="color:#c94">Liste yüklenemedi</div>';
+  }
+  talepPositionParetoTooltip(el, clientX, clientY);
+}
+
+function talepEnsureParetoHostHover() {
+  const host = document.getElementById('talep-pareto-host');
+  if (!host || host.dataset.paretoHoverBound) return;
+  host.dataset.paretoHoverBound = '1';
+  let lastTr = null;
+  host.addEventListener('mouseover', (e) => {
+    const tr = e.target.closest('.talep-pareto-esik-row');
+    if (tr === lastTr) return;
+    lastTr = tr;
+    if (!tr) return;
+    if (talepParetoTooltipHideTimer) {
+      clearTimeout(talepParetoTooltipHideTimer);
+      talepParetoTooltipHideTimer = null;
+    }
+    talepFillParetoTooltip(tr, e.clientX, e.clientY);
+  });
+  host.addEventListener('mouseout', (e) => {
+    const to = e.relatedTarget;
+    if (to && (host.contains(to) || (talepParetoTooltipEl && talepParetoTooltipEl.contains(to)))) return;
+    lastTr = null;
+    talepParetoTooltipHideTimer = setTimeout(() => {
+      talepHideParetoTooltip();
+      talepParetoTooltipHideTimer = null;
+    }, 140);
+  });
+}
+
+function talepRenderParetoSide(title, p, tarihStr, tipKey) {
   if (!p || !p.urun_sayisi) {
     return `<div class="talep-subcard"><h4>${escapeHtml(title)}</h4><p class="talep-note">Bu dönemde pozitif tutarlı SKU yok.</p></div>`;
   }
@@ -1060,10 +1185,11 @@ function talepRenderParetoSide(title, p) {
   const isEur = vcIsEUR();
   const payKey = isEur ? 'tutar_pay_yuzdesi_eur' : 'tutar_pay_yuzdesi_tl';
   const payStr = u20 && u20[payKey] != null ? fmtN(u20[payKey], 1) + '%' : '—';
+  const tAttr = escapeHtml(tarihStr || '');
   const rows = [50, 70, 80, 90].map((th) => {
     const e = p.esik_tutar[th] || p.esik_tutar[String(th)];
     if (!e) return `<tr><td>≥ %${th} tutar</td><td>—</td><td style="text-align:right">—</td></tr>`;
-    return `<tr><td>≥ %${th} tutar</td><td>${e.urun_sayisi}</td><td style="text-align:right">${fmtN(e.urun_yuzdesi, 1)}%</td></tr>`;
+    return `<tr class="talep-pareto-esik-row" data-talep-pareto-tarih="${tAttr}" data-talep-pareto-tip="${tipKey}" data-talep-pareto-esik="${th}"><td>≥ %${th} tutar</td><td>${e.urun_sayisi}</td><td style="text-align:right">${fmtN(e.urun_yuzdesi, 1)}%</td></tr>`;
   }).join('');
   const k20 = u20 ? u20.urun_sayisi : '—';
   const pct20 = u20 && u20.urun_yuzdesi != null ? fmtN(u20.urun_yuzdesi, 1) : '—';
@@ -1081,11 +1207,12 @@ function talepRenderParetoSide(title, p) {
     </div>`;
 }
 
-function talepRenderPareto(pareto) {
+function talepRenderPareto(pareto, tarihStr) {
   const host = document.getElementById('talep-pareto-host');
   if (!host) return;
   const p = pareto || {};
-  host.innerHTML = talepRenderParetoSide('Yiyecek', p.yiyecek) + talepRenderParetoSide('İçecek', p.icenek);
+  host.innerHTML = talepRenderParetoSide('Yiyecek', p.yiyecek, tarihStr, 'yiyecek') + talepRenderParetoSide('İçecek', p.icenek, tarihStr, 'icenek');
+  talepEnsureParetoHostHover();
 }
 
 async function loadTalepAnaliz() {
@@ -1118,7 +1245,9 @@ async function loadTalepAnaliz() {
       subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam yiyecek ${fmtCur(top || 0)} · Pareto: aynı dönemde yiyecek + içecek`;
     }
 
-    talepRenderPareto(data.pareto);
+    talepParetoDetailCache.clear();
+    talepHideParetoTooltip();
+    talepRenderPareto(data.pareto, data.tarih_str);
 
     const pRows = data.protein_yapisi || [];
     const pLabels = pRows.map(x => x.etiket || x.bucket);

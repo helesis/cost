@@ -231,6 +231,62 @@ async function computeParetoForTip(pool, tarih_str, tipCondSql) {
   };
 }
 
+const PARETO_ESIK_ALLOWED = new Set([50, 70, 80, 90]);
+
+/**
+ * Pareto eşiğine kadar (kümülatif tutar ≥ esik%) dahil olan SKU'lar, tutar_tl azalan.
+ * tipKind: 'yiyecek' | 'icenek'
+ */
+async function fetchParetoEsikUrunleri(pool, tarih_str, tipKind, esikYuzde) {
+  const e = parseInt(esikYuzde, 10);
+  if (!tarih_str || !PARETO_ESIK_ALLOWED.has(e)) {
+    return [];
+  }
+  if (tipKind !== 'yiyecek' && tipKind !== 'icenek') {
+    return [];
+  }
+  const tipSql = tipKind === 'icenek' ? `tip IN ('icenek', 'icecek')` : `tip = 'yiyecek'`;
+  const sql = `
+    WITH per_sku AS (
+      SELECT stok_mali,
+             SUM(tutar_tl)::numeric AS tutar_tl,
+             SUM(tutar_eur)::numeric AS tutar_eur
+      FROM fb_cost.tuketim
+      WHERE tarih_str = $1 AND (${tipSql}) AND ${SQL_EXC_FINANS}
+      GROUP BY stok_mali
+      HAVING SUM(tutar_tl) > 0
+    ),
+    tot AS (
+      SELECT COALESCE(SUM(tutar_tl), 0)::numeric AS total_tl FROM per_sku
+    ),
+    ord AS (
+      SELECT stok_mali, tutar_tl, tutar_eur,
+        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC) AS rnk,
+        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl
+      FROM per_sku
+    ),
+    kneed AS (
+      SELECT MIN(o.rnk)::int AS k
+      FROM ord o
+      CROSS JOIN tot t
+      WHERE t.total_tl > 0 AND o.cum_tl >= ($2::numeric / 100.0) * t.total_tl
+    )
+    SELECT o.stok_mali,
+           o.tutar_tl::float8 AS tutar_tl,
+           o.tutar_eur::float8 AS tutar_eur
+    FROM ord o
+    CROSS JOIN kneed kk
+    WHERE kk.k IS NOT NULL AND o.rnk <= kk.k
+    ORDER BY o.tutar_tl DESC
+  `;
+  const { rows } = await pool.query(sql, [tarih_str, e]);
+  return rows.map((r) => ({
+    stok_mali: r.stok_mali,
+    tutar_tl: parseFloat(r.tutar_tl) || 0,
+    tutar_eur: parseFloat(r.tutar_eur) || 0
+  }));
+}
+
 async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
   const { tarih_str, onceki, zincir } = await resolveTarih(pool, tarihIn || null);
   if (!tarih_str) {
@@ -501,4 +557,4 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
   };
 }
 
-module.exports = { buildTalepAnaliz, donemZinciri };
+module.exports = { buildTalepAnaliz, donemZinciri, fetchParetoEsikUrunleri, PARETO_ESIK_ALLOWED };

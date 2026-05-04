@@ -8,8 +8,8 @@ const path = require('path');
 const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
-const { buildTalepAnaliz } = require('./talepAnaliz');
-const { parseExcelToRows } = require('./excelImport');
+const { buildTalepAnaliz, fetchParetoEsikUrunleri, PARETO_ESIK_ALLOWED } = require('./talepAnaliz');
+const { parseExcelToRows, normalizeTuketimRowForDb } = require('./excelImport');
 const {
   countPairStats,
   getJobState,
@@ -1036,6 +1036,28 @@ app.get('/api/talep-analiz', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('talep-analiz:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/talep-pareto-detay', async (req, res) => {
+  try {
+    const tarih_str = (req.query.tarih_str || '').trim() || null;
+    const tip = (req.query.tip || '').trim().toLowerCase();
+    const esik = parseInt(req.query.esik, 10);
+    if (!tarih_str) {
+      return res.status(400).json({ error: 'tarih_str gerekli' });
+    }
+    if (tip !== 'yiyecek' && tip !== 'icenek') {
+      return res.status(400).json({ error: 'tip: yiyecek veya icenek' });
+    }
+    if (!PARETO_ESIK_ALLOWED.has(esik)) {
+      return res.status(400).json({ error: 'esik: 50, 70, 80 veya 90' });
+    }
+    const urunler = await fetchParetoEsikUrunleri(pool, tarih_str, tip, esik);
+    res.json({ ok: true, tarih_str, tip, esik, urunler });
+  } catch (err) {
+    console.error('talep-pareto-detay:', err);
     res.status(500).json({ error: err.message });
   }
 });
