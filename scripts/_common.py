@@ -52,78 +52,36 @@ SKIP_SATIRLAR = [
 
 DIGER_GIDER = "Diğer Giderler"
 
-# Kıyas Excel: stok_mali sabit grup başlıkları (yiyecek / içecek; normalize_text ile eşleşir)
-KNOWN_YIYECEK_GROUP_HEADERS: list[str] = [
-    "1001001 - DANA ETLERI",
-    "1001002 - KUZU ETLERI",
-    "1001004 - SAKATADLAR - KIRMIZI ET",
-    "1001005 - SARKUTERI - KIRMIZI ET",
-    "1002001 - KUMES HAYVANLARI - PILIC -",
-    "1002002 - KUMES HAYVANLARI - HINDI - DIGER",
-    "1002004 - SARKUTERI - BEYAZ ET -",
-    "1002005 - BALIKLAR",
-    "1002006 - DIGER SU URUNLERI",
-    "1003001 - KATI YAGLAR",
-    "1003002 - SIVI YAGLAR",
-    "1004001 - SOSLAR",
-    "1005001 - KONSERVELER",
-    "1006001 - BAHARATLAR",
-    "1006002 - BAKLIYATLAR",
-    "1007001 - ZEYTINLER",
-    "1008001 - PEYNIRLER",
-    "1009001 - SEKERLER",
-    "1010001 - CAYLAR",
-    "1010002 - CAYLAR -POSET-",
-    "1010003 - KAHVELER",
-    "1011001 - UNLU MAMULLER",
-    "1011002 - MAKARNALAR",
-    "1012001 - TURSULAR",
-    "1014001 - BAL - RECELLER - MARMELATLAR",
-    "1015001 - PASTANE MALZEMELERI",
-    "1016001 - SUT - YOGURTLAR",
-    "1017001 - YUMURTALAR",
-    "1018001 - KOMPOSTOLAR",
-    "1019001 - TAZE SEBZELER",
-    "1019002 - TAZE MEYVELER",
-    "1019003 - SOKLU SEBZELER",
-    "1019004 - SOKLU MEYVELER",
-    "1020001 - DONDURMALAR -DOKME-",
-    "1020002 - DONDURMALAR -CUBUKLU-CUP-",
-    "1021001 - SEKER - CIKOLATA - LOKUM",
-    "1022001 - DIGER YIYECEK MALZEMELERI",
-    "1023001 - BEBEK MAMALARI",
-]
+# Grup başlıkları: depo kökünde data/kiyas-group-headers.txt ([yiyecek] / [icenek])
 
-KNOWN_ICENEK_GROUP_HEADERS: list[str] = [
-    "2001002 - MESRUBATLAR -SISE-",
-    "2001003 - MESRUBATLAR -KUTU-",
-    "2001004 - MESRUBATLAR -PET-",
-    "2002002 - SODALAR -SISE-",
-    "2002005 - SULAR",
-    "2003001 - MEYVE SULARI -TETRAPAK-",
-    "2003003 - MEYVE SULARI -DIGER-",
-    "2004003 - KONSANTRE ICECEKLER -DIGER-",
-    "2005001 - ICECEK SOSLARI ALKOLSUZ",
-    "2006001 - BIRALAR -FICI-",
-    "2006002 - BIRALAR -SISE-",
-    "2006003 - BIRALAR -KUTU-",
-    "2007001 - RAKILAR",
-    "2007002 - VOTKALAR",
-    "2007003 - CINLER",
-    "2007004 - KANYAKLAR",
-    "2007005 - LIKORLER",
-    "2007006 - WHISKYLER",
-    "2007007 - APERATIFLER",
-    "2007008 - ROMLAR",
-    "2008002 - KIRMIZI SARAPLAR SOFRA",
-    "2008003 - KIRMIZI SARAPLAR EXTRA",
-    "2008005 - BEYAZ SARAPLAR SOFRA",
-    "2008006 - BEYAZ SARAPLAR EXTRA",
-    "2008008 - ROSE SARAPLAR SOFRA",
-    "2008009 - ROSE SARAPLAR EXTRA",
-    "2009001 - SAMPANYALAR SOFRA",
-    "2009002 - SAMPANYALAR EXTRA",
-]
+
+def _parse_kiyas_group_headers_text(content: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {"yiyecek": [], "icenek": []}
+    section: Optional[str] = None
+    for line in content.splitlines():
+        t = line.strip()
+        if not t or t.startswith("#"):
+            continue
+        m = re.match(r"^\[(yiyecek|icenek)\]$", t, re.I)
+        if m:
+            section = m.group(1).lower()
+            continue
+        if section in out:
+            out[section].append(t)
+    return out
+
+
+def _load_kiyas_group_headers() -> dict[str, list[str]]:
+    root = Path(__file__).resolve().parent.parent
+    p = root / "data" / "kiyas-group-headers.txt"
+    if not p.is_file():
+        return {"yiyecek": [], "icenek": []}
+    return _parse_kiyas_group_headers_text(p.read_text(encoding="utf-8"))
+
+
+_KIYAS_GROUP_HEADERS = _load_kiyas_group_headers()
+KNOWN_YIYECEK_GROUP_HEADERS: list[str] = _KIYAS_GROUP_HEADERS["yiyecek"]
+KNOWN_ICENEK_GROUP_HEADERS: list[str] = _KIYAS_GROUP_HEADERS["icenek"]
 
 HEADER_ALIASES = {
     "stok_mali": [

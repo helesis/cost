@@ -6,6 +6,8 @@
 'use strict';
 
 const XLSX = require('xlsx');
+const fs = require('fs');
+const path = require('path');
 
 /** Ay: birden çok isim (ASCII / Türkçe) aynı ay_no */
 const AY_CESITLERI = [
@@ -31,86 +33,43 @@ const SKIP_STOKLAR = [
 ];
 /* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
 
-/**
- * Kıyas Excel'inde stok_mali sütununda sabit görünen grup başlıkları (yiyecek / içecek şablonu).
- * normalizeText ile eşleştirilir; tutar/miktar dolu gelse bile grup satırı sayılır.
- */
-const KNOWN_YIYECEK_GROUP_HEADERS = [
-  '1001001 - DANA ETLERI',
-  '1001002 - KUZU ETLERI',
-  '1001004 - SAKATADLAR - KIRMIZI ET',
-  '1001005 - SARKUTERI - KIRMIZI ET',
-  '1002001 - KUMES HAYVANLARI - PILIC -',
-  '1002002 - KUMES HAYVANLARI - HINDI - DIGER',
-  '1002004 - SARKUTERI - BEYAZ ET -',
-  '1002005 - BALIKLAR',
-  '1002006 - DIGER SU URUNLERI',
-  '1003001 - KATI YAGLAR',
-  '1003002 - SIVI YAGLAR',
-  '1004001 - SOSLAR',
-  '1005001 - KONSERVELER',
-  '1006001 - BAHARATLAR',
-  '1006002 - BAKLIYATLAR',
-  '1007001 - ZEYTINLER',
-  '1008001 - PEYNIRLER',
-  '1009001 - SEKERLER',
-  '1010001 - CAYLAR',
-  '1010002 - CAYLAR -POSET-',
-  '1010003 - KAHVELER',
-  '1011001 - UNLU MAMULLER',
-  '1011002 - MAKARNALAR',
-  '1012001 - TURSULAR',
-  '1014001 - BAL - RECELLER - MARMELATLAR',
-  '1015001 - PASTANE MALZEMELERI',
-  '1016001 - SUT - YOGURTLAR',
-  '1017001 - YUMURTALAR',
-  '1018001 - KOMPOSTOLAR',
-  '1019001 - TAZE SEBZELER',
-  '1019002 - TAZE MEYVELER',
-  '1019003 - SOKLU SEBZELER',
-  '1019004 - SOKLU MEYVELER',
-  '1020001 - DONDURMALAR -DOKME-',
-  '1020002 - DONDURMALAR -CUBUKLU-CUP-',
-  '1021001 - SEKER - CIKOLATA - LOKUM',
-  '1022001 - DIGER YIYECEK MALZEMELERI',
-  '1023001 - BEBEK MAMALARI',
-];
+/** data/kiyas-group-headers.txt — [yiyecek] / [icenek] bölümleri */
+function parseKiyasGroupHeadersFile(content) {
+  const out = { yiyecek: [], icenek: [] };
+  let section = null;
+  for (const line of String(content).split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const br = /^\[(yiyecek|icenek)\]$/i.exec(t);
+    if (br) {
+      section = br[1].toLowerCase();
+      continue;
+    }
+    if (section === 'yiyecek' || section === 'icenek') {
+      out[section].push(t);
+    }
+  }
+  return out;
+}
 
-/** Kıyas içecek Excel: stok_mali sabit grup başlıkları */
-const KNOWN_ICENEK_GROUP_HEADERS = [
-  '2001002 - MESRUBATLAR -SISE-',
-  '2001003 - MESRUBATLAR -KUTU-',
-  '2001004 - MESRUBATLAR -PET-',
-  '2002002 - SODALAR -SISE-',
-  '2002005 - SULAR',
-  '2003001 - MEYVE SULARI -TETRAPAK-',
-  '2003003 - MEYVE SULARI -DIGER-',
-  '2004003 - KONSANTRE ICECEKLER -DIGER-',
-  '2005001 - ICECEK SOSLARI ALKOLSUZ',
-  '2006001 - BIRALAR -FICI-',
-  '2006002 - BIRALAR -SISE-',
-  '2006003 - BIRALAR -KUTU-',
-  '2007001 - RAKILAR',
-  '2007002 - VOTKALAR',
-  '2007003 - CINLER',
-  '2007004 - KANYAKLAR',
-  '2007005 - LIKORLER',
-  '2007006 - WHISKYLER',
-  '2007007 - APERATIFLER',
-  '2007008 - ROMLAR',
-  '2008002 - KIRMIZI SARAPLAR SOFRA',
-  '2008003 - KIRMIZI SARAPLAR EXTRA',
-  '2008005 - BEYAZ SARAPLAR SOFRA',
-  '2008006 - BEYAZ SARAPLAR EXTRA',
-  '2008008 - ROSE SARAPLAR SOFRA',
-  '2008009 - ROSE SARAPLAR EXTRA',
-  '2009001 - SAMPANYALAR SOFRA',
-  '2009002 - SAMPANYALAR EXTRA',
-];
+function loadKiyasGroupHeaders() {
+  const filePath = path.join(__dirname, '..', 'data', 'kiyas-group-headers.txt');
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.warn('[excelImport] Eksik dosya (grup başlıkları boş):', filePath);
+      return { yiyecek: [], icenek: [] };
+    }
+    return parseKiyasGroupHeadersFile(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    console.warn('[excelImport] kiyas-group-headers.txt okunamadı:', e.message);
+    return { yiyecek: [], icenek: [] };
+  }
+}
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
 
 function normalizeText(value) {
   if (value == null) return '';
@@ -126,6 +85,10 @@ function normalizeText(value) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+const _kiyasGroupHeaders = loadKiyasGroupHeaders();
+const KNOWN_YIYECEK_GROUP_HEADERS = _kiyasGroupHeaders.yiyecek;
+const KNOWN_ICENEK_GROUP_HEADERS = _kiyasGroupHeaders.icenek;
 
 const FIXED_GROUP_HEADER_NORM_TO_LABEL = (() => {
   const m = new Map();
