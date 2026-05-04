@@ -234,7 +234,12 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
         SUM(tutar_tl) AS tutar_tl,
         SUM(tutar_eur) AS tutar_eur,
         (SUM(tutar_tl) / NULLIF(MAX(cost_pax), 0)) AS pp_tl,
-        (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur
+        (SUM(tutar_eur) / NULLIF(MAX(cost_pax), 0)) AS pp_eur,
+        (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN COALESCE(birim_fiyat, 0) * COALESCE(tuk_miktar, 0) ELSE 0 END)
+          / NULLIF(SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN COALESCE(tuk_miktar, 0) ELSE 0 END), 0))::numeric AS birim_fiyat_ort_tl,
+        (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} AND COALESCE(kur, 0) > 0
+              THEN (COALESCE(birim_fiyat, 0) / NULLIF(kur, 0)) * COALESCE(tuk_miktar, 0) ELSE 0 END)
+          / NULLIF(SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN COALESCE(tuk_miktar, 0) ELSE 0 END), 0))::numeric AS birim_fiyat_ort_eur
       FROM fb_cost.tuketim
       WHERE tarih_str = $1 AND tip = $2 AND kategori = $3 AND (${SQL_EXC_FINANS_PP})
       GROUP BY stok_mali

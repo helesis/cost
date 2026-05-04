@@ -319,8 +319,8 @@
         <select class="form-select" id="trend-metrik" style="width:180px">
           <option value="toplam">Toplam Maliyet</option>
           <option value="toplam_pp">Pax Başına</option>
-          <option value="toplam_pp_gr">P.P. GR (Yiyecek)</option>
-          <option value="toplam_pp_cl">P.P. CL (İçecek)</option>
+          <option value="toplam_pp_gr">P.P. g (yiyecek)</option>
+          <option value="toplam_pp_cl">P.P. mL (içecek)</option>
         </select>
       </div>
     </div>
@@ -376,6 +376,7 @@
               <thead>
                 <tr>
                   <th>Ürün (stok)</th>
+                  <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
                   <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
                   <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
                 </tr>
@@ -386,7 +387,7 @@
         </div>
         <div class="card kat-card-block" id="kat-urun-seri-card">
           <div class="card-title">Kişi başı tüketim — tüm aylar</div>
-          <p id="kat-urun-seri-hint" style="margin:0;color:var(--text-dim);font-size:13px">Soldaki ürün listesinden bir satıra tıklayın; seçilen ürün için gram (yiyecek) veya cl (içecek) pax başı serisi gösterilir.</p>
+          <p id="kat-urun-seri-hint" style="margin:0;color:var(--text-dim);font-size:13px">Soldaki ürün listesinden bir satıra tıklayın. Yiyecek: kişi başı kütle <strong>g</strong>; içecek: kişi başı hacim <strong>mL</strong> (SI).</p>
           <div id="kat-urun-chart-wrap" style="display:none;margin-top:14px">
             <div id="kat-urun-chart-baslik" style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--gold)"></div>
             <div class="chart-wrap" style="height:280px"><canvas id="chart-kat-urun-seri"></canvas></div>
@@ -783,8 +784,8 @@
           <select class="form-select" id="esik-metrik">
             <option value="pp_tl">P.P. TL</option>
             <option value="pp_eur">P.P. EUR</option>
-            <option value="pp_gr">P.P. GR</option>
-            <option value="pp_cl">P.P. CL</option>
+            <option value="pp_gr">P.P. g</option>
+            <option value="pp_cl">P.P. mL</option>
             <option value="tutar_tl">Toplam TL</option>
           </select>
         </div>
@@ -1062,6 +1063,24 @@ const fmtN   = (n, d=1) => new Intl.NumberFormat('tr-TR', { maximumFractionDigit
 function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Alarm/eşik sayıları DB biriminde (pp_cl=cL); gösterimde mL için ×10. */
+function fmtOlcumDegeri(metrik, v, frac) {
+  const n = parseFloat(v);
+  if (v == null || v === '' || isNaN(n)) return '—';
+  const f = frac != null ? frac : 2;
+  if (metrik === 'pp_cl') return `${fmtN(n * 10, 0)} mL`;
+  if (metrik === 'pp_gr') return `${fmtN(n, 0)} g`;
+  return fmtN(n, f);
+}
+
+function fmtMetrikEtiket(m) {
+  if (m == null || m === '') return '';
+  const x = String(m);
+  if (x === 'pp_gr' || x === 'toplam_pp_gr') return 'P.P. g';
+  if (x === 'pp_cl' || x === 'toplam_pp_cl') return 'P.P. mL';
+  return x;
 }
 
 function destroyTalepCharts() {
@@ -1475,8 +1494,8 @@ function renderOzet() {
           <div class="stat-label">Pax Başına (${curLabel()})</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)}g</div>
-          <div class="stat-label">Pax Başına (GR)</div>
+          <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)} g</div>
+          <div class="stat-label">Pax başına (g)</div>
         </div>
       </div>
     </section>
@@ -1492,8 +1511,8 @@ function renderOzet() {
           <div class="stat-label">Pax Başına (${curLabel()})</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${fmtN(+ice.toplam_pp_cl || 0, 1)}cl</div>
-          <div class="stat-label">Pax Başına (CL)</div>
+          <div class="stat-value">${fmtN((+ice.toplam_pp_cl || 0) * 10, 0)} mL</div>
+          <div class="stat-label">Pax başına (mL)</div>
         </div>
       </div>
     </section>`;
@@ -1556,13 +1575,26 @@ function renderTrend() {
   const field = isCur ? `${metrik}_${vcIsEUR() ? 'eur' : 'tl'}` : metrik;
 
   const labels  = filtered.map(r => r.tarih_str);
-  const values  = filtered.map(r => +r[field] || 0);
+  let values  = filtered.map(r => +r[field] || 0);
+  if (metrik === 'toplam_pp_cl') values = values.map(v => v * 10);
 
   let labelText = metrik;
   if (metrik === 'toplam')        labelText = `Toplam Maliyet (${curLabel()})`;
   else if (metrik === 'toplam_pp') labelText = `Pax Başına (${curLabel()})`;
-  else if (metrik === 'toplam_pp_gr') labelText = 'P.P. GR (Yiyecek)';
-  else if (metrik === 'toplam_pp_cl') labelText = 'P.P. CL (İçecek)';
+  else if (metrik === 'toplam_pp_gr') labelText = 'P.P. g (yiyecek)';
+  else if (metrik === 'toplam_pp_cl') labelText = 'P.P. mL (içecek)';
+
+  const volTooltip = (y) => {
+    if (metrik === 'toplam_pp_gr') return `${labelText}: ${fmtN(y, 0)} g`;
+    if (metrik === 'toplam_pp_cl') return `${labelText}: ${fmtN(y, 0)} mL`;
+    return `${labelText}: ${isCur ? fmtCur(y) : fmtN(y, 2)}`;
+  };
+  const volTick = (v) => {
+    if (isCur) return new Intl.NumberFormat('tr-TR').format(v);
+    if (metrik === 'toplam_pp_gr') return `${fmtN(v, 0)} g`;
+    if (metrik === 'toplam_pp_cl') return `${fmtN(v, 0)} mL`;
+    return v;
+  };
 
   if (chartTrend) chartTrend.destroy();
   chartTrend = new Chart(document.getElementById('chart-trend'), {
@@ -1575,9 +1607,9 @@ function renderTrend() {
       responsive:true, maintainAspectRatio:false,
       plugins: {
         legend:{display:false},
-        tooltip: { callbacks: { label: ctx => `${labelText}: ${isCur ? fmtCur(ctx.parsed.y) : fmtN(ctx.parsed.y, 2)}` } }
+        tooltip: { callbacks: { label: ctx => volTooltip(ctx.parsed.y) } }
       },
-      scales:{ y:{ beginAtZero:false, ticks:{ callback: v => isCur ? new Intl.NumberFormat('tr-TR').format(v) : v } } }
+      scales:{ y:{ beginAtZero:false, ticks:{ callback: v => volTick(v) } } }
     }
   });
 
@@ -1620,7 +1652,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
   if (!wrap || !titleEl) return;
 
   const icenek = tip === 'icenek' || tip === 'icecek';
-  titleEl.textContent = `${stok_mali} — ${icenek ? 'Kişi başı tüketim (cl)' : 'Kişi başı tüketim (gr)'} · tüm aylar`;
+  titleEl.textContent = `${stok_mali} — Kişi başı tüketim · tüm aylar`;
 
   try {
     const tipQ = icenek ? 'icenek' : 'yiyecek';
@@ -1642,11 +1674,12 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
     if (seriHint) seriHint.style.display = 'none';
     const labels = data.map(d => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
     const yKey = icenek ? 'pp_cl' : 'pp_gr';
-    const ys = data.map(d => {
+    const ys = data.map((d) => {
       const v = d[yKey];
-      return v != null && !isNaN(+v) ? +v : null;
+      if (v == null || isNaN(+v)) return null;
+      return icenek ? +v * 10 : +v;
     });
-    const labelSeri = icenek ? 'P.P. cl' : 'P.P. gr';
+    const labelSeri = icenek ? 'mL / pax' : 'g / pax';
     const color = icenek ? '#2a5f8f' : '#8a6c2e';
 
     if (chartKatUrunSeri) {
@@ -1680,7 +1713,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
               label: (ctx) => {
                 const v = ctx.parsed.y;
                 if (v == null || isNaN(v)) return `${ctx.dataset.label}: —`;
-                return icenek ? `${ctx.dataset.label}: ${fmtN(v, 1)} cl` : `${ctx.dataset.label}: ${fmtN(v, 0)} g`;
+                return icenek ? `${ctx.dataset.label}: ${fmtN(v, 0)} mL` : `${ctx.dataset.label}: ${fmtN(v, 0)} g`;
               }
             }
           }
@@ -1689,9 +1722,9 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
           y: {
             beginAtZero: false,
             ticks: {
-              callback: (v) => fmtN(v, icenek ? 1 : 0)
+              callback: (v) => fmtN(v, 0)
             },
-            title: { display: true, text: icenek ? 'cl / pax' : 'g / pax', color }
+            title: { display: true, text: icenek ? 'mL / pax' : 'g / pax', color }
           }
         }
       }
@@ -1724,10 +1757,12 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const wrap = document.getElementById('kat-urun-wrap');
   const baslik = document.getElementById('kat-urun-baslik');
   const thPp = document.getElementById('kat-urun-th-pp');
+  const thBf = document.getElementById('kat-urun-th-bf');
   const thTut = document.getElementById('kat-urun-th-tutar');
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
   if (thPp) thPp.textContent = `Pax başı (${curLabel()})`;
+  if (thBf) thBf.textContent = `Birim fiyat (${curLabel()})`;
   if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
   if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
   if (wrap) wrap.style.display = 'none';
@@ -1749,13 +1784,18 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     const sorted = [...list].sort((a, b) => (pickCur(b, 'pp') || 0) - (pickCur(a, 'pp') || 0));
     if (hint) hint.style.display = 'none';
     if (wrap) wrap.style.display = '';
-    document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => `
+    document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => {
+      const bf = vcIsEUR()
+        ? (parseFloat(r.birim_fiyat_ort_eur) || 0)
+        : (parseFloat(r.birim_fiyat_ort_tl) || 0);
+      return `
       <tr data-stok="${encodeURIComponent(r.stok_mali)}">
         <td>${escapeHtml(r.stok_mali)}</td>
+        <td style="text-align:right">${fmtCur(bf)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
     document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
       tr.addEventListener('click', (ev) => {
         ev.stopPropagation();
@@ -1923,7 +1963,7 @@ async function loadAlarmlar() {
       <div class="alarm-dot red"></div>
       <div style="flex:1">
         <div style="font-weight:600;font-size:13px">${r.alarm}</div>
-        <div style="font-size:12px;color:var(--text-dim)">${r.donem} · ${r.metrik}: <strong>${fmtN(r.gerceklesen,2)}</strong> (eşik: ${fmtN(r.esik,2)})</div>
+        <div style="font-size:12px;color:var(--text-dim)">${r.donem} · ${fmtMetrikEtiket(r.metrik)}: <strong>${fmtOlcumDegeri(r.metrik, r.gerceklesen)}</strong> (eşik: ${fmtOlcumDegeri(r.metrik, r.esik)})</div>
       </div>
       <span class="badge badge-red">Alarm</span>
     </div>
@@ -1949,11 +1989,11 @@ async function loadEsikler() {
       <div class="esik-row">
         <div style="flex:1">
           <span style="font-weight:600">${r.ad}</span>
-          <span class="badge badge-gray" style="margin-left:6px">${r.metrik}</span>
+          <span class="badge badge-gray" style="margin-left:6px">${fmtMetrikEtiket(r.metrik)}</span>
           ${r.tip ? `<span class="badge badge-gold" style="margin-left:4px">${r.tip}</span>` : ''}
         </div>
         <div style="font-size:12px;color:var(--text-dim);display:inline-flex;align-items:center;gap:4px">
-          <i data-lucide="${r.yon === 'yukari' ? 'arrow-up' : 'arrow-down'}" class="delta-icon"></i> ${fmtN(r.esik_deger, 2)}
+          <i data-lucide="${r.yon === 'yukari' ? 'arrow-up' : 'arrow-down'}" class="delta-icon"></i> ${fmtOlcumDegeri(r.metrik, r.esik_deger)}
         </div>
         <button class="btn btn-danger btn-sm btn-icon" onclick="esikSil(${r.id})"><i data-lucide="x"></i></button>
       </div>
