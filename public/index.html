@@ -34,10 +34,72 @@
   }
   .kat-page-body { display: flex; flex-direction: column; gap: 24px; }
   .kat-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  /* Üst satır: pasta + kategori detay kartları aynı yükseklik, grafik alanı tablo viewport’u ile eşit */
+  .kat-row-kategori-ust {
+    align-items: stretch;
+  }
+  .kat-row-kategori-ust > .kat-card-block {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .kat-row-kategori-ust .chart-wrap {
+    height: min(420px, 55vh);
+    flex-shrink: 0;
+  }
+  .kat-row-kategori-ust .kat-detay-table-wrap {
+    height: min(420px, 55vh);
+    max-height: min(420px, 55vh);
+    overflow: auto;
+    flex-shrink: 0;
+  }
   .kat-row-kategori-alt {
+    align-items: stretch;
     padding-top: 8px;
     border-top: 1px solid var(--border);
     margin-top: 4px;
+  }
+  .kat-row-kategori-alt > .kat-card-block {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .kat-row-kategori-alt .kat-urun-alt-fill {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: min(480px, 60vh);
+    min-width: 0;
+  }
+  .kat-row-kategori-alt .kat-urun-alt-fill > p {
+    margin: 0;
+    flex-shrink: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+  .kat-row-kategori-alt .kat-urun-pax-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 12px;
+    overflow: auto;
+  }
+  .kat-row-kategori-alt #kat-urun-chart-wrap {
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 12px;
+  }
+  .kat-row-kategori-alt #kat-urun-chart-baslik {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--gold);
+  }
+  .kat-row-kategori-alt .kat-urun-seri-chart {
+    flex: 1 1 auto;
+    min-height: 240px;
+    height: auto !important;
   }
   .kat-tablo-master tbody tr[data-kategori] { cursor: pointer; transition: background .12s; }
   .kat-tablo-master tbody tr[data-kategori]:hover { background: var(--gold-bg); }
@@ -45,6 +107,35 @@
   #kat-urun-tablo tr[data-stok] { cursor: pointer; transition: background .12s; }
   #kat-urun-tablo tr[data-stok]:hover { background: var(--gold-bg); }
   #kat-urun-tablo tr.kat-urun-stok-active { background: rgba(42, 77, 122, 0.14); outline: 1px solid rgba(42, 77, 122, 0.45); }
+
+  .me-disclaimer {
+    font-size: 13px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+  }
+  .me-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .me-kpi { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .me-kpi-val { font-size: 20px; font-weight: 700; color: var(--gold); }
+  .me-kpi-lbl { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; margin-top: 4px; }
+  .me-skel .me-kpi-val,
+  .me-skel .me-kpi-lbl { background: var(--border); border-radius: 4px; min-height: 1.2em; animation: me-pulse 1.1s ease-in-out infinite; color: transparent; }
+  @keyframes me-pulse { 0%,100%{opacity:.35} 50%{opacity:.65} }
+  .me-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 16px; }
+  .me-threshold-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 200px; }
+  .me-threshold-wrap input[type=range] { width: 100%; }
+  .me-threshold-hint { font-size: 11px; color: var(--text-dim); }
+  .me-empty { text-align: center; padding: 48px 20px; color: var(--text-dim); font-size: 14px; }
+  .me-pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .me-seg-STARS { color: #2d6a4f; font-weight: 600; }
+  .me-seg-VOLUME_RISK { color: #9b2226; font-weight: 600; }
+  .me-seg-OPPORTUNITY { color: #ca6702; font-weight: 600; }
+  .me-seg-DEAD_STOCK { color: #6c757d; font-weight: 600; }
+  .me-seg-REVIEW_REQUIRED { color: #7209b7; font-weight: 600; }
 
   .upload-zone {
     border: 2px dashed var(--border2);
@@ -174,6 +265,9 @@
     </a>
     <a class="nav-item" data-page="yillik" href="#">
       <i class="nav-icon" data-lucide="calendar-days"></i> Yıllık Analiz
+    </a>
+    <a class="nav-item" data-page="menu-engineering" href="#">
+      <i class="nav-icon" data-lucide="layout-grid"></i> Menu Engineering
     </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
@@ -359,7 +453,7 @@
         </div>
         <div class="card kat-card-block">
           <div class="card-title">Kategori detay</div>
-          <div class="table-wrap" style="max-height:min(420px,55vh);overflow:auto">
+          <div class="table-wrap kat-detay-table-wrap">
             <table class="kat-tablo-master">
               <thead><tr><th>Kategori</th><th style="text-align:right" id="kat-tablo-th-deger">Tutar</th><th style="text-align:right">Pay %</th></tr></thead>
               <tbody id="kat-tablo"></tbody>
@@ -370,27 +464,31 @@
       <div class="kat-row-2col kat-row-kategori-alt">
         <div class="card kat-card-block" id="kat-urun-pax-card">
           <div class="card-title" id="kat-urun-baslik">Ürün — pax başı (seçili kategori)</div>
-          <p id="kat-urun-hint" style="margin:0;color:var(--text-dim);font-size:13px">Önce üstteki kategori tablosundan bir satır seçin.</p>
-          <div class="table-wrap" id="kat-urun-wrap" style="display:none;margin-top:12px;max-height:min(480px,60vh);overflow:auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Ürün (stok)</th>
-                  <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
-                  <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
-                  <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
-                </tr>
-              </thead>
-              <tbody id="kat-urun-tablo"></tbody>
-            </table>
+          <div class="kat-urun-alt-fill">
+            <p id="kat-urun-hint">Önce üstteki kategori tablosundan bir satır seçin.</p>
+            <div class="table-wrap kat-urun-pax-scroll" id="kat-urun-wrap" style="display:none">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ürün (stok)</th>
+                    <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
+                    <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
+                    <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
+                  </tr>
+                </thead>
+                <tbody id="kat-urun-tablo"></tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="card kat-card-block" id="kat-urun-seri-card">
           <div class="card-title">Kişi başı tüketim — tüm aylar</div>
-          <p id="kat-urun-seri-hint" style="margin:0;color:var(--text-dim);font-size:13px">Soldaki ürün listesinden bir satıra tıklayın. Yiyecek: kişi başı kütle <strong>g</strong>; içecek: kişi başı hacim <strong>mL</strong> (SI).</p>
-          <div id="kat-urun-chart-wrap" style="display:none;margin-top:14px">
-            <div id="kat-urun-chart-baslik" style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--gold)"></div>
-            <div class="chart-wrap" style="height:280px"><canvas id="chart-kat-urun-seri"></canvas></div>
+          <div class="kat-urun-alt-fill">
+            <p id="kat-urun-seri-hint">Soldaki ürün listesinden bir satıra tıklayın. Yiyecek: kişi başı kütle <strong>g</strong>; içecek: kişi başı hacim <strong>mL</strong> (SI).</p>
+            <div id="kat-urun-chart-wrap" style="display:none">
+              <div id="kat-urun-chart-baslik"></div>
+              <div class="chart-wrap kat-urun-seri-chart"><canvas id="chart-kat-urun-seri"></canvas></div>
+            </div>
           </div>
         </div>
       </div>
@@ -652,6 +750,135 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── MENU ENGINEERING (tüketim tabanlı) ───────────────────────────────── -->
+  <div id="page-menu-engineering" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Menu Engineering</div>
+        <div class="page-sub">Consumption-Based — tüketim ve maliyet proxy sınıflaması</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="meExport('csv')">CSV</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="meExport('xlsx')">Excel</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="loadMenuEngineeringData(true)">Yenile</button>
+      </div>
+    </div>
+    <div class="page-body">
+      <div class="me-disclaimer">
+        Bu analiz, satış ve kârlılık verisi olmadan yalnızca tüketim miktarlarına göre yapılmıştır. Sonuçlar operasyonel yönlendirme amaçlıdır.
+      </div>
+
+      <div class="card mb-20">
+        <div class="card-title">Filtreler</div>
+        <div class="me-filters">
+          <div>
+            <label class="form-label" for="me-baslangic">Başlangıç</label>
+            <select class="form-select" id="me-baslangic" style="width:160px"></select>
+          </div>
+          <div>
+            <label class="form-label" for="me-bitis">Bitiş</label>
+            <select class="form-select" id="me-bitis" style="width:160px"></select>
+          </div>
+          <div>
+            <label class="form-label" for="me-tip">Tip</label>
+            <select class="form-select" id="me-tip" style="width:130px">
+              <option value="">Hepsi</option>
+              <option value="yiyecek" selected>Yiyecek</option>
+              <option value="icenek">İçecek</option>
+            </select>
+          </div>
+          <div class="me-threshold-wrap">
+            <label class="form-label" for="me-threshold">Tüketim eşiği (üst %)</label>
+            <input type="range" id="me-threshold" min="20" max="40" step="10" value="30">
+            <span class="me-threshold-hint">Üst <strong id="me-threshold-lbl">30</strong>% SKU → yüksek tüketim</span>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <label class="form-label" for="me-q">Ürün ara</label>
+            <input type="text" class="form-input" id="me-q" placeholder="Stok / kategori…">
+          </div>
+          <div>
+            <label class="form-label" for="me-segment">Segment</label>
+            <select class="form-select" id="me-segment" style="width:160px">
+              <option value="">Hepsi</option>
+              <option value="STARS">STARS</option>
+              <option value="VOLUME_RISK">VOLUME RISK</option>
+              <option value="OPPORTUNITY">OPPORTUNITY</option>
+              <option value="DEAD_STOCK">DEAD STOCK</option>
+              <option value="REVIEW_REQUIRED">REVIEW</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label" for="me-cost">Cost proxy</label>
+            <select class="form-select" id="me-cost" style="width:120px">
+              <option value="">Hepsi</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+              <option value="UNKNOWN">UNKNOWN</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="me-loading" class="card mb-20 me-skel" style="display:none">
+        <div class="me-kpis">
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+        </div>
+        <p style="text-align:center;color:var(--text-dim);padding:20px"><span class="spinner"></span> Analiz hesaplanıyor…</p>
+      </div>
+
+      <div id="me-content" style="display:none">
+        <div class="me-kpis" id="me-kpis"></div>
+
+        <div class="grid-2 mb-20" style="gap:20px">
+          <div class="card">
+            <div class="card-title">2×2 Matrix — maliyet proxy × tüketim payı %</div>
+            <div class="chart-wrap" style="height:380px"><canvas id="chart-me-matrix"></canvas></div>
+            <p id="me-matrix-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:8px 0 0"></p>
+          </div>
+          <div class="card">
+            <div class="card-title">Pareto — tüketim &amp; kümülatif %</div>
+            <p id="me-pareto-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:0 0 8px"></p>
+            <div class="chart-wrap" style="height:380px"><canvas id="chart-me-pareto"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Ürün detayı</div>
+          <div class="table-wrap" style="max-height:min(520px,65vh);overflow:auto">
+            <table class="search-results" id="me-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Ürün</th>
+                  <th style="text-align:right">Tüketim</th>
+                  <th style="text-align:right">%</th>
+                  <th>Cost</th>
+                  <th>Segment</th>
+                  <th>Öneri</th>
+                </tr>
+              </thead>
+              <tbody id="me-tbody"></tbody>
+            </table>
+          </div>
+          <div class="me-pager">
+            <span id="me-page-info"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="me-prev" onclick="mePrevPage()">Önceki</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="me-next" onclick="meNextPage()">Sonraki</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="me-empty" class="card me-empty" style="display:none">
+        Seçilen aralık veya filtreler için veri yok. Dönem yükleyin veya filtreleri gevşetin.
+      </div>
     </div>
   </div>
 
@@ -937,6 +1164,348 @@ const COLORS = [
   '#4a3a1e','#1d4a33','#1a3050','#4a1d1d','#5a3a10',
 ];
 
+// ── Menu Engineering (consumption-based) ────────────────────────────────────
+let chartMeMatrix = null;
+let chartMePareto = null;
+let mePage = 1;
+let _meLastTotal = 0;
+let _mePageSize = 50;
+
+const ME_SEG_COLORS = {
+  STARS: '#2d6a4f',
+  VOLUME_RISK: '#9b2226',
+  OPPORTUNITY: '#ca6702',
+  DEAD_STOCK: '#6c757d',
+  REVIEW_REQUIRED: '#7209b7'
+};
+
+function initMenuEngineeringFilters() {
+  const root = document.getElementById('me-baslangic');
+  if (!root || root.dataset.bound) return;
+  root.dataset.bound = '1';
+  ['me-baslangic', 'me-bitis', 'me-tip', 'me-segment', 'me-cost'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => loadMenuEngineeringData(true));
+  });
+  const th = document.getElementById('me-threshold');
+  if (th) {
+    th.addEventListener('input', () => {
+      const l = document.getElementById('me-threshold-lbl');
+      if (l) l.textContent = th.value;
+    });
+    th.addEventListener('change', () => loadMenuEngineeringData(true));
+  }
+  const mq = document.getElementById('me-q');
+  if (mq) {
+    let qt;
+    mq.addEventListener('input', () => {
+      clearTimeout(qt);
+      qt = setTimeout(() => loadMenuEngineeringData(true), 400);
+    });
+  }
+}
+
+function meBuildQuery(forExport) {
+  const u = new URLSearchParams();
+  u.set('baslangic', document.getElementById('me-baslangic')?.value || '');
+  u.set('bitis', document.getElementById('me-bitis')?.value || '');
+  const tip = document.getElementById('me-tip')?.value || '';
+  if (tip) u.set('tip', tip);
+  u.set('threshold_pct', document.getElementById('me-threshold')?.value || '30');
+  const q = (document.getElementById('me-q')?.value || '').trim();
+  if (q) u.set('q', q);
+  const seg = document.getElementById('me-segment')?.value || '';
+  if (seg) u.set('segment', seg);
+  const cost = document.getElementById('me-cost')?.value || '';
+  if (cost) u.set('cost_proxy', cost);
+  if (!forExport) {
+    u.set('page', String(mePage));
+    u.set('pageSize', '50');
+  }
+  return u;
+}
+
+function loadMenuEngineeringPage() {
+  initMenuEngineeringFilters();
+  loadMenuEngineeringData(true);
+}
+
+async function loadMenuEngineeringData(resetPage) {
+  const bas = document.getElementById('me-baslangic');
+  const bit = document.getElementById('me-bitis');
+  const loadEl = document.getElementById('me-loading');
+  const contentEl = document.getElementById('me-content');
+  const emptyEl = document.getElementById('me-empty');
+  if (!bas || !bit || !loadEl || !contentEl || !emptyEl) return;
+
+  if (!bas.value || !bit.value) {
+    loadEl.style.display = 'none';
+    contentEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  if (resetPage) mePage = 1;
+
+  loadEl.style.display = 'block';
+  contentEl.style.display = 'none';
+  emptyEl.style.display = 'none';
+
+  try {
+    const u = meBuildQuery(false);
+    const res = await fetch('/api/menu-engineering?' + u.toString());
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Hata', 'error');
+      loadEl.style.display = 'none';
+      emptyEl.style.display = 'block';
+      return;
+    }
+    loadEl.style.display = 'none';
+    if (!data.totalRows) {
+      emptyEl.style.display = 'block';
+      meDestroyMeCharts();
+      return;
+    }
+    emptyEl.style.display = 'none';
+    contentEl.style.display = 'block';
+
+    meRenderMeKpis(data.kpis);
+    meRenderMeCharts(data);
+    meRenderMeTable(data.rows || []);
+    meUpdateMePager(data);
+
+    requestAnimationFrame(() => {
+      try { chartMeMatrix && chartMeMatrix.resize(); } catch (e) {}
+      try { chartMePareto && chartMePareto.resize(); } catch (e) {}
+    });
+    if (window.lucide) lucide.createIcons();
+  } catch (e) {
+    loadEl.style.display = 'none';
+    toast('Menu Engineering yüklenemedi', 'error');
+  }
+}
+
+function meRenderMeKpis(k) {
+  const el = document.getElementById('me-kpis');
+  if (!el || !k) return;
+  el.innerHTML = `
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.total_sku, 0)}</div><div class="me-kpi-lbl">Toplam SKU</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.total_consumption, 0)}</div><div class="me-kpi-lbl">Toplam tüketim</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.top20_share_pct, 1)}%</div><div class="me-kpi-lbl">Top 20 payı</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.volume_risk_count, 0)}</div><div class="me-kpi-lbl">Volume risk</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.dead_stock_count, 0)}</div><div class="me-kpi-lbl">Dead stock</div></div>
+  `;
+}
+
+function meDestroyMeCharts() {
+  if (chartMeMatrix) { try { chartMeMatrix.destroy(); } catch (e) {} chartMeMatrix = null; }
+  if (chartMePareto) { try { chartMePareto.destroy(); } catch (e) {} chartMePareto = null; }
+}
+
+function meRenderMeCharts(data) {
+  meDestroyMeCharts();
+  const matrix = data.matrix || [];
+  const canvasM = document.getElementById('chart-me-matrix');
+  const canvasP = document.getElementById('chart-me-pareto');
+  if (!canvasM || !canvasP) return;
+
+  const mTrunc = document.getElementById('me-matrix-trunc');
+  if (mTrunc) {
+    if (data.matrix_truncated) {
+      mTrunc.style.display = 'block';
+      mTrunc.textContent = `Grafikte en yüksek paylı ${(data.matrix || []).length} / ${data.matrix_total_points || 0} SKU (tam küme tabloda).`;
+    } else {
+      mTrunc.style.display = 'none';
+    }
+  }
+
+  chartMeMatrix = new Chart(canvasM, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Ürünler',
+        data: matrix.map(m => ({ x: m.x, y: m.y })),
+        backgroundColor: matrix.map(m => (ME_SEG_COLORS[m.segment] || '#888') + 'cc'),
+        borderColor: matrix.map(m => ME_SEG_COLORS[m.segment] || '#888'),
+        pointRadius: 5,
+        pointHoverRadius: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const m = matrix[ctx.dataIndex];
+              if (!m) return '';
+              return [
+                m.item_name,
+                `Pay: ${fmtN(m.consumption_pct, 2)}%`,
+                `Segment: ${m.segment}`,
+                `Cost: ${m.cost_proxy}`
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: 0,
+          max: 1,
+          title: { display: true, text: 'Maliyet proxy (düşük → yüksek)' },
+          ticks: {
+            callback(v) {
+              if (v <= 0.2) return 'LOW';
+              if (v <= 0.65) return 'MED';
+              return 'HIGH';
+            }
+          }
+        },
+        y: {
+          title: { display: true, text: 'Tüketim payı %' },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  const p = data.pareto || [];
+  const ptr = document.getElementById('me-pareto-trunc');
+  if (ptr) {
+    if (data.pareto_truncated) {
+      ptr.style.display = 'block';
+      ptr.textContent = `Grafikte ilk ${p.length} / ${data.pareto_total_points || p.length} SKU (tam liste tablo ve dışa aktarımda).`;
+    } else {
+      ptr.style.display = 'none';
+    }
+  }
+
+  const labels = p.map(x => {
+    const n = x.item_name || '';
+    return n.length > 22 ? n.slice(0, 20) + '…' : n;
+  });
+
+  chartMePareto = new Chart(canvasP, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Tüketim',
+          data: p.map(x => x.consumption),
+          backgroundColor: 'rgba(138,108,46,0.45)',
+          borderColor: 'rgba(138,108,46,0.85)',
+          borderWidth: 1,
+          yAxisID: 'y',
+          order: 2
+        },
+        {
+          type: 'line',
+          label: 'Kümülatif %',
+          data: p.map(x => x.cum_pct),
+          borderColor: '#2a4d7a',
+          backgroundColor: 'rgba(42,77,122,0.06)',
+          tension: 0.25,
+          yAxisID: 'y1',
+          order: 1,
+          pointRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title(items) {
+              const i = items[0]?.dataIndex;
+              return i != null && p[i] ? p[i].item_name : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { maxRotation: 60, minRotation: 45, font: { size: 8 } }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'Tüketim' },
+          beginAtZero: true
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          min: 0,
+          max: 100,
+          grid: { drawOnChartArea: false },
+          title: { display: true, text: 'Kümülatif %' }
+        }
+      }
+    }
+  });
+}
+
+function meRenderMeTable(rows) {
+  const tb = document.getElementById('me-tbody');
+  if (!tb) return;
+  tb.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(String(r.rank ?? ''))}</td>
+      <td>${escapeHtml(r.item_name || '')}</td>
+      <td style="text-align:right">${fmtN(r.consumption_quantity, 2)}</td>
+      <td style="text-align:right">${fmtN(r.consumption_pct, 2)}</td>
+      <td>${escapeHtml(r.cost_proxy || '')}</td>
+      <td><span class="me-seg-${escapeHtml(r.segment || '')}">${escapeHtml((r.segment || '').replace(/_/g, ' '))}</span></td>
+      <td>${escapeHtml(r.suggestion || '')}</td>
+    </tr>
+  `).join('');
+}
+
+function meUpdateMePager(data) {
+  _meLastTotal = data.totalRows || 0;
+  _mePageSize = data.pageSize || 50;
+  const totP = Math.max(1, Math.ceil(_meLastTotal / _mePageSize));
+  const info = document.getElementById('me-page-info');
+  const prev = document.getElementById('me-prev');
+  const next = document.getElementById('me-next');
+  if (info) info.textContent = `Sayfa ${data.page || 1} / ${totP} · ${_meLastTotal} ürün`;
+  if (prev) prev.disabled = (data.page || 1) <= 1;
+  if (next) next.disabled = (data.page || 1) >= totP;
+}
+
+function mePrevPage() {
+  if (mePage <= 1) return;
+  mePage--;
+  loadMenuEngineeringData(false);
+}
+
+function meNextPage() {
+  const totP = Math.max(1, Math.ceil(_meLastTotal / _mePageSize));
+  if (mePage >= totP) return;
+  mePage++;
+  loadMenuEngineeringData(false);
+}
+
+function meExport(fmt) {
+  const bas = document.getElementById('me-baslangic');
+  const bit = document.getElementById('me-bitis');
+  if (!bas?.value || !bit?.value) {
+    toast('Önce başlangıç ve bitiş dönemi seçin', 'error');
+    return;
+  }
+  const u = meBuildQuery(true);
+  u.set('format', fmt);
+  window.open('/api/menu-engineering/export?' + u.toString(), '_blank');
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item[data-page]').forEach(el => {
   el.addEventListener('click', e => {
@@ -954,6 +1523,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
     if (page === 'siniflandirma') { classifyRefreshStats(); classifyLoadResults(); }
+    if (page === 'menu-engineering') loadMenuEngineeringPage();
   });
 });
 
@@ -1427,6 +1997,18 @@ async function init() {
     ['ozet-donem','kat-donem','talep-donem'].forEach(id => {
       document.getElementById(id).innerHTML = donemOpts;
     });
+    const meB = document.getElementById('me-baslangic');
+    const meE = document.getElementById('me-bitis');
+    if (meB && meE) {
+      meB.innerHTML = donemOpts;
+      meE.innerHTML = donemOpts;
+      if (don.length) {
+        const sorted = [...don].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
+        meB.value = sorted[0].tarih_str;
+        meE.value = sorted[sorted.length - 1].tarih_str;
+      }
+    }
+    initMenuEngineeringFilters();
     const talepSel = document.getElementById('talep-donem');
     if (talepSel && !talepSel.dataset.bound) {
       talepSel.dataset.bound = '1';
@@ -1686,7 +2268,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
       try { chartKatUrunSeri.destroy(); } catch (e) {}
       chartKatUrunSeri = null;
     }
-    wrap.style.display = '';
+    wrap.style.display = 'flex';
     chartKatUrunSeri = new Chart(document.getElementById('chart-kat-urun-seri'), {
       type: 'line',
       data: {
@@ -1729,6 +2311,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
         }
       }
     });
+    requestAnimationFrame(() => { try { chartKatUrunSeri && chartKatUrunSeri.resize(); } catch (e) {} });
   } catch (e) {
     toast('Grafik yüklenemedi', 'error');
     const seriHint = document.getElementById('kat-urun-seri-hint');

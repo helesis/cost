@@ -16,6 +16,7 @@ const {
   runJobLoop,
   requestPause
 } = require('./classifyWorker');
+const menuEngineering = require('./menuEngineering');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
@@ -1063,6 +1064,40 @@ app.get('/api/talep-pareto-detay', async (req, res) => {
     res.json({ ok: true, tarih_str, tip, esik, urunler });
   } catch (err) {
     console.error('talep-pareto-detay:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Menu Engineering (tüketim tabanlı) ─────────────────────────────────────
+app.get('/api/menu-engineering', async (req, res) => {
+  try {
+    const data = await menuEngineering.analyze(pool, req.query, SQL_EXC_FINANS_PP);
+    res.json(data);
+  } catch (err) {
+    if (err && err.message && err.message.includes('gerekli')) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('menu-engineering:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/menu-engineering/export', async (req, res) => {
+  try {
+    const fmt = String(req.query.format || 'csv').toLowerCase();
+    const { body, contentType } = await menuEngineering.exportFiltered(pool, req.query, SQL_EXC_FINANS_PP, fmt);
+    const ext = fmt === 'xlsx' ? 'xlsx' : 'csv';
+    const bs = String(req.query.baslangic || 'baslangic').replace(/[^0-9-]/g, '_');
+    const bt = String(req.query.bitis || 'bitis').replace(/[^0-9-]/g, '_');
+    const name = `menu-engineering_${bs}_${bt}.${ext}`;
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+    res.send(Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8'));
+  } catch (err) {
+    if (err && err.message && err.message.includes('gerekli')) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('menu-engineering export:', err);
     res.status(500).json({ error: err.message });
   }
 });

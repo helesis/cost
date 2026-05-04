@@ -1,0 +1,51 @@
+{
+  "HIGH": [
+    "dana",
+    "beef",
+    "bonfile",
+    "antrikot",
+    "tenderloin",
+    "t-bone",
+    "tomahawk",
+    "kuzu",
+    "lamb",
+    "somon",
+    "salmon",
+    "karides",
+    "shrimp",
+    "tuna",
+    "levrek",
+    "seabass",
+    "kalkan"
+  ],
+  "MEDIUM": [
+    "hindi",
+    "turkey",
+    "şarküteri",
+    "sarkuteri",
+    "peynir",
+    "cheese",
+    "süt",
+    "sut",
+    "yoğurt",
+    "yogurt",
+    "tereyağ",
+    "tereyag",
+    "zeytinyağı",
+    "zeytinyagi"
+  ],
+  "LOW": [
+    "tavuk",
+    "chicken",
+    "pirinç",
+    "pirinc",
+    "rice",
+    "makarna",
+    "pasta",
+    "sebze",
+    "vegetable",
+    "patates",
+    "ekmek",
+    "sos"
+  ]
+}
