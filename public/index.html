@@ -646,7 +646,7 @@
           <button class="btn btn-primary" onclick="fiyatAnalizEt()">Analiz Et</button>
         </div>
         <div id="fiyat-urun-chips-host" class="fiyat-urun-chips-host" style="display:none">
-          <div class="fiyat-urun-chips-caption">Aramaya uyan ürünler — fiyat analizi için tıklayın</div>
+          <div class="fiyat-urun-chips-caption">Aramaya uyan ürünler — çipe tıklayınca yalnızca grafik ve tablo güncellenir (arama metni aynı kalır)</div>
           <div class="fiyat-urun-chips" id="fiyat-urun-chips" role="list"></div>
         </div>
       </div>
@@ -2977,6 +2977,17 @@ async function refreshFiyatUrunChips() {
   }
 }
 
+/** Çip listesini yeniden çekmeden seçili ürün vurgusunu güncelle (tıklanınca liste kaybolmasın). */
+function fiyatChipsUpdateActiveOnly() {
+  const wrap = document.getElementById('fiyat-urun-chips');
+  if (!wrap) return;
+  const sel = fiyatSecilenStok;
+  wrap.querySelectorAll('.fiyat-urun-chip').forEach((btn) => {
+    const st = btn.getAttribute('data-stok');
+    btn.classList.toggle('active', !!(sel && st === sel));
+  });
+}
+
 function initFiyatPage() {
   if (!fiyatPageInited) {
     const bas = document.getElementById('kat-fiyat-baslangic');
@@ -3014,8 +3025,8 @@ function initFiyatPage() {
         e.preventDefault();
         const stok = btn.getAttribute('data-stok');
         if (!stok) return;
-        document.getElementById('fiyat-q').value = stok;
         fiyatSecilenStok = stok;
+        fiyatChipsUpdateActiveOnly();
         fiyatAnalizEt({ tam: true, exactStokMali: stok });
       });
     }
@@ -3035,7 +3046,10 @@ async function fiyatAnalizEt(opts) {
   const tip = document.getElementById('fiyat-tip').value;
   const tam = fromExact || o.tam === true;
 
-  if (!q) { toast('Ürün adı girin', 'warning'); return; }
+  if (!q) {
+    if (!fromExact) toast('Ürün adı girin', 'warning');
+    return;
+  }
 
   if (!tam) fiyatSecilenStok = null;
 
@@ -3057,13 +3071,15 @@ async function fiyatAnalizEt(opts) {
       const msg = rows && rows.error ? rows.error : 'Sunucu yanıtı geçersiz';
       baslik.textContent = msg;
       toast(msg, 'error');
-      await refreshFiyatUrunChips();
+      if (tam) fiyatChipsUpdateActiveOnly();
+      else await refreshFiyatUrunChips();
       return;
     }
 
     if (!rows.length) {
       baslik.textContent = `"${q}" için fiyat verisi bulunamadı`;
-      await refreshFiyatUrunChips();
+      if (tam) fiyatChipsUpdateActiveOnly();
+      else await refreshFiyatUrunChips();
       return;
     }
 
@@ -3100,11 +3116,13 @@ async function fiyatAnalizEt(opts) {
     chartWrap.style.display = 'block';
     tabloWrap.style.display = 'block';
     if (tam) fiyatSecilenStok = q;
-    await refreshFiyatUrunChips();
+    if (tam) fiyatChipsUpdateActiveOnly();
+    else await refreshFiyatUrunChips();
   } catch (err) {
     baslik.textContent = 'Hata: ' + err.message;
     toast('Analiz hatası: ' + err.message, 'error');
-    await refreshFiyatUrunChips();
+    if (tam) fiyatChipsUpdateActiveOnly();
+    else await refreshFiyatUrunChips();
   }
 }
 
