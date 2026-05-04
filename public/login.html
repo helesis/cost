@@ -87,7 +87,13 @@
     window.location.href = '/';
   }
 
-  function vcLucide() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
+  (async function redirectIfAuthBypass() {
+    try {
+      const r = await fetch('/api/auth/public-config');
+      const c = await r.json();
+      if (c.authBypass) window.location.replace('/');
+    } catch (e) {}
+  })();
   vcLucide();
 
   const stepEmail = $('step-email');

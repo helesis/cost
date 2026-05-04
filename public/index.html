@@ -5,38 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>F&B Maliyet Analizi</title>
 <link rel="stylesheet" href="/voyage-design-system.css">
-<script>
-// ── Auth guard + fetch wrapper — API çağrılarından önce çalışmalı ─────────────
-(function() {
-  const token = localStorage.getItem('vc_token');
-  if (!token) {
-    window.location.replace('/login');
-    return;
-  }
-  const origFetch = window.fetch.bind(window);
-  window.fetch = function(url, opts = {}) {
-    if (typeof url === 'string' && url.startsWith('/api/')) {
-      const t = localStorage.getItem('vc_token');
-      if (t) {
-        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + t });
-      }
-    }
-    return origFetch(url, opts).then(r => {
-      if (r.status === 401) {
-        localStorage.removeItem('vc_token');
-        localStorage.removeItem('vc_email');
-        window.location.replace('/login');
-      }
-      return r;
-    });
-  };
-  window.vcLogout = function() {
-    localStorage.removeItem('vc_token');
-    localStorage.removeItem('vc_email');
-    window.location.replace('/login');
-  };
-})();
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
@@ -2189,13 +2157,60 @@ function renderYilKarsilastirma(data) {
   vcMakeSortable(tbody.closest('table'));
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-document.querySelectorAll('[data-currency]').forEach(b => {
-  b.classList.toggle('active', b.dataset.currency === vcCurrency);
-});
-vcLucide();
-setupUpload();
-init();
+// ── Auth guard + fetch — public-config sonrası boot ──────────────────────────
+window.__vcAuthBypass = false;
+window.__vcAuthReady = (async function() {
+  let authBypass = false;
+  try {
+    const r = await fetch('/api/auth/public-config');
+    const c = await r.json();
+    authBypass = !!c.authBypass;
+  } catch (e) {}
+  window.__vcAuthBypass = authBypass;
+
+  if (!authBypass && !localStorage.getItem('vc_token')) {
+    window.location.replace('/login');
+    throw new Error('auth-redirect');
+  }
+
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(url, opts = {}) {
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      const t = localStorage.getItem('vc_token');
+      if (t) {
+        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + t });
+      }
+    }
+    return origFetch(url, opts).then(r => {
+      if (r.status === 401 && !window.__vcAuthBypass) {
+        localStorage.removeItem('vc_token');
+        localStorage.removeItem('vc_email');
+        window.location.replace('/login');
+      }
+      return r;
+    });
+  };
+  window.vcLogout = function() {
+    if (window.__vcAuthBypass) {
+      window.location.replace('/');
+      return;
+    }
+    localStorage.removeItem('vc_token');
+    localStorage.removeItem('vc_email');
+    window.location.replace('/login');
+  };
+  return authBypass;
+})();
+
+// ── Boot (token/bypass hazır olduktan sonra) ──────────────────────────────────
+window.__vcAuthReady.then(function() {
+  document.querySelectorAll('[data-currency]').forEach(b => {
+    b.classList.toggle('active', b.dataset.currency === vcCurrency);
+  });
+  vcLucide();
+  setupUpload();
+  init();
+}).catch(function() { /* login yönlendirmesi */ });
 </script>
 </body>
 </html>

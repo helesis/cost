@@ -37,6 +37,16 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
   .split(',')
   .map(e => e.trim().toLowerCase())
   .filter(Boolean);
+/** Geliştirme: varsayılan açık. Kapatmak: BYPASS_AUTH=0. Üretimde yalnızca BYPASS_AUTH=1 ile açılır. */
+const AUTH_BYPASS =
+  process.env.NODE_ENV === 'production'
+    ? /^1|true|yes$/i.test(String(process.env.BYPASS_AUTH || '').trim())
+    : !/^0|false|no$/i.test(String(process.env.BYPASS_AUTH || '').trim());
+const BYPASS_USER_EMAIL = (() => {
+  const v = (process.env.BYPASS_AUTH_EMAIL || '').trim().toLowerCase();
+  if (v) return v;
+  return ALLOWED_EMAILS[0] || 'dev@local';
+})();
 const RESEND_FROM = process.env.RESEND_FROM || 'Cost Analysis <noreply@voyagestars.com>';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
@@ -57,6 +67,11 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/api/auth/')) return next();
   if (!req.path.startsWith('/api/')) return next();
 
+  if (AUTH_BYPASS) {
+    req.user = { email: BYPASS_USER_EMAIL };
+    return next();
+  }
+
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
@@ -73,6 +88,11 @@ function requireAuth(req, res, next) {
   }
 }
 app.use(requireAuth);
+
+// ── API: Auth — istemci: tam auth kapalı mı? ─────────────────────────────────
+app.get('/api/auth/public-config', (req, res) => {
+  res.json({ authBypass: AUTH_BYPASS });
+});
 
 // ── API: Auth — giriş modu (login sayfası) ───────────────────────────────────
 app.get('/api/auth/login-mode', (req, res) => {
@@ -1090,4 +1110,7 @@ app.get('*', (req, res) => {
 // ── Başlat ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Cost Analysis → http://localhost:${PORT}`);
+  if (AUTH_BYPASS) {
+    console.warn('⚠️  BYPASS_AUTH: JWT doğrulaması kapalı (req.user.email = %s)', BYPASS_USER_EMAIL);
+  }
 });
