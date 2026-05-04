@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
 const { buildTalepAnaliz } = require('./talepAnaliz');
+const { parseExcelToRows } = require('./excelImport');
 const {
   countPairStats,
   getJobState,

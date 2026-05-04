@@ -137,6 +137,100 @@ function toShareRows(rows, valueKey = 'tutar_tl') {
   }));
 }
 
+/** SKU başına tutar (azalan) Pareto; tip ifadesi sabit (enjekte edilmez). */
+async function computeParetoForTip(pool, tarih_str, tipCondSql) {
+  const sql = `
+    WITH per_sku AS (
+      SELECT stok_mali,
+             SUM(tutar_tl)::numeric AS tutar_tl,
+             SUM(tutar_eur)::numeric AS tutar_eur
+      FROM fb_cost.tuketim
+      WHERE tarih_str = $1 AND (${tipCondSql}) AND ${SQL_EXC_FINANS}
+      GROUP BY stok_mali
+      HAVING SUM(tutar_tl) > 0
+    ),
+    tot AS (
+      SELECT COUNT(*)::int AS n,
+             COALESCE(SUM(tutar_tl), 0)::numeric AS total_tl,
+             COALESCE(SUM(tutar_eur), 0)::numeric AS total_eur
+      FROM per_sku
+    ),
+    ord AS (
+      SELECT tutar_tl, tutar_eur,
+        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC) AS rnk,
+        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl,
+        SUM(tutar_eur) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_eur
+      FROM per_sku
+    ),
+    thresh AS (
+      SELECT
+        (SELECT MIN(o.rnk) FROM ord o CROSS JOIN tot t2
+         WHERE t2.total_tl > 0 AND o.cum_tl >= 0.50 * t2.total_tl) AS k50,
+        (SELECT MIN(o.rnk) FROM ord o CROSS JOIN tot t2
+         WHERE t2.total_tl > 0 AND o.cum_tl >= 0.70 * t2.total_tl) AS k70,
+        (SELECT MIN(o.rnk) FROM ord o CROSS JOIN tot t2
+         WHERE t2.total_tl > 0 AND o.cum_tl >= 0.80 * t2.total_tl) AS k80,
+        (SELECT MIN(o.rnk) FROM ord o CROSS JOIN tot t2
+         WHERE t2.total_tl > 0 AND o.cum_tl >= 0.90 * t2.total_tl) AS k90
+    ),
+    top20 AS (
+      SELECT COALESCE(SUM(o.tutar_tl), 0)::numeric AS sum_tl,
+             COALESCE(SUM(o.tutar_eur), 0)::numeric AS sum_eur
+      FROM ord o
+      CROSS JOIN tot t
+      WHERE t.n > 0 AND o.rnk <= GREATEST(1, CEIL(0.20 * t.n::numeric)::int)
+    )
+    SELECT t.n AS urun_sayisi,
+           t.total_tl AS tutar_tl,
+           t.total_eur AS tutar_eur,
+           th.k50, th.k70, th.k80, th.k90,
+           t20.sum_tl AS ust_20pct_urun_tutar_tl,
+           t20.sum_eur AS ust_20pct_urun_tutar_eur
+    FROM tot t
+    CROSS JOIN thresh th
+    CROSS JOIN top20 t20
+  `;
+  const { rows } = await pool.query(sql, [tarih_str]);
+  const r = rows[0];
+  const n = parseInt(r?.urun_sayisi, 10) || 0;
+  if (!r || n <= 0) {
+    return {
+      urun_sayisi: 0,
+      tutar_tl: 0,
+      tutar_eur: 0,
+      esik_tutar: { 50: null, 70: null, 80: null, 90: null },
+      ust_pct20_urun: null
+    };
+  }
+  const totalTl = parseFloat(r.tutar_tl) || 0;
+  const totalEur = parseFloat(r.tutar_eur) || 0;
+  const esik = (k) => {
+    const ki = k != null ? parseInt(k, 10) : NaN;
+    if (!Number.isFinite(ki) || ki <= 0) return null;
+    return { urun_sayisi: ki, urun_yuzdesi: Math.round((10000 * ki) / n) / 100 };
+  };
+  const k20 = Math.max(1, Math.ceil(0.2 * n));
+  const ustTl = parseFloat(r.ust_20pct_urun_tutar_tl) || 0;
+  const ustEur = parseFloat(r.ust_20pct_urun_tutar_eur) || 0;
+  return {
+    urun_sayisi: n,
+    tutar_tl: totalTl,
+    tutar_eur: totalEur,
+    esik_tutar: {
+      50: esik(r.k50),
+      70: esik(r.k70),
+      80: esik(r.k80),
+      90: esik(r.k90)
+    },
+    ust_pct20_urun: {
+      urun_sayisi: k20,
+      urun_yuzdesi: Math.round((10000 * k20) / n) / 100,
+      tutar_pay_yuzdesi_tl: pct(ustTl, totalTl),
+      tutar_pay_yuzdesi_eur: pct(ustEur, totalEur)
+    }
+  };
+}
+
 async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
   const { tarih_str, onceki, zincir } = await resolveTarih(pool, tarihIn || null);
   if (!tarih_str) {
@@ -163,7 +257,9 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
     costDriverCur,
     costDriverPrev,
     toplamCur,
-    toplamPrev
+    toplamPrev,
+    paretoYiyecek,
+    paretoIcenek
   ] = await Promise.all([
     pool.query(
       `
@@ -294,7 +390,9 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
           `SELECT SUM(tutar_tl) AS tl, SUM(tutar_eur) AS eur FROM fb_cost.tuketim WHERE tarih_str = $1 AND ${SQL_YIYECEK_BASE}`,
           paramsPrev
         ).then(r => r.rows[0] || {})
-      : Promise.resolve(null)
+      : Promise.resolve(null),
+    computeParetoForTip(pool, tarih_str, `tip = 'yiyecek'`),
+    computeParetoForTip(pool, tarih_str, `tip IN ('icenek', 'icecek')`)
   ]);
 
   const proteinLabels = {
@@ -395,6 +493,10 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
       pasif_katalog_pay: allSku > 0 ? Math.round((10000 * (allSku - thisSku)) / allSku) / 100 : null,
       seri_aylik: kompSeri,
       seri_ozet: minSeri && maxSeri ? { min: minSeri, max: maxSeri, aralik: maxSeri - minSeri } : null
+    },
+    pareto: {
+      yiyecek: paretoYiyecek,
+      icenek: paretoIcenek
     }
   };
 }

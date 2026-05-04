@@ -234,8 +234,14 @@
         <div class="chart-wrap" style="height:280px;max-width:420px;margin:0 auto"><canvas id="chart-talep-density"></canvas></div>
       </div>
 
+      <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
+        <div class="card-title">4. Pareto analizi (80/20)</div>
+        <p class="talep-note">Aynı dönemde tutar bazında sıralı SKU’lar: toplam tüketim cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?</p>
+        <div class="talep-two-col" id="talep-pareto-host"></div>
+      </div>
+
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">4. Düşük / sıfır tüketim</div>
+        <div class="card-title">5. Düşük / sıfır tüketim</div>
         <div class="talep-two-col">
           <div class="talep-subcard">
             <h4>Bu dönem kullanılmayan ürünler</h4>
@@ -256,13 +262,13 @@
       </div>
 
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">5. Maliyet sürücüsü (dolaylı)</div>
+        <div class="card-title">6. Maliyet sürücüsü (dolaylı)</div>
         <p class="talep-note" id="talep-cost-aciklama"></p>
         <div class="talep-kpi" id="talep-cost-kpi"></div>
       </div>
 
       <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
-        <div class="card-title">6. Üretim karmaşıklığı (aktif SKU)</div>
+        <div class="card-title">7. Üretim karmaşıklığı (aktif SKU)</div>
         <p class="talep-note">Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.</p>
         <div class="talep-kpi" id="talep-komp-kpi"></div>
         <div class="chart-wrap" style="height:300px;margin-top:16px"><canvas id="chart-talep-complexity"></canvas></div>
@@ -1046,6 +1052,42 @@ function talepMacroLabel(m) {
   return map[m] || m;
 }
 
+function talepRenderParetoSide(title, p) {
+  if (!p || !p.urun_sayisi) {
+    return `<div class="talep-subcard"><h4>${escapeHtml(title)}</h4><p class="talep-note">Bu dönemde pozitif tutarlı SKU yok.</p></div>`;
+  }
+  const u20 = p.ust_pct20_urun;
+  const isEur = vcIsEUR();
+  const payKey = isEur ? 'tutar_pay_yuzdesi_eur' : 'tutar_pay_yuzdesi_tl';
+  const payStr = u20 && u20[payKey] != null ? fmtN(u20[payKey], 1) + '%' : '—';
+  const rows = [50, 70, 80, 90].map((th) => {
+    const e = p.esik_tutar[th] || p.esik_tutar[String(th)];
+    if (!e) return `<tr><td>≥ %${th} tutar</td><td>—</td><td style="text-align:right">—</td></tr>`;
+    return `<tr><td>≥ %${th} tutar</td><td>${e.urun_sayisi}</td><td style="text-align:right">${fmtN(e.urun_yuzdesi, 1)}%</td></tr>`;
+  }).join('');
+  const k20 = u20 ? u20.urun_sayisi : '—';
+  const pct20 = u20 && u20.urun_yuzdesi != null ? fmtN(u20.urun_yuzdesi, 1) : '—';
+  return `
+    <div class="talep-subcard">
+      <h4>${escapeHtml(title)}</h4>
+      <p class="talep-note">Pozitif tutarlı <strong>${p.urun_sayisi}</strong> ürün · Dönem toplamı <strong>${fmtCur(isEur ? p.tutar_eur : p.tutar_tl)}</strong></p>
+      <div class="table-wrap" style="max-height:220px;overflow:auto">
+        <table class="search-results" style="font-size:12px;width:100%">
+          <thead><tr><th>Eşik (kümülatif)</th><th>Ürün sayısı</th><th style="text-align:right">Ürün %</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="talep-note" style="margin-top:10px"><strong>~%20 ürün (ciroya göre üst):</strong> En yüksek tutara sahip <strong>${k20}</strong> ürün (~katalogun <strong>${pct20}%</strong>'i) toplamın ≈ <strong>${payStr}</strong>'ini oluşturur.</p>
+    </div>`;
+}
+
+function talepRenderPareto(pareto) {
+  const host = document.getElementById('talep-pareto-host');
+  if (!host) return;
+  const p = pareto || {};
+  host.innerHTML = talepRenderParetoSide('Yiyecek', p.yiyecek) + talepRenderParetoSide('İçecek', p.icenek);
+}
+
 async function loadTalepAnaliz() {
   const sel = document.getElementById('talep-donem');
   const tarih_str = sel && sel.value ? sel.value : '';
@@ -1073,8 +1115,10 @@ async function loadTalepAnaliz() {
     const subEl = document.getElementById('talep-subtitle');
     if (subEl) {
       const top = vcIsEUR() ? (data.toplam && data.toplam.tutar_eur) : (data.toplam && data.toplam.tutar_tl);
-      subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam yiyecek ${fmtCur(top || 0)}`;
+      subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam yiyecek ${fmtCur(top || 0)} · Pareto: aynı dönemde yiyecek + içecek`;
     }
+
+    talepRenderPareto(data.pareto);
 
     const pRows = data.protein_yapisi || [];
     const pLabels = pRows.map(x => x.etiket || x.bucket);
