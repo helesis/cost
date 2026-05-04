@@ -273,6 +273,15 @@ h1, h2, h3, .font-serif {
 .stat-card.gold   .stat-value { color: var(--gold); }
 .stat-card.blue   .stat-value { color: var(--blue); }
 
+/* Genel Özet: KPI kartları min. sütun +%25; yan padding azaltılarak kart alanı genişletilir */
+#page-ozet .page-body {
+  padding: 28px 24px;
+}
+
+#page-ozet .stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
 /* ---- TABLO ---- */
 .table-wrap { overflow-x: auto; }
 
