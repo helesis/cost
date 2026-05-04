@@ -120,7 +120,7 @@
   </div>
 
   <div class="currency-toggle">
-    <button data-currency="TL"  onclick="vcSetCurrency('TL')"><i data-lucide="turkish-lira-sign"></i>TL</button>
+    <button data-currency="TL"  onclick="vcSetCurrency('TL')"><i data-lucide="turkish-lira"></i>TL</button>
     <button data-currency="EUR" onclick="vcSetCurrency('EUR')"><i data-lucide="euro"></i>EUR</button>
   </div>
 
@@ -931,7 +931,16 @@ async function classifyRefreshStats() {
     if (j.lastError) hint.push('Uyarı: ' + j.lastError);
     if (j.pauseReason) hint.push(j.pauseReason);
     document.getElementById('classify-job-hint').textContent = hint.join(' · ') || (j.running ? '' : 'Beklemede');
-    if (j.running) classifyLoadResults();
+    if (j.running) {
+      const now = Date.now();
+      if (!window._classifyLastTableAt) window._classifyLastTableAt = 0;
+      if (now - window._classifyLastTableAt > 1800) {
+        window._classifyLastTableAt = now;
+        classifyLoadResults();
+      }
+    } else {
+      window._classifyLastTableAt = 0;
+    }
   } catch (e) { /* tablo yok vb. */ }
 }
 
@@ -1227,7 +1236,7 @@ async function init() {
       if (document.querySelector('.tab-content.active')?.id === 'page-siniflandirma') {
         classifyRefreshStats();
       }
-    }, 1500);
+    }, 400);
   } catch (e) {
     toast('Veri yüklenemedi. Dosya yüklü mü?', 'error');
   }

@@ -149,12 +149,14 @@ async function runJobLoop(pool, { skipExisting }) {
   resetJobCounters();
   jobState.startedAt = Date.now();
 
-  const stats = await countPairStats(pool, { skipExisting: jobState.skipExisting });
-  jobState.totalAtStart = skip ? (parseInt(stats.unclassified_pairs, 10) || 0) : (parseInt(stats.total_pairs, 10) || 0);
-
-  let cursor = null;
-
   try {
+    const stats = await countPairStats(pool, { skipExisting: jobState.skipExisting });
+    jobState.totalAtStart = jobState.skipExisting
+      ? (parseInt(stats.unclassified_pairs, 10) || 0)
+      : (parseInt(stats.total_pairs, 10) || 0);
+
+    let cursor = null;
+
     while (!jobState.pauseRequested) {
       const pair = await fetchNextPair(pool, jobState.skipExisting, cursor);
       if (!pair) break;
@@ -193,6 +195,9 @@ async function runJobLoop(pool, { skipExisting }) {
     if (jobState.pauseRequested) {
       jobState.pauseReason = 'Kullanıcı duraklattı';
     }
+  } catch (err) {
+    jobState.lastError = err.message || String(err);
+    console.error('classify job:', err);
   } finally {
     jobState.running = false;
     jobState.pauseRequested = false;
