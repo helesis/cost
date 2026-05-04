@@ -291,7 +291,7 @@ const DIGER_GIDER = 'Diğer Giderler';
 
 /**
  * Ürün değil, grup/kategori başlığı (tabloya satır olarak yazılmaz).
- * Excel'de "1001001 - DANA ETLERI" ara toplam miktarı dolu, tutar/birim fiyat 0 — yine başlık.
+ * Excel'de "1001001 - DANA ETLERI" ara toplam: stok no yok, tutar TL 0; birim fiyat/miktar dolu olabilir.
  * Kategori metni olarak tam `stok_mali` string'i (örn. 1001001 - DANA ETLERI) kullanılır.
  */
 function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
@@ -304,12 +304,7 @@ function isGroupHeaderRow(stokMali, stokNoStr, numVals) {
   const birimFiyat = numVals.birim_fiyat || 0;
   const tuk = numVals.tuk_miktar || 0;
 
-  if (
-    !hasRealStokNo &&
-    tutar === 0 &&
-    birimFiyat === 0 &&
-    /^\d+\s*-\s/.test(sm)
-  ) {
+  if (!hasRealStokNo && tutar === 0 && /^\d+\s*-\s/.test(sm)) {
     return true;
   }
 

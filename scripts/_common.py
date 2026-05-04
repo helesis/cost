@@ -557,7 +557,7 @@ def is_group_header_row(stok_mali: str, stok_no_str: str, parsed_numeric: dict[s
     bf = _pn_val(parsed_numeric, "birim_fiyat")
     tuk = _pn_val(parsed_numeric, "tuk_miktar")
 
-    if not has_real_stok_no and tutar == 0 and bf == 0 and re.match(r"^\d+\s*-\s", sm):
+    if not has_real_stok_no and tutar == 0 and re.match(r"^\d+\s*-\s", sm):
         return True
 
     has_amount = tutar != 0 or tuk != 0 or bf != 0
