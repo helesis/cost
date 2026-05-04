@@ -149,16 +149,10 @@
       <div class="user-avatar">A</div>
       <div style="flex:1;min-width:0">
         <div class="user-role">Ali Ozkir</div>
-        <div id="user-email" style="font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="user-email" style="font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cost Analysis</div>
       </div>
     </div>
-    <button class="btn-signout" onclick="window.vcLogout()" style="width:100%;margin-top:10px;padding:8px;border-radius:var(--radius);font-size:12px;cursor:pointer;font-family:inherit;">
-      Çıkış Yap
-    </button>
   </div>
-  <script>
-    document.getElementById('user-email').textContent = localStorage.getItem('vc_email') || '';
-  </script>
 </div>
 
 <div id="main">
@@ -2157,60 +2151,13 @@ function renderYilKarsilastirma(data) {
   vcMakeSortable(tbody.closest('table'));
 }
 
-// ── Auth guard + fetch — public-config sonrası boot ──────────────────────────
-window.__vcAuthBypass = false;
-window.__vcAuthReady = (async function() {
-  let authBypass = false;
-  try {
-    const r = await fetch('/api/auth/public-config');
-    const c = await r.json();
-    authBypass = !!c.authBypass;
-  } catch (e) {}
-  window.__vcAuthBypass = authBypass;
-
-  if (!authBypass && !localStorage.getItem('vc_token')) {
-    window.location.replace('/login');
-    throw new Error('auth-redirect');
-  }
-
-  const origFetch = window.fetch.bind(window);
-  window.fetch = function(url, opts = {}) {
-    if (typeof url === 'string' && url.startsWith('/api/')) {
-      const t = localStorage.getItem('vc_token');
-      if (t) {
-        opts.headers = Object.assign({}, opts.headers || {}, { Authorization: 'Bearer ' + t });
-      }
-    }
-    return origFetch(url, opts).then(r => {
-      if (r.status === 401 && !window.__vcAuthBypass) {
-        localStorage.removeItem('vc_token');
-        localStorage.removeItem('vc_email');
-        window.location.replace('/login');
-      }
-      return r;
-    });
-  };
-  window.vcLogout = function() {
-    if (window.__vcAuthBypass) {
-      window.location.replace('/');
-      return;
-    }
-    localStorage.removeItem('vc_token');
-    localStorage.removeItem('vc_email');
-    window.location.replace('/login');
-  };
-  return authBypass;
-})();
-
-// ── Boot (token/bypass hazır olduktan sonra) ──────────────────────────────────
-window.__vcAuthReady.then(function() {
-  document.querySelectorAll('[data-currency]').forEach(b => {
-    b.classList.toggle('active', b.dataset.currency === vcCurrency);
-  });
-  vcLucide();
-  setupUpload();
-  init();
-}).catch(function() { /* login yönlendirmesi */ });
+// ── Boot ─────────────────────────────────────────────────────────────────────
+document.querySelectorAll('[data-currency]').forEach(b => {
+  b.classList.toggle('active', b.dataset.currency === vcCurrency);
+});
+vcLucide();
+setupUpload();
+init();
 </script>
 </body>
 </html>

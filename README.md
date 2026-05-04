@@ -229,7 +229,7 @@ Her iki script de:
 ## Veritabanı Şeması
 
 - `fb_cost.tuketim` — kayıt: `tuk_miktar`, `birim_fiyat`, `kur`, `cost_pax` + meta; `tutar_tl`, `tutar_eur`, `pp_*` sütunları **GENERATED** (formüller `fb_cost.tuketim_*` SQL fonksiyonları ve `migrate.sql` ile aynı).
-- `fb_cost.otp_kodlari`, `fb_cost.alarm_esikleri` — giriş ve alarmlar
+- `fb_cost.otp_kodlari` (artık kullanılmıyor; geçmiş şema), `fb_cost.alarm_esikleri` — alarmlar
 
 Detay: `migrate.sql` ve `fb_cost_functions.sql`.
 
@@ -237,7 +237,7 @@ Detay: `migrate.sql` ve `fb_cost_functions.sql`.
 
 ## Sunucuda çalıştırma
 
-Örnek kurulum dizini: `/var/www/cost-analysis`. Veritabanı (Docker) ayakta ve `.env` doğru (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, gerekiyorsa `PORT`, `JWT_SECRET`, vb.) olmalı.
+Örnek kurulum dizini: `/var/www/cost-analysis`. Veritabanı (Docker) ayakta ve `.env` doğru (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, gerekiyorsa `PORT`, `NODE_ENV`) olmalı.
 
 1. **Güncelleme ve bağımlılık**
 

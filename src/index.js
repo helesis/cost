@@ -9,9 +9,6 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
 const { parseExcelToRows, normalizeTuketimRowForDb } = require('./excelImport');
-const fs = require('fs');
-const jwt = require('jsonwebtoken');
-const { Resend } = require('resend');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
@@ -31,199 +28,14 @@ const STOK_NO_KDV_ILAVE = '__KDV_ILAVE__';
 const SQL_EXC_FINANS_PP = `(stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
 const ALARM_METRIK_TUTAR = new Set(['tutar_tl', 'tutar_eur']);
 
-// ── Auth yapılandırması ───────────────────────────────────────────────────────
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
-  .split(',')
-  .map(e => e.trim().toLowerCase())
-  .filter(Boolean);
-/** Geliştirme: varsayılan açık. Kapatmak: BYPASS_AUTH=0. Üretimde yalnızca BYPASS_AUTH=1 ile açılır. */
-const AUTH_BYPASS =
-  process.env.NODE_ENV === 'production'
-    ? /^1|true|yes$/i.test(String(process.env.BYPASS_AUTH || '').trim())
-    : !/^0|false|no$/i.test(String(process.env.BYPASS_AUTH || '').trim());
-const BYPASS_USER_EMAIL = (() => {
-  const v = (process.env.BYPASS_AUTH_EMAIL || '').trim().toLowerCase();
-  if (v) return v;
-  return ALLOWED_EMAILS[0] || 'dev@local';
-})();
-const RESEND_FROM = process.env.RESEND_FROM || 'Cost Analysis <noreply@voyagestars.com>';
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-/** Resend yokken giriş: DB’ye yazılan 6 haneli sabit kod (DEFAULT_LOGIN_OTP, varsayılan 000000) */
-function devLoginOtpCode() {
-  let d = String(process.env.DEFAULT_LOGIN_OTP || '000000').replace(/\D/g, '');
-  if (d.length > 6) d = d.slice(-6);
-  return d.padStart(6, '0').slice(-6);
-}
-
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
-// ── Auth Middleware: /api/* için JWT zorunlu (auth route'ları hariç) ─────────
-function requireAuth(req, res, next) {
-  if (req.path.startsWith('/api/auth/')) return next();
-  if (!req.path.startsWith('/api/')) return next();
-
-  if (AUTH_BYPASS) {
-    req.user = { email: BYPASS_USER_EMAIL };
-    return next();
-  }
-
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Yetkilendirme gerekli' });
-
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    if (!ALLOWED_EMAILS.includes((payload.email || '').toLowerCase())) {
-      return res.status(403).json({ error: 'Erişim reddedildi' });
-    }
-    req.user = payload;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Geçersiz veya süresi dolmuş token' });
-  }
-}
-app.use(requireAuth);
-
-// ── API: Auth — istemci: tam auth kapalı mı? ─────────────────────────────────
-app.get('/api/auth/public-config', (req, res) => {
-  res.json({ authBypass: AUTH_BYPASS });
-});
-
-// ── API: Auth — giriş modu (login sayfası) ───────────────────────────────────
-app.get('/api/auth/login-mode', (req, res) => {
-  res.json({ emailOnlyLogin: !resend });
-});
-
-// ── API: Auth — doğrudan giriş (yalnızca RESEND_API_KEY yokken) ──────────────
-app.post('/api/auth/quick-login', async (req, res) => {
-  try {
-    if (resend) {
-      return res.status(400).json({ error: 'Bu ortamda e-posta doğrulama kodu gerekir' });
-    }
-    const email = (req.body?.email || '').trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
-    }
-    if (!ALLOWED_EMAILS.includes(email)) {
-      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
-    }
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ ok: true, token, email });
-  } catch (err) {
-    console.error('quick-login hatası:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── API: Auth — OTP gönder ────────────────────────────────────────────────────
-app.post('/api/auth/send-otp', async (req, res) => {
-  try {
-    const email = (req.body?.email || '').trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
-    }
-    if (!ALLOWED_EMAILS.includes(email)) {
-      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
-    }
-    if (!resend) {
-      const kod = devLoginOtpCode();
-      const gecerliUntil = new Date(Date.now() + 10 * 60 * 1000);
-      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-      await pool.query(
-        `INSERT INTO fb_cost.otp_kodlari (email, kod, gecerli_until, ip_adresi)
-         VALUES ($1, $2, $3, $4)`,
-        [email, kod, gecerliUntil, ip]
-      );
-      return res.json({
-        ok: true,
-        mesaj: 'E-posta gönderilmedi (RESEND_API_KEY yok). Sabit geliştirme kodunu kullanın.',
-        resendYok: true,
-        devOtpHint: kod
-      });
-    }
-
-    const kod = Math.floor(100000 + Math.random() * 900000).toString();
-    const gecerliUntil = new Date(Date.now() + 10 * 60 * 1000); // 10 dk
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
-
-    await pool.query(
-      `INSERT INTO fb_cost.otp_kodlari (email, kod, gecerli_until, ip_adresi)
-       VALUES ($1, $2, $3, $4)`,
-      [email, kod, gecerliUntil, ip]
-    );
-
-    const { error } = await resend.emails.send({
-      from: RESEND_FROM,
-      to: email,
-      subject: 'Cost Analysis — Giriş Kodunuz',
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#faf9f6;border-radius:12px;">
-          <h2 style="color:#1a1814;margin:0 0 16px;font-family:Georgia,serif;">Cost Analysis</h2>
-          <p style="color:#1a1814;font-size:15px;margin:0 0 8px;">Giriş kodunuz:</p>
-          <div style="font-size:36px;font-weight:700;color:#8a6c2e;letter-spacing:8px;padding:20px;text-align:center;background:#f7f1e6;border-radius:8px;margin:16px 0;">${kod}</div>
-          <p style="color:#7a7369;font-size:13px;margin:16px 0 0;">Bu kod 10 dakika geçerlidir. Eğer bu girişi siz talep etmediyseniz bu e-postayı yok sayabilirsiniz.</p>
-        </div>
-      `
-    });
-
-    if (error) {
-      console.error('Resend hatası:', error);
-      return res.status(500).json({ error: 'E-posta gönderilemedi' });
-    }
-
-    res.json({ ok: true, mesaj: 'Doğrulama kodu e-posta adresinize gönderildi' });
-  } catch (err) {
-    console.error('send-otp hatası:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── API: Auth — OTP doğrula → JWT ─────────────────────────────────────────────
-app.post('/api/auth/verify-otp', async (req, res) => {
-  try {
-    const email = (req.body?.email || '').trim().toLowerCase();
-    const kod = (req.body?.kod || '').trim();
-    if (!email || !kod) {
-      return res.status(400).json({ error: 'E-posta ve kod zorunlu' });
-    }
-    if (!ALLOWED_EMAILS.includes(email)) {
-      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
-    }
-
-    const { rows } = await pool.query(
-      `SELECT id FROM fb_cost.otp_kodlari
-       WHERE email = $1 AND kod = $2
-         AND kullanildi = FALSE
-         AND gecerli_until > NOW()
-       ORDER BY id DESC LIMIT 1`,
-      [email, kod]
-    );
-
-    if (!rows.length) {
-      return res.status(401).json({ error: 'Kod hatalı veya süresi dolmuş' });
-    }
-
-    await pool.query(
-      'UPDATE fb_cost.otp_kodlari SET kullanildi = TRUE WHERE id = $1',
-      [rows[0].id]
-    );
-
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ ok: true, token, email });
-  } catch (err) {
-    console.error('verify-otp hatası:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Route: /login → login.html ────────────────────────────────────────────────
+// Eski giriş adresi → ana sayfa
 app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/login.html'));
+  res.redirect(302, '/');
 });
 
 // ── CSV / Excel Yükle (tek veya çoklu dosya) ────────────────────────────────
@@ -1110,7 +922,4 @@ app.get('*', (req, res) => {
 // ── Başlat ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Cost Analysis → http://localhost:${PORT}`);
-  if (AUTH_BYPASS) {
-    console.warn('⚠️  BYPASS_AUTH: JWT doğrulaması kapalı (req.user.email = %s)', BYPASS_USER_EMAIL);
-  }
 });
