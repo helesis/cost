@@ -157,9 +157,9 @@ async function computeParetoForTip(pool, tarih_str, tipCondSql) {
     ),
     ord AS (
       SELECT tutar_tl, tutar_eur,
-        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC) AS rnk,
-        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl,
-        SUM(tutar_eur) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_eur
+        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC, stok_mali ASC) AS rnk,
+        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC, stok_mali ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl,
+        SUM(tutar_eur) OVER (ORDER BY tutar_tl DESC, stok_mali ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_eur
       FROM per_sku
     ),
     thresh AS (
@@ -261,8 +261,8 @@ async function fetchParetoEsikUrunleri(pool, tarih_str, tipKind, esikYuzde) {
     ),
     ord AS (
       SELECT stok_mali, tutar_tl, tutar_eur,
-        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC) AS rnk,
-        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl
+        ROW_NUMBER() OVER (ORDER BY tutar_tl DESC, stok_mali ASC) AS rnk,
+        SUM(tutar_tl) OVER (ORDER BY tutar_tl DESC, stok_mali ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_tl
       FROM per_sku
     ),
     kneed AS (
@@ -277,7 +277,7 @@ async function fetchParetoEsikUrunleri(pool, tarih_str, tipKind, esikYuzde) {
     FROM ord o
     CROSS JOIN kneed kk
     WHERE kk.k IS NOT NULL AND o.rnk <= kk.k
-    ORDER BY o.tutar_tl DESC
+    ORDER BY o.tutar_tl DESC, o.stok_mali ASC
   `;
   const { rows } = await pool.query(sql, [tarih_str, e]);
   return rows.map((r) => ({

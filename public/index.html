@@ -30,7 +30,14 @@
   .search-results th.sortable.desc .sort-ind { opacity: 1; color: var(--gold); }
 
   @media (max-width: 1100px) {
-    .kat-grid-3 { grid-template-columns: 1fr !important; }
+    .kat-row-2col { grid-template-columns: 1fr !important; }
+  }
+  .kat-page-body { display: flex; flex-direction: column; gap: 24px; }
+  .kat-row-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .kat-row-kategori-alt {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
   }
   .kat-tablo-master tbody tr[data-kategori] { cursor: pointer; transition: background .12s; }
   .kat-tablo-master tbody tr[data-kategori]:hover { background: var(--gold-bg); }
@@ -185,7 +192,7 @@
     <div class="sidebar-user">
       <div class="user-avatar">A</div>
       <div style="flex:1;min-width:0">
-        <div class="user-role">Ali Ozkir</div>
+        <div class="user-role">Ali Mürşit Özkır</div>
         <div id="user-email" style="font-size:11px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cost Analysis</div>
       </div>
     </div>
@@ -344,14 +351,14 @@
         </select>
       </div>
     </div>
-    <div class="page-body">
-      <div class="kat-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:20px;align-items:start">
-        <div class="card">
-          <div class="card-title">Kategori Pasta Grafik</div>
+    <div class="page-body kat-page-body">
+      <div class="kat-row-2col kat-row-kategori-ust">
+        <div class="card kat-card-block">
+          <div class="card-title">Kategori pasta grafik</div>
           <div class="chart-wrap"><canvas id="chart-kat-pasta"></canvas></div>
         </div>
-        <div class="card">
-          <div class="card-title">Kategori Detay</div>
+        <div class="card kat-card-block">
+          <div class="card-title">Kategori detay</div>
           <div class="table-wrap" style="max-height:min(420px,55vh);overflow:auto">
             <table class="kat-tablo-master">
               <thead><tr><th>Kategori</th><th style="text-align:right" id="kat-tablo-th-deger">Tutar</th><th style="text-align:right">Pay %</th></tr></thead>
@@ -359,9 +366,11 @@
             </table>
           </div>
         </div>
-        <div class="card" id="kat-urun-card">
-          <div class="card-title" id="kat-urun-baslik">Ürün — pax başı</div>
-          <p id="kat-urun-hint" style="margin:0;color:var(--text-dim);font-size:13px">Bir kategori seçin.</p>
+      </div>
+      <div class="kat-row-2col kat-row-kategori-alt">
+        <div class="card kat-card-block" id="kat-urun-pax-card">
+          <div class="card-title" id="kat-urun-baslik">Ürün — pax başı (seçili kategori)</div>
+          <p id="kat-urun-hint" style="margin:0;color:var(--text-dim);font-size:13px">Önce üstteki kategori tablosundan bir satır seçin.</p>
           <div class="table-wrap" id="kat-urun-wrap" style="display:none;margin-top:12px;max-height:min(480px,60vh);overflow:auto">
             <table>
               <thead>
@@ -374,9 +383,13 @@
               <tbody id="kat-urun-tablo"></tbody>
             </table>
           </div>
-          <div id="kat-urun-chart-wrap" style="display:none;margin-top:16px">
-            <div class="card-title" style="font-size:13px;margin-bottom:8px" id="kat-urun-chart-baslik"></div>
-            <div class="chart-wrap" style="height:260px"><canvas id="chart-kat-urun-seri"></canvas></div>
+        </div>
+        <div class="card kat-card-block" id="kat-urun-seri-card">
+          <div class="card-title">Kişi başı tüketim — tüm aylar</div>
+          <p id="kat-urun-seri-hint" style="margin:0;color:var(--text-dim);font-size:13px">Soldaki ürün listesinden bir satıra tıklayın; seçilen ürün için gram (yiyecek) veya cl (içecek) pax başı serisi gösterilir.</p>
+          <div id="kat-urun-chart-wrap" style="display:none;margin-top:14px">
+            <div id="kat-urun-chart-baslik" style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--gold)"></div>
+            <div class="chart-wrap" style="height:280px"><canvas id="chart-kat-urun-seri"></canvas></div>
           </div>
         </div>
       </div>
@@ -1595,12 +1608,15 @@ function resetKatUrunStokChart() {
   if (cw) cw.style.display = 'none';
   const cb = document.getElementById('kat-urun-chart-baslik');
   if (cb) cb.textContent = '';
+  const seriHint = document.getElementById('kat-urun-seri-hint');
+  if (seriHint) seriHint.style.display = '';
   document.querySelectorAll('#kat-urun-tablo tr.kat-urun-stok-active').forEach(tr => tr.classList.remove('kat-urun-stok-active'));
 }
 
 async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
   const wrap = document.getElementById('kat-urun-chart-wrap');
   const titleEl = document.getElementById('kat-urun-chart-baslik');
+  const seriHint = document.getElementById('kat-urun-seri-hint');
   if (!wrap || !titleEl) return;
 
   const icenek = tip === 'icenek' || tip === 'icecek';
@@ -1612,15 +1628,18 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
     const res = await fetch(u);
     const data = await res.json();
     if (!res.ok) {
+      if (seriHint) seriHint.style.display = '';
       toast(data.error || 'Seri alınamadı', 'error');
       wrap.style.display = 'none';
       return;
     }
     if (!Array.isArray(data) || data.length === 0) {
+      if (seriHint) seriHint.style.display = '';
       toast('Bu ürün için dönem verisi yok.', 'info');
       wrap.style.display = 'none';
       return;
     }
+    if (seriHint) seriHint.style.display = 'none';
     const labels = data.map(d => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
     const yKey = icenek ? 'pp_cl' : 'pp_gr';
     const ys = data.map(d => {
@@ -1679,6 +1698,8 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
     });
   } catch (e) {
     toast('Grafik yüklenemedi', 'error');
+    const seriHint = document.getElementById('kat-urun-seri-hint');
+    if (seriHint) seriHint.style.display = '';
     wrap.style.display = 'none';
   }
 }
@@ -1690,9 +1711,9 @@ function resetKatUrunPanel() {
   const hint = document.getElementById('kat-urun-hint');
   const wrap = document.getElementById('kat-urun-wrap');
   const baslik = document.getElementById('kat-urun-baslik');
-  if (hint) { hint.style.display = ''; hint.textContent = 'Bir kategori seçin.'; }
+  if (hint) { hint.style.display = ''; hint.textContent = 'Önce üstteki kategori tablosundan bir satır seçin.'; }
   if (wrap) wrap.style.display = 'none';
-  if (baslik) baslik.textContent = 'Ürün — pax başı';
+  if (baslik) baslik.textContent = 'Ürün — pax başı (seçili kategori)';
   const tb = document.getElementById('kat-urun-tablo');
   if (tb) tb.innerHTML = '';
 }
