@@ -180,7 +180,7 @@
       </div>
     </div>
     <div class="page-body">
-      <div class="stats-grid" id="ozet-stats"></div>
+      <div id="ozet-stats" class="ozet-stats-rows"></div>
       <div class="grid-2" style="gap:20px">
         <div class="card">
           <div class="card-title">Yiyecek vs İçecek Dağılımı</div>
@@ -807,44 +807,67 @@ function renderOzet() {
   const ice = rows.find(r => r.tip === 'icenek')  || {};
   const don = donemler.find(d => d.tarih_str === tarih) || {};
 
-  const toplam   = pickCur(yiy, 'toplam') + pickCur(ice, 'toplam');
-  const ppTop    = pickCur(yiy, 'toplam_pp') + pickCur(ice, 'toplam_pp');
-  const ppYiy    = pickCur(yiy, 'toplam_pp');
-  const ppIce    = pickCur(ice, 'toplam_pp');
+  const ppTop = pickCur(yiy, 'toplam_pp') + pickCur(ice, 'toplam_pp');
+  const ppYiy = pickCur(yiy, 'toplam_pp');
+  const ppIce = pickCur(ice, 'toplam_pp');
+  const yiyTop = pickCur(yiy, 'toplam');
+  const iceTop = pickCur(ice, 'toplam');
 
   document.getElementById('ozet-subtitle').textContent =
     `${don.ay || ''} ${don.yil || ''} · ${fmtN(don.cost_pax || 0, 0)} pax · Kur: ${fmtN(don.kur || 0, 4)} TL/€`;
 
   document.getElementById('ozet-stats').innerHTML = `
-    <div class="stat-card gold">
-      <div class="stat-value">${fmtCur(toplam)}</div>
-      <div class="stat-label">Toplam F&B Maliyet (${curLabel()})</div>
-    </div>
-    <div class="stat-card green">
-      <div class="stat-value">${fmtCur(ppTop)}</div>
-      <div class="stat-label">Pax Başına Toplam (${curLabel()})</div>
-    </div>
-    <div class="stat-card yellow">
-      <div class="stat-value">${fmtCur(ppYiy)}</div>
-      <div class="stat-label">Pax Başına Yiyecek (${curLabel()})</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="stat-value">${fmtCur(ppIce)}</div>
-      <div class="stat-label">Pax Başına İçecek (${curLabel()})</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)}g</div>
-      <div class="stat-label">Pax Başına Yiyecek (GR)</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${fmtN(+ice.toplam_pp_cl || 0, 1)}cl</div>
-      <div class="stat-label">Pax Başına İçecek (CL)</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-value">${fmtN(don.kur || 0, 2)}</div>
-      <div class="stat-label">Kur (TL/€)</div>
-    </div>
-  `;
+    <section class="ozet-stats-section">
+      <h3 class="ozet-stats-section-title">Toplam</h3>
+      <div class="stats-grid">
+        <div class="stat-card gold">
+          <div class="stat-value">${fmtCur(yiyTop + iceTop)}</div>
+          <div class="stat-label">Toplam F&B Maliyet (${curLabel()})</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-value">${fmtCur(ppTop)}</div>
+          <div class="stat-label">Pax Başına Toplam (${curLabel()})</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${fmtN(don.kur || 0, 2)}</div>
+          <div class="stat-label">Kur (TL/€)</div>
+        </div>
+      </div>
+    </section>
+    <section class="ozet-stats-section">
+      <h3 class="ozet-stats-section-title">Yiyecek</h3>
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-value">${fmtCur(yiyTop)}</div>
+          <div class="stat-label">Yiyecek Maliyet (${curLabel()})</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-value">${fmtCur(ppYiy)}</div>
+          <div class="stat-label">Pax Başına (${curLabel()})</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)}g</div>
+          <div class="stat-label">Pax Başına (GR)</div>
+        </div>
+      </div>
+    </section>
+    <section class="ozet-stats-section">
+      <h3 class="ozet-stats-section-title">İçecek</h3>
+      <div class="stats-grid">
+        <div class="stat-card blue">
+          <div class="stat-value">${fmtCur(iceTop)}</div>
+          <div class="stat-label">İçecek Maliyet (${curLabel()})</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-value">${fmtCur(ppIce)}</div>
+          <div class="stat-label">Pax Başına (${curLabel()})</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">${fmtN(+ice.toplam_pp_cl || 0, 1)}cl</div>
+          <div class="stat-label">Pax Başına (CL)</div>
+        </div>
+      </div>
+    </section>`;
 
   // Dağılım pasta
   if (chartDagilim) chartDagilim.destroy();
