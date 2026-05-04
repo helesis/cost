@@ -369,8 +369,10 @@ app.get('/api/urun', async (req, res) => {
 app.get('/api/donemler', async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT DISTINCT tarih_str, yil, ay_no, ay,
-             MAX(cost_pax) AS cost_pax, MAX(kur) AS kur
+      SELECT tarih_str, yil, ay_no, ay,
+             MAX(cost_pax) AS cost_pax, MAX(kur) AS kur,
+             SUM(CASE WHEN tip = 'yiyecek' THEN 1 ELSE 0 END)::int AS yiyecek_satir,
+             SUM(CASE WHEN tip IN ('icenek', 'icecek') THEN 1 ELSE 0 END)::int AS icenek_satir
       FROM fb_cost.tuketim
       GROUP BY tarih_str, yil, ay_no, ay
       ORDER BY yil DESC, ay_no DESC
@@ -381,18 +383,31 @@ app.get('/api/donemler', async (req, res) => {
   }
 });
 
-// Belirli dönem (tarih_str) için tüm tüketim satırlarını siler
+// Belirli dönem (tarih_str) için satırları siler. tip=yiyecek|icenek → yalnız o veri seti; tip yok → tümü
 app.delete('/api/donemler', async (req, res) => {
   const tarih_str = (req.query.tarih_str || '').trim();
+  const tipRaw = (req.query.tip || '').trim().toLowerCase();
   if (!tarih_str) {
     return res.status(400).json({ error: 'tarih_str parametresi gerekli' });
   }
   if (!/^\d{4}-\d{2}(-15g)?$/.test(tarih_str)) {
     return res.status(400).json({ error: 'Geçersiz tarih_str' });
   }
+  if (tipRaw && tipRaw !== 'yiyecek' && tipRaw !== 'icenek' && tipRaw !== 'icecek') {
+    return res.status(400).json({ error: 'tip: yiyecek veya icenek olmalı' });
+  }
   try {
-    const { rowCount } = await pool.query('DELETE FROM fb_cost.tuketim WHERE tarih_str = $1', [tarih_str]);
-    return res.json({ ok: true, silinen: rowCount, tarih_str });
+    let sql = 'DELETE FROM fb_cost.tuketim WHERE tarih_str = $1';
+    const params = [tarih_str];
+    if (tipRaw === 'yiyecek') {
+      sql += ' AND tip = $2';
+      params.push('yiyecek');
+    } else if (tipRaw === 'icenek' || tipRaw === 'icecek') {
+      sql += ' AND tip IN ($2, $3)';
+      params.push('icenek', 'icecek');
+    }
+    const { rowCount } = await pool.query(sql, params);
+    return res.json({ ok: true, silinen: rowCount, tarih_str, tip: tipRaw || null });
   } catch (err) {
     console.error('donemler DELETE:', err);
     return res.status(500).json({ error: err.message });

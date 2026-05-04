@@ -84,6 +84,23 @@
   .donem-tag .donem-tag-x { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; margin:0; padding:0; border:none; border-radius:50%;
     background:transparent; color:var(--text-dim); cursor:pointer; font-size:16px; line-height:1; font-weight:400; transition:color .15s, background .15s; flex-shrink:0; }
   .donem-tag .donem-tag-x:hover { color:var(--red); background:rgba(200,50,50,.12); }
+  .yukle-donem-table tbody td:nth-child(2),
+  .yukle-donem-table tbody td:nth-child(3) { white-space: nowrap; }
+  .yukle-donem-cell { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .yukle-donem-etiket { font-weight: 600; }
+  .yukle-chip { display: inline-flex; align-items: center; gap: 2px; padding: 4px 4px 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; max-width: 100%; }
+  .yukle-chip-label { overflow: hidden; text-overflow: ellipsis; }
+  .yukle-chip-yiyecek { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45, 106, 79, 0.35); }
+  .yukle-chip-icenek { background: rgba(70, 130, 180, 0.14); color: #2a5f8f; border: 1px solid rgba(70, 130, 180, 0.35); }
+  .yukle-chip .yukle-chip-x {
+    display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: 0; padding: 0;
+    border: none; border-radius: 50%; background: transparent; color: var(--text-dim); cursor: pointer;
+    font-size: 16px; line-height: 1; font-weight: 400; flex-shrink: 0;
+    transition: color .15s, background .15s;
+  }
+  .yukle-chip .yukle-chip-x:hover { color: var(--red); background: rgba(200, 50, 50, 0.12); }
+  .yukle-empty { color: var(--text-xdim); font-size: 13px; padding: 4px 0; }
+  .yukle-donem-hint { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.45; }
   .nav-section { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-xdim); padding:12px 12px 4px; font-weight:600; }
   .esik-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .esik-row:last-child { border-bottom:none; }
@@ -548,7 +565,7 @@
       </div>
     </div>
     <div class="page-body">
-      <div class="card" style="max-width:600px">
+      <div class="card" style="max-width:920px">
         <div class="upload-zone" id="upload-zone">
           <i class="upload-icon" data-lucide="cloud-upload"></i>
           <div style="font-weight:600;margin-bottom:6px">Excel / CSV dosyalarını buraya sürükleyin (çoklu)</div>
@@ -558,7 +575,8 @@
         </div>
         <div id="upload-sonuc" style="margin-top:16px;display:none"></div>
         <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:8px">YÜKLENMİŞ DÖNEMLER</div>
+          <div style="font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:4px">YÜKLENMİŞ DÖNEMLER</div>
+          <p class="yukle-donem-hint">Tablo: solda dönem; yiyecek ve içecek yükleme durumu çiplerle. Çip üzerindeki × yalnız o veri setini siler; «Tümünü sil» hem yiyecek hem içecek satırlarını kaldırır.</p>
           <div id="yuklu-donemler"></div>
         </div>
       </div>
@@ -1166,13 +1184,22 @@ function setupUpload() {
   if (yukluDonemler && !yukluDonemler.dataset.vcDonemDelegate) {
     yukluDonemler.dataset.vcDonemDelegate = '1';
     yukluDonemler.addEventListener('click', (e) => {
-      const btn = e.target && e.target.closest && e.target.closest('.donem-tag-x');
-      if (!btn) return;
-      e.preventDefault();
-      const enc = btn.getAttribute('data-tstr');
-      if (enc == null || enc === '') return;
-      const tarihStr = decodeURIComponent(enc);
-      vcSilDonem(tarihStr);
+      const chipX = e.target && e.target.closest && e.target.closest('.yukle-chip-x');
+      if (chipX) {
+        e.preventDefault();
+        const enc = chipX.getAttribute('data-tstr');
+        const tip = chipX.getAttribute('data-tip');
+        if (enc == null || enc === '' || !tip) return;
+        vcSilDonem(decodeURIComponent(enc), tip);
+        return;
+      }
+      const allBtn = e.target && e.target.closest && e.target.closest('.yukle-row-del-all');
+      if (allBtn) {
+        e.preventDefault();
+        const enc = allBtn.getAttribute('data-tstr');
+        if (enc == null || enc === '') return;
+        vcSilDonem(decodeURIComponent(enc), null);
+      }
     });
   }
 }
@@ -1205,27 +1232,63 @@ async function uploadFiles(fileList) {
   }
 }
 
+function vcEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+}
+
 async function loadYukluDonemler() {
   const rows = await fetch('/api/donemler').then(r => r.json()).catch(() => []);
   window._yukluDonemCache = rows;
-  document.getElementById('yuklu-donemler').innerHTML = rows.length
-    ? rows.map(d => {
-        const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
-        const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
-        const tEnc = encodeURIComponent(d.tarih_str || '');
-        return `<span class="donem-tag"><span class="donem-tag-label">${etiket}</span><button type="button" class="donem-tag-x" title="Bu dönemi sil" aria-label="Sil" data-tstr="${tEnc}">×</button></span>`;
-      }).join('')
-    : '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
+  const el = document.getElementById('yuklu-donemler');
+  if (!rows.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
+    return;
+  }
+  const enc = (s) => encodeURIComponent(s || '');
+  const num = (v) => +v || 0;
+  el.innerHTML =
+    '<div class="table-wrap"><table class="yukle-donem-table">' +
+    '<thead><tr><th>Dönem</th><th>Yiyecek</th><th>İçecek</th></tr></thead><tbody>' +
+    rows.map((d) => {
+      const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
+      const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
+      const ts = enc(d.tarih_str);
+      const ny = num(d.yiyecek_satir);
+      const ni = num(d.icenek_satir);
+      const chipY = ny > 0
+        ? `<span class="yukle-chip yukle-chip-yiyecek"><span class="yukle-chip-label">Yiyecek · ${ny.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="yiyecek" title="Yiyecek veri setini sil" aria-label="Yiyeceği sil">×</button></span>`
+        : '<span class="yukle-empty">—</span>';
+      const chipI = ni > 0
+        ? `<span class="yukle-chip yukle-chip-icenek"><span class="yukle-chip-label">İçecek · ${ni.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="icenek" title="İçecek veri setini sil" aria-label="İçeceği sil">×</button></span>`
+        : '<span class="yukle-empty">—</span>';
+      return `<tr><td><div class="yukle-donem-cell"><span class="yukle-donem-etiket">${vcEsc(etiket)}</span><button type="button" class="btn btn-secondary btn-sm yukle-row-del-all" data-tstr="${ts}" title="Bu döneme ait tüm satırları sil (yiyecek + içecek)">Tümünü sil</button></div></td><td>${chipY}</td><td>${chipI}</td></tr>`;
+    }).join('') +
+    '</tbody></table></div>';
+  vcLucide();
 }
 
-async function vcSilDonem(tarihStr) {
+async function vcSilDonem(tarihStr, tip) {
   if (tarihStr == null || tarihStr === '') return;
   const row = (window._yukluDonemCache || []).find(d => d.tarih_str === tarihStr);
   const kismi = (tarihStr || '').endsWith('-15g');
   const etiket = row ? `${row.ay} ${row.yil}${kismi ? ' (15 gün)' : ''}` : tarihStr;
-  if (!confirm(`“${etiket}” dönemine ait tüm yiyecek ve içecek verileri silinsin mi?\n\nBu işlem geri alınamaz.`)) return;
+  let msg;
+  if (tip === 'yiyecek') {
+    const n = row ? (+row.yiyecek_satir || 0) : 0;
+    msg = `“${etiket}” dönemine ait yiyecek veri seti${n ? ` (${n.toLocaleString('tr-TR')} satır)` : ''} silinsin mi?\n\nBu işlem geri alınamaz.`;
+  } else if (tip === 'icenek') {
+    const n = row ? (+row.icenek_satir || 0) : 0;
+    msg = `“${etiket}” dönemine ait içecek veri seti${n ? ` (${n.toLocaleString('tr-TR')} satır)` : ''} silinsin mi?\n\nBu işlem geri alınamaz.`;
+  } else {
+    msg = `“${etiket}” dönemine ait tüm yiyecek ve içecek verileri silinsin mi?\n\nBu işlem geri alınamaz.`;
+  }
+  if (!confirm(msg)) return;
   try {
     const u = new URLSearchParams({ tarih_str: tarihStr });
+    if (tip) u.set('tip', tip);
     const res = await fetch('/api/donemler?' + u.toString(), { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) {
