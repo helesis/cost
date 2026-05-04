@@ -32,7 +32,7 @@ const SKIP_STOKLAR = [
 /* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
 
 /**
- * Kıyas Excel'inde stok_mali sütununda sabit görünen grup başlıkları (yalnızca yiyecek şablonu).
+ * Kıyas Excel'inde stok_mali sütununda sabit görünen grup başlıkları (yiyecek / içecek şablonu).
  * normalizeText ile eşleştirilir; tutar/miktar dolu gelse bile grup satırı sayılır.
  */
 const KNOWN_YIYECEK_GROUP_HEADERS = [
@@ -76,8 +76,37 @@ const KNOWN_YIYECEK_GROUP_HEADERS = [
   '1023001 - BEBEK MAMALARI',
 ];
 
-/** İçecek raporunda aynı yapıda sabit başlıklar eklenince buraya yazılır */
-const KNOWN_ICENEK_GROUP_HEADERS = [];
+/** Kıyas içecek Excel: stok_mali sabit grup başlıkları */
+const KNOWN_ICENEK_GROUP_HEADERS = [
+  '2001002 - MESRUBATLAR -SISE-',
+  '2001003 - MESRUBATLAR -KUTU-',
+  '2001004 - MESRUBATLAR -PET-',
+  '2002002 - SODALAR -SISE-',
+  '2002005 - SULAR',
+  '2003001 - MEYVE SULARI -TETRAPAK-',
+  '2003003 - MEYVE SULARI -DIGER-',
+  '2004003 - KONSANTRE ICECEKLER -DIGER-',
+  '2005001 - ICECEK SOSLARI ALKOLSUZ',
+  '2006001 - BIRALAR -FICI-',
+  '2006002 - BIRALAR -SISE-',
+  '2006003 - BIRALAR -KUTU-',
+  '2007001 - RAKILAR',
+  '2007002 - VOTKALAR',
+  '2007003 - CINLER',
+  '2007004 - KANYAKLAR',
+  '2007005 - LIKORLER',
+  '2007006 - WHISKYLER',
+  '2007007 - APERATIFLER',
+  '2007008 - ROMLAR',
+  '2008002 - KIRMIZI SARAPLAR SOFRA',
+  '2008003 - KIRMIZI SARAPLAR EXTRA',
+  '2008005 - BEYAZ SARAPLAR SOFRA',
+  '2008006 - BEYAZ SARAPLAR EXTRA',
+  '2008008 - ROSE SARAPLAR SOFRA',
+  '2008009 - ROSE SARAPLAR EXTRA',
+  '2009001 - SAMPANYALAR SOFRA',
+  '2009002 - SAMPANYALAR EXTRA',
+];
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
