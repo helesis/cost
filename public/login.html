@@ -53,6 +53,10 @@
 
         <div id="msg-otp" class="badge" style="display:none;width:100%;justify-content:center;padding:10px 12px;margin-bottom:14px"></div>
 
+        <div class="badge badge-gray" id="dev-otp-hint" style="display:none;margin-bottom:16px;font-size:12px;line-height:1.45;text-align:center">
+          E-posta gönderilmedi. Bu ortamda sabit kod: <strong id="dev-otp-code">000000</strong>
+        </div>
+
         <form id="form-otp">
           <div class="form-group mb-16">
             <label class="form-label" for="kod">6 HANELİ KOD</label>
@@ -128,6 +132,16 @@
 
       currentEmail = email;
       $('email-display').textContent = email;
+      const devHint = $('dev-otp-hint');
+      const devCodeEl = $('dev-otp-code');
+      if (data.resendYok && data.devOtpHint) {
+        devCodeEl.textContent = data.devOtpHint;
+        devHint.style.display = 'flex';
+        $('kod').value = data.devOtpHint;
+      } else {
+        devHint.style.display = 'none';
+        $('kod').value = '';
+      }
       stepEmail.style.display = 'none';
       stepOtp.style.display = 'block';
       setTimeout(() => $('kod').focus(), 100);
@@ -179,6 +193,7 @@
     stepOtp.style.display = 'none';
     stepEmail.style.display = 'block';
     $('kod').value = '';
+    $('dev-otp-hint').style.display = 'none';
     hideMsg($('msg-otp'));
     $('email').focus();
   });

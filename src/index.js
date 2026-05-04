@@ -40,6 +40,13 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
 const RESEND_FROM = process.env.RESEND_FROM || 'Cost Analysis <noreply@voyagestars.com>';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
+/** Resend yokken giriş: DB’ye yazılan 6 haneli sabit kod (DEFAULT_LOGIN_OTP, varsayılan 000000) */
+function devLoginOtpCode() {
+  let d = String(process.env.DEFAULT_LOGIN_OTP || '000000').replace(/\D/g, '');
+  if (d.length > 6) d = d.slice(-6);
+  return d.padStart(6, '0').slice(-6);
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
@@ -78,7 +85,20 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
     }
     if (!resend) {
-      return res.status(500).json({ error: 'E-posta servisi yapılandırılmamış (RESEND_API_KEY)' });
+      const kod = devLoginOtpCode();
+      const gecerliUntil = new Date(Date.now() + 10 * 60 * 1000);
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || null;
+      await pool.query(
+        `INSERT INTO fb_cost.otp_kodlari (email, kod, gecerli_until, ip_adresi)
+         VALUES ($1, $2, $3, $4)`,
+        [email, kod, gecerliUntil, ip]
+      );
+      return res.json({
+        ok: true,
+        mesaj: 'E-posta gönderilmedi (RESEND_API_KEY yok). Sabit geliştirme kodunu kullanın.',
+        resendYok: true,
+        devOtpHint: kod
+      });
     }
 
     const kod = Math.floor(100000 + Math.random() * 900000).toString();
