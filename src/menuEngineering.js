@@ -197,7 +197,7 @@ function computeQuadrantSplits(filtered, threshold_pct) {
   return { quadrant_split_x: QUADRANT_SPLIT_X_DEFAULT, quadrant_split_y };
 }
 
-const PARETO_CHART_MAX = 100;
+const PARETO_CHART_MAX = 50;
 const MATRIX_CHART_MAX = 1500;
 
 async function computeFilteredItems(pool, query, sqlExcFinans) {
