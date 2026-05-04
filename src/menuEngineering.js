@@ -176,6 +176,27 @@ function paretoSeries(items) {
   });
 }
 
+/** matrix_x: LOW=0.15, MEDIUM=0.5, HIGH=0.85 — dikey çizgi MED–HIGH ortası */
+const QUADRANT_SPLIT_X_DEFAULT = (0.5 + 0.85) / 2;
+
+function computeQuadrantSplits(filtered, threshold_pct) {
+  if (!filtered.length) {
+    return { quadrant_split_x: QUADRANT_SPLIT_X_DEFAULT, quadrant_split_y: 0 };
+  }
+  const N = filtered.length;
+  const cutoff = Math.max(1, Math.ceil((N * threshold_pct) / 100));
+  const sortedByQty = [...filtered].sort((a, b) => b.consumption_quantity - a.consumption_quantity);
+  const lastHigh = sortedByQty[cutoff - 1];
+  const firstLow = sortedByQty[cutoff];
+  let quadrant_split_y = 0;
+  if (lastHigh && firstLow) {
+    quadrant_split_y = (lastHigh.consumption_pct + firstLow.consumption_pct) / 2;
+  } else if (lastHigh) {
+    quadrant_split_y = lastHigh.consumption_pct * 0.5;
+  }
+  return { quadrant_split_x: QUADRANT_SPLIT_X_DEFAULT, quadrant_split_y };
+}
+
 const PARETO_CHART_MAX = 100;
 const MATRIX_CHART_MAX = 1500;
 
@@ -219,6 +240,7 @@ async function analyze(pool, query, sqlExcFinans) {
   );
 
   const kpis = computeKpis(filtered);
+  const { quadrant_split_x, quadrant_split_y } = computeQuadrantSplits(filtered, threshold_pct);
   const paretoFull = paretoSeries(filtered);
   const pareto = paretoFull.slice(0, PARETO_CHART_MAX);
   const pareto_truncated = paretoFull.length > PARETO_CHART_MAX;
@@ -268,6 +290,8 @@ async function analyze(pool, query, sqlExcFinans) {
     page,
     pageSize,
     threshold_pct,
+    quadrant_split_x,
+    quadrant_split_y,
     baslangic,
     bitis,
     tip

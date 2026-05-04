@@ -137,6 +137,50 @@
   .me-seg-DEAD_STOCK { color: #6c757d; font-weight: 600; }
   .me-seg-REVIEW_REQUIRED { color: #7209b7; font-weight: 600; }
 
+  .me-charts-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .me-matrix-card {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .me-matrix-card .chart-wrap {
+    flex: 1;
+    min-height: 480px;
+    height: auto !important;
+  }
+  .me-pareto-card {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .me-pareto-card .chart-wrap {
+    flex: 1;
+    min-height: 400px;
+    height: auto !important;
+  }
+  @media (max-width: 1100px) {
+    .me-charts-layout {
+      grid-template-columns: 1fr;
+    }
+    .me-matrix-card,
+    .me-pareto-card {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    .me-matrix-card .chart-wrap { min-height: 400px; }
+    .me-pareto-card .chart-wrap { min-height: 360px; }
+  }
+
   .upload-zone {
     border: 2px dashed var(--border2);
     border-radius: var(--radius-lg);
@@ -837,16 +881,16 @@
       <div id="me-content" style="display:none">
         <div class="me-kpis" id="me-kpis"></div>
 
-        <div class="grid-2 mb-20" style="gap:20px">
-          <div class="card">
+        <div class="me-charts-layout">
+          <div class="card me-matrix-card">
             <div class="card-title">2×2 Matrix — maliyet proxy × tüketim payı %</div>
-            <div class="chart-wrap" style="height:380px"><canvas id="chart-me-matrix"></canvas></div>
+            <div class="chart-wrap"><canvas id="chart-me-matrix"></canvas></div>
             <p id="me-matrix-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:8px 0 0"></p>
           </div>
-          <div class="card">
+          <div class="card me-pareto-card">
             <div class="card-title">Pareto — tüketim &amp; kümülatif %</div>
             <p id="me-pareto-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:0 0 8px"></p>
-            <div class="chart-wrap" style="height:380px"><canvas id="chart-me-pareto"></canvas></div>
+            <div class="chart-wrap"><canvas id="chart-me-pareto"></canvas></div>
           </div>
         </div>
 
@@ -1302,6 +1346,66 @@ function meDestroyMeCharts() {
   if (chartMePareto) { try { chartMePareto.destroy(); } catch (e) {} chartMePareto = null; }
 }
 
+/** matrix_x ile uyumlu: MED–HIGH sınırı (backend ile aynı) */
+const ME_QUADRANT_SPLIT_X = (0.5 + 0.85) / 2;
+
+function meQuadrantPlugin(splitX, splitY) {
+  return {
+    id: 'meMenuQuadrants',
+    afterDraw(chart) {
+      const ca = chart.chartArea;
+      const ctx = chart.ctx;
+      if (!ca || !ctx) return;
+      const xS = chart.scales.x;
+      const yS = chart.scales.y;
+      if (!xS || !yS) return;
+      let sy = splitY;
+      const minY = yS.min;
+      const maxY = yS.max;
+      if (sy <= minY || sy == null || isNaN(sy)) sy = minY + (maxY - minY) * 0.5;
+      if (sy >= maxY) sy = maxY - (maxY - minY) * 0.08;
+      const xMid = xS.getPixelForValue(splitX);
+      const yMid = yS.getPixelForValue(sy);
+      const { left, top, right, bottom } = ca;
+      const xm = Math.min(Math.max(xMid, left), right);
+      const ym = Math.min(Math.max(yMid, top), bottom);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(138, 108, 46, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.moveTo(xm, top);
+      ctx.lineTo(xm, bottom);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(left, ym);
+      ctx.lineTo(right, ym);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      const labels = [
+        { text: 'STARS', cx: (left + xm) / 2, cy: (top + ym) / 2 },
+        { text: 'VOLUME RISK', cx: (xm + right) / 2, cy: (top + ym) / 2 },
+        { text: 'DEAD STOCK', cx: (left + xm) / 2, cy: (ym + bottom) / 2 },
+        { text: 'OPPORTUNITY', cx: (xm + right) / 2, cy: (ym + bottom) / 2 }
+      ];
+      ctx.save();
+      ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (const { text, cx, cy } of labels) {
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillStyle = 'rgba(74, 58, 30, 0.96)';
+        ctx.strokeText(text, cx, cy);
+        ctx.fillText(text, cx, cy);
+      }
+      ctx.restore();
+    }
+  };
+}
+
 function meRenderMeCharts(data) {
   meDestroyMeCharts();
   const matrix = data.matrix || [];
@@ -1318,6 +1422,16 @@ function meRenderMeCharts(data) {
       mTrunc.style.display = 'none';
     }
   }
+
+  let splitY = data.quadrant_split_y;
+  if ((!splitY || splitY <= 0) && matrix.length) {
+    const ys = [...matrix.map(m => m.y)].sort((a, b) => a - b);
+    splitY = ys[Math.floor(ys.length / 2)] || 0;
+  }
+  const splitX = data.quadrant_split_x != null ? data.quadrant_split_x : ME_QUADRANT_SPLIT_X;
+  const yVals = matrix.map(m => m.y);
+  const maxYData = yVals.length ? Math.max(...yVals, splitY || 0) : Math.max(splitY || 0, 1);
+  const ySuggestedMax = maxYData <= 0 ? 1 : maxYData * 1.12;
 
   chartMeMatrix = new Chart(canvasM, {
     type: 'scatter',
@@ -1366,10 +1480,12 @@ function meRenderMeCharts(data) {
         },
         y: {
           title: { display: true, text: 'Tüketim payı %' },
-          beginAtZero: true
+          beginAtZero: true,
+          suggestedMax: ySuggestedMax
         }
       }
-    }
+    },
+    plugins: [meQuadrantPlugin(splitX, splitY)]
   });
 
   const p = data.pareto || [];
