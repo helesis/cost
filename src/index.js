@@ -74,6 +74,32 @@ function requireAuth(req, res, next) {
 }
 app.use(requireAuth);
 
+// ── API: Auth — giriş modu (login sayfası) ───────────────────────────────────
+app.get('/api/auth/login-mode', (req, res) => {
+  res.json({ emailOnlyLogin: !resend });
+});
+
+// ── API: Auth — doğrudan giriş (yalnızca RESEND_API_KEY yokken) ──────────────
+app.post('/api/auth/quick-login', async (req, res) => {
+  try {
+    if (resend) {
+      return res.status(400).json({ error: 'Bu ortamda e-posta doğrulama kodu gerekir' });
+    }
+    const email = (req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Geçerli bir e-posta adresi girin' });
+    }
+    if (!ALLOWED_EMAILS.includes(email)) {
+      return res.status(403).json({ error: 'Bu e-posta adresi yetkili değil' });
+    }
+    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ ok: true, token, email });
+  } catch (err) {
+    console.error('quick-login hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── API: Auth — OTP gönder ────────────────────────────────────────────────────
 app.post('/api/auth/send-otp', async (req, res) => {
   try {

@@ -27,7 +27,7 @@
 
       <div id="step-email">
         <div class="card-title" style="display:block;margin-bottom:6px">Giriş Yap</div>
-        <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px">
+        <div id="step-email-sub" style="font-size:13px;color:var(--text-dim);margin-bottom:20px">
           E-posta adresinize tek kullanımlık bir kod göndereceğiz.
         </div>
 
@@ -113,12 +113,61 @@
     }
   }
 
+  let emailOnlyLogin = false;
+  let btnSendDefaultText = 'Kod Gönder';
+
+  async function initLoginMode() {
+    try {
+      const r = await fetch('/api/auth/login-mode');
+      const data = await r.json();
+      emailOnlyLogin = !!data.emailOnlyLogin;
+      const sub = $('step-email-sub');
+      const btn = $('btn-send');
+      if (emailOnlyLogin) {
+        if (sub) sub.textContent = 'Yetkili e-posta adresinizle doğrudan giriş yapın.';
+        btnSendDefaultText = 'Giriş Yap';
+        btn.textContent = btnSendDefaultText;
+      }
+    } catch (e) {
+      /* ağ yoksa OTP akışı */
+    }
+  }
+
+  $('btn-send').disabled = true;
+  initLoginMode().finally(() => { $('btn-send').disabled = false; });
+
   $('form-email').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('email').value.trim();
     const msg = $('msg-email');
     const btn = $('btn-send');
     hideMsg(msg);
+    if (emailOnlyLogin) {
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+      btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:#fff"></span> Giriş yapılıyor...';
+      try {
+        const r = await fetch('/api/auth/quick-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Giriş yapılamadı');
+        localStorage.setItem('vc_token', data.token);
+        localStorage.setItem('vc_email', data.email);
+        showMsg(msg, 'Yönlendiriliyorsunuz...', 'success');
+        setTimeout(() => { window.location.href = '/'; }, 400);
+      } catch (err) {
+        showMsg(msg, err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.textContent = btnSendDefaultText;
+      }
+      return;
+    }
+
     setLoading(btn, true);
 
     try {
@@ -148,7 +197,7 @@
     } catch (err) {
       showMsg(msg, err.message, 'error');
     } finally {
-      setLoading(btn, false, 'Kod Gönder');
+      setLoading(btn, false, btnSendDefaultText);
     }
   });
 
