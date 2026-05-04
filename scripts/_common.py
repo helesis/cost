@@ -76,6 +76,10 @@ def _row_has_meaningful_stok_context(
             return True
     return False
 
+
+# Özel stok_no (DB/API ile uyumlu)
+STOK_NO_DUZELTME = "__DUZELTME__"
+STOK_NO_KDV_ILAVE = "__KDV_ILAVE__"
 DIGER_GIDER = "Diğer Giderler"
 
 # Grup başlıkları: depo kökünde data/kiyas-group-headers.txt ([yiyecek] / [icenek])
@@ -565,6 +569,30 @@ def normalize_tuk_miktar_yiyecek_kg_to_gr(tuk: float, birim: str) -> float:
     return tuk * 1000.0
 
 
+def normalize_icenek_tuk_birim_to_litres(
+    tuk: float, birim_fiyat: float, birim: str
+) -> tuple[float, float]:
+    """İçecek: miktar litre, birim fiyat TL/lt; tutar korunur."""
+    t = float(tuk or 0)
+    bf = float(birim_fiyat or 0)
+    b = normalize_text(birim).replace(" ", "")
+    if not b:
+        return t, bf
+    if "adet" in b or "piece" in b or b == "pk":
+        return t, bf
+    if "metrekup" in b or b == "m3":
+        return t * 1000.0, (bf / 1000.0) if bf else 0.0
+    if "mili" in b or b == "ml" or (b.endswith("ml") and "litre" not in b):
+        return t / 1000.0, bf * 1000.0
+    if "santi" in b or b == "cl" or (b.endswith("cl") and "mili" not in b):
+        return t / 100.0, bf * 100.0
+    if ("decilit" in b or b == "dl") and "mili" not in b:
+        return t / 10.0, bf * 10.0
+    if "litre" in b or b in ("lt", "l") or b.endswith("lt"):
+        return t, bf
+    return t, bf
+
+
 def backfill_tuk_birim(tip: str, tuk: float, birim_fiyat: float, tutar_tl: float) -> tuple[float, float]:
     t = tuk or 0.0
     bf = birim_fiyat or 0.0
@@ -633,14 +661,28 @@ def is_group_header_row(
     return bool(fixed_group_header_label(stok_mali, tip))
 
 
-def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[str, int]) -> tuple[float, float]:
+def _footer_finance_summary_normalized(nsm: str) -> bool:
+    """Footer’da ayrı işlenen satırlar (normalize_text çıktısı)."""
+    if not nsm:
+        return False
+    if "fiyat fark" in nsm:
+        return True
+    if "odenmez" in nsm:
+        return True
+    if "kdv" in nsm and ("ilave" in nsm or "edilecek" in nsm):
+        return True
+    return False
+
+
+def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[str, int]) -> tuple[float, float, float]:
     fiyat_farki = 0.0
     odenmez = 0.0
+    kdv_ilave = 0.0
     start_r = max(header_row + 1, len(df_raw) - 45)
     tut_idx = col_map.get("tutar_tl")
     st_idx = col_map.get("stok_mali")
     if tut_idx is None or st_idx is None:
-        return 0.0, 0.0
+        return 0.0, 0.0, 0.0
     for i in range(start_r, len(df_raw)):
         row = df_raw.iloc[i]
         sm = get_cell(row, st_idx)
@@ -652,7 +694,9 @@ def scan_footer_deductions(df_raw: pd.DataFrame, header_row: int, col_map: dict[
             fiyat_farki += abs(float(tut))
         elif "odenmez" in nsm:
             odenmez += abs(float(tut))
-    return fiyat_farki, odenmez
+        elif "kdv" in nsm and ("ilave" in nsm or "edilecek" in nsm):
+            kdv_ilave += abs(float(tut))
+    return fiyat_farki, odenmez, kdv_ilave
 
 
 def kalite_kontrol(rows: list[dict[str, Any]], meta: dict[str, Any], candidate: Optional[SheetCandidate]) -> tuple[str, list[str]]:
@@ -740,6 +784,8 @@ def sheet_isle(
             continue
         if _should_skip_stok_mali(stok_mali):
             continue
+        if _footer_finance_summary_normalized(normalize_text(stok_mali)):
+            continue
 
         if is_group_header_row(stok_mali, stok_no_str, parsed_numeric, tip):
             last_stok_mali_merge = ""
@@ -780,6 +826,8 @@ def sheet_isle(
         if _norm_tip(tip) == "yiyecek":
             tuk0 = normalize_tuk_miktar_yiyecek_kg_to_gr(tuk0, birim)
         tuk0, bf0 = backfill_tuk_birim(tip, tuk0, bf0, tut0)
+        if _norm_tip(tip) == "icenek":
+            tuk0, bf0 = normalize_icenek_tuk_birim_to_litres(tuk0, bf0, birim)
         d = derive_tutar_pp(tip, tuk0, bf0, meta.get("kur"), meta.get("cost_pax"))
         row_has_warning = any(not parsed_out.get(f"{f}_parse_ok", True) and parsed_out.get(f"{f}_raw", "") for f in NUMERIC_FIELDS)
 
@@ -822,23 +870,25 @@ def sheet_isle(
 
     if pending:
         flush_pending(forward_kategori or "")
-    ff, od = scan_footer_deductions(df_raw, candidate.header_row, candidate.column_map)
+    ff, od, kdv_ilave = scan_footer_deductions(df_raw, candidate.header_row, candidate.column_map)
     meta_kur = meta.get("kur")
     meta_pax = meta.get("cost_pax")
     tipn2 = _norm_tip(tip)
-    for label, amt in (
-        ("— Excel: Fiyat farkı düşümü —", ff),
-        ("— Excel: Ödenmez toplamı düşümü —", od),
+    for label, amt, is_kdv in (
+        ("— Excel: Fiyat farkı düşümü —", ff, False),
+        ("— Excel: Ödenmez toplamı düşümü —", od, False),
+        ("— Excel: KDV ilave —", kdv_ilave, True),
     ):
         if amt is None or float(amt) <= 0:
             continue
         amt_f = float(amt)
         if tipn2 == "yiyecek":
-            tuk_d = -amt_f * 1000.0
+            tuk_d = amt_f * 1000.0 if is_kdv else -amt_f * 1000.0
             birim_d = "Gram"
         else:
-            tuk_d = -amt_f
+            tuk_d = amt_f if is_kdv else -amt_f
             birim_d = "Litre"
+        stok_adj = STOK_NO_KDV_ILAVE if is_kdv else STOK_NO_DUZELTME
         d_adj = derive_tutar_pp(tip, tuk_d, 1.0, meta_kur, meta_pax)
         parsed_base: dict[str, Any] = {}
         for f in NUMERIC_FIELDS:
@@ -864,7 +914,7 @@ def sheet_isle(
             "kategori": DIGER_GIDER,
             "grup": DIGER_GIDER,
             "stok_mali": label,
-            "stok_no": "__DUZELTME__",
+            "stok_no": stok_adj,
             "birim": birim_d,
             **parsed_base,
             "tuk_miktar": tuk_d,

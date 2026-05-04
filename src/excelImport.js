@@ -34,7 +34,7 @@ const SKIP_STOKLAR_INCLUDES = [
   'cost pax', 'stok malı', 'stok mali',
 ];
 const SKIP_STOKLAR_WORD = ['toplam', 'kur'];
-/* fiyat farkı / ödenmez: ürün satırı değil; alt satırdan tutar okunup düşüm olarak eklenir */
+/* fiyat farkı / ödenmez (düşüm), KDV ilave: footer’dan okunur; gövdede çift sayım yok */
 
 /** data/kiyas-group-headers.txt — [yiyecek] / [icenek] bölümleri */
 function parseKiyasGroupHeadersFile(content) {
@@ -338,6 +338,34 @@ function normalizeTukMiktarYiyecekKgToGr(tuk, birim) {
 }
 
 /**
+ * İçecek: Excel miktarı litreye, birim fiyat TL/lt — tutar = lt × TL/lt korunur.
+ * Pax başı cl DB’de (lt×100)/pax; özet toplamda sum(lt)/pax ile uyum için lt tek tip olmalı.
+ */
+function normalizeIcenekTukBirimFiyatToLitre(tuk, birimFiyat, birim) {
+  const t = +tuk || 0;
+  let bf = +birimFiyat || 0;
+  const b = normalizeText(birim).replace(/ /g, '');
+  if (!b) return { tuk_miktar: t, birim_fiyat: bf };
+  if (b.includes('adet') || b.includes('piece') || b === 'pk') return { tuk_miktar: t, birim_fiyat: bf };
+  if (b.includes('metrekup') || b === 'm3') {
+    return { tuk_miktar: t * 1000, birim_fiyat: bf ? bf / 1000 : 0 };
+  }
+  if (b.includes('mili') || b === 'ml' || (b.endsWith('ml') && !b.includes('litre'))) {
+    return { tuk_miktar: t / 1000, birim_fiyat: bf * 1000 };
+  }
+  if (b.includes('santi') || b === 'cl' || (b.endsWith('cl') && !b.includes('mili'))) {
+    return { tuk_miktar: t / 100, birim_fiyat: bf * 100 };
+  }
+  if ((b.includes('decilit') || b === 'dl') && !b.includes('mili')) {
+    return { tuk_miktar: t / 10, birim_fiyat: bf * 10 };
+  }
+  if (b.includes('litre') || b === 'lt' || b === 'l' || b.endsWith('lt')) {
+    return { tuk_miktar: t, birim_fiyat: bf };
+  }
+  return { tuk_miktar: t, birim_fiyat: bf };
+}
+
+/**
  * tuk=0, tutar>0, birim>0: Excel D/E'den türet.
  * tuk=0, birim=0, tutar>0: sadece tutarı korumak için (KDV satırı vb.) birim fiyat=1, tuk sanal.
  */
@@ -378,10 +406,26 @@ function isGroupHeaderRow(stokMali, stokNoStr, numVals, tip) {
   return !!fixedGroupHeaderLabel(stokMali, tip);
 }
 
-/** Sayfa sonu: fiyat farkı + ödenmez tutarları (pozitif, TL); yalnızca son satırlarda ara */
+/** Fiyat farkı / ödenmez (düşüm), KDV ilave (toplama): footer’da okunur; ürün gövdesinde aynı satır atlanır */
+const STOK_NO_KDV_ILAVE = '__KDV_ILAVE__';
+
+/**
+ * Footer’da ayrı işlenen satırlar — ürün döngüsüne alınmaz (çift sayım olmasın).
+ * normalizeText çıktısı ile çağırın.
+ */
+function isFooterFinanceSummaryNormalized(smn) {
+  if (!smn) return false;
+  if (smn.includes('fiyat fark')) return true;
+  if (smn.includes('odenmez')) return true;
+  if (smn.includes('kdv') && (smn.includes('ilave') || smn.includes('edilecek'))) return true;
+  return false;
+}
+
+/** Sayfa sonu: fiyat farkı + ödenmez (düşüm, TL), KDV ilave (toplama, TL) */
 function scanFooterDeductions(grid, startRow, colMap) {
   let fiyatFarki = 0;
   let odenmez = 0;
+  let kdvIlave = 0;
   const tailFrom = Math.max(startRow, grid.length - 45);
   for (let r = tailFrom; r < grid.length; r++) {
     const row = grid[r] || [];
@@ -393,9 +437,11 @@ function scanFooterDeductions(grid, startRow, colMap) {
       fiyatFarki += Math.abs(tut);
     } else if (smn.includes('odenmez')) {
       odenmez += Math.abs(tut);
+    } else if (smn.includes('kdv') && (smn.includes('ilave') || smn.includes('edilecek'))) {
+      kdvIlave += Math.abs(tut);
     }
   }
-  return { fiyatFarki, odenmez };
+  return { fiyatFarki, odenmez, kdvIlave };
 }
 
 function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur) {
@@ -424,6 +470,39 @@ function buildDeductionRow(label, amountTl, tip, tarih, dosyaName, costPax, kur)
     grup: DIGER_GIDER,
     stok_mali: label,
     stok_no: '__DUZELTME__',
+    birim,
+    tuk_miktar: String(tuk),
+    birim_fiyat: '1',
+  };
+}
+
+/** KDV ilave: tutara pozitif ekler (__KDV_ILAVE__); pp metrikleri API’de hariç */
+function buildKdvIlaveRow(amountTl, tip, tarih, dosyaName, costPax, kur) {
+  if (!(amountTl > 0)) return null;
+  const tipN = tip === 'icecek' ? 'icenek' : tip;
+  let tuk;
+  let birim;
+  if (tipN === 'yiyecek') {
+    tuk = amountTl * 1000;
+    birim = 'Gram';
+  } else {
+    tuk = amountTl;
+    birim = 'Litre';
+  }
+  return {
+    dosya: dosyaName,
+    tip,
+    tarih_str: tarih.tarih_str,
+    yil: String(tarih.yil),
+    ay_no: String(tarih.ay_no),
+    ay: tarih.ay,
+    gun: String(tarih.gun),
+    cost_pax: costPax != null ? String(costPax) : '',
+    kur: kur != null ? String(kur) : '',
+    kategori: DIGER_GIDER,
+    grup: DIGER_GIDER,
+    stok_mali: '— Excel: KDV ilave —',
+    stok_no: STOK_NO_KDV_ILAVE,
     birim,
     tuk_miktar: String(tuk),
     birim_fiyat: '1',
@@ -535,6 +614,8 @@ function parseExcelToRows(buffer, originalname) {
     }
     if (!sm) continue;
     if (shouldSkipStokMaliLine(sm)) continue;
+    const smnBody = normalizeText(sm);
+    if (isFooterFinanceSummaryNormalized(smnBody)) continue;
 
     if (isGroupHeaderRow(sm, stokNoStr, numVals, tip)) {
       lastStokMaliMerge = '';
@@ -589,9 +670,10 @@ function parseExcelToRows(buffer, originalname) {
   if (pending.length > 0) {
     flushPending(forwardKategori || '');
   }
-  const { fiyatFarki, odenmez } = scanFooterDeductions(grid, headerRowIdx + 1, bestMap);
+  const { fiyatFarki, odenmez, kdvIlave } = scanFooterDeductions(grid, headerRowIdx + 1, bestMap);
   const dff = buildDeductionRow('— Excel: Fiyat farkı düşümü —', fiyatFarki, tip, tarih, name, costPax, kur);
   const dod = buildDeductionRow('— Excel: Ödenmez toplamı düşümü —', odenmez, tip, tarih, name, costPax, kur);
+  const kdvR = buildKdvIlaveRow(kdvIlave, tip, tarih, name, costPax, kur);
   if (dff) {
     out.push({
       ...dff,
@@ -607,6 +689,18 @@ function parseExcelToRows(buffer, originalname) {
   if (dod) {
     out.push({
       ...dod,
+      tutar_tl: '0',
+      tutar_eur: '0',
+      pp_miktar: '0',
+      pp_tl: '0',
+      pp_eur: '0',
+      pp_gr: '0',
+      pp_cl: '0',
+    });
+  }
+  if (kdvR) {
+    out.push({
+      ...kdvR,
       tutar_tl: '0',
       tutar_eur: '0',
       pp_miktar: '0',
@@ -640,6 +734,11 @@ function normalizeTuketimRowForDb(r) {
   const filled = backfillTukBirim(o.tip, tuk, birimF, tutar);
   tuk = filled.tuk_miktar;
   birimF = filled.birim_fiyat;
+  if (o.tip === 'icenek') {
+    const lit = normalizeIcenekTukBirimFiyatToLitre(tuk, birimF, birim);
+    tuk = lit.tuk_miktar;
+    birimF = lit.birim_fiyat;
+  }
   o.tuk_miktar = String(tuk);
   o.birim_fiyat = String(birimF);
   if ((o.grup == null || String(o.grup).trim() === '') && o.kategori) {
