@@ -542,8 +542,8 @@ function parseExcelToRows(buffer, originalname) {
       continue;
     }
 
-    const hasProduct = !!stokNoStr || numVals.tutar_tl > 0 || numVals.tuk_miktar > 0 || numVals.birim_fiyat > 0;
-    if (!hasProduct) continue;
+    /* stok_mali dolu, skip/grup başlığı değilse satırı atlamıyoruz (stok_no boş / tüm
+     * sayılar 0 olsa bile kayıt oluşsun; aksi halde Excel’de görünen kalemler DB’de eksik kalıyordu). */
 
     const rowObj = {
       dosya: name,

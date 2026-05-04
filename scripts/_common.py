@@ -739,10 +739,7 @@ def sheet_isle(
                 forward_kategori = label
             continue
 
-        # satırı ürün olarak kabul etmek için minimum sinyal
-        has_product_signal = bool(stok_no_str) or any((p.ok and (p.value or 0) != 0) for p in parsed_numeric.values()) or bool(birim)
-        if not has_product_signal:
-            continue
+        # stok_mali dolu ve grup/skip değilse satırı atlamıyoruz (stok_no boş / tüm sayılar 0 olsa bile)
 
         parsed_out: dict[str, Any] = {}
         for f in NUMERIC_FIELDS:
