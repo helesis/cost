@@ -25,6 +25,11 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || 'postgres',
 });
 
+/** Excel fiyat farkı / ödenmez düşümü: tutar_tl & tutar_eur toplamlarında dahil; pp_* ve miktar KPI'larında hariç */
+const STOK_NO_DUZELTME = '__DUZELTME__';
+const SQL_EXC_DUZELTME = `stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}'`;
+const ALARM_METRIK_TUTAR = new Set(['tutar_tl', 'tutar_eur']);
+
 // ── Auth yapılandırması ───────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '')
@@ -310,10 +315,10 @@ app.get('/api/ozet', async (req, res) => {
         MAX(kur)      AS kur,
         SUM(tutar_tl) AS toplam_tl,
         SUM(tutar_eur) AS toplam_eur,
-        SUM(CASE WHEN tip='yiyecek' THEN pp_gr ELSE 0 END) AS toplam_pp_gr,
-        SUM(CASE WHEN tip='icenek'  THEN pp_cl ELSE 0 END) AS toplam_pp_cl,
-        SUM(pp_tl)    AS toplam_pp_tl,
-        SUM(pp_eur)   AS toplam_pp_eur
+        SUM(CASE WHEN ${SQL_EXC_DUZELTME} AND tip='yiyecek' THEN pp_gr ELSE 0 END) AS toplam_pp_gr,
+        SUM(CASE WHEN ${SQL_EXC_DUZELTME} AND tip IN ('icenek','icecek') THEN pp_cl ELSE 0 END) AS toplam_pp_cl,
+        SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_tl ELSE 0 END) AS toplam_pp_tl,
+        SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_eur ELSE 0 END) AS toplam_pp_eur
       FROM fb_cost.tuketim
       GROUP BY tarih_str, yil, ay_no, tip
       ORDER BY yil, ay_no, tip
@@ -371,8 +376,8 @@ app.get('/api/donemler', async (req, res) => {
     const { rows } = await pool.query(`
       SELECT tarih_str, yil, ay_no, ay,
              MAX(cost_pax) AS cost_pax, MAX(kur) AS kur,
-             SUM(CASE WHEN tip = 'yiyecek' THEN 1 ELSE 0 END)::int AS yiyecek_satir,
-             SUM(CASE WHEN tip IN ('icenek', 'icecek') THEN 1 ELSE 0 END)::int AS icenek_satir
+             SUM(CASE WHEN tip = 'yiyecek' AND ${SQL_EXC_DUZELTME} THEN 1 ELSE 0 END)::int AS yiyecek_satir,
+             SUM(CASE WHEN tip IN ('icenek', 'icecek') AND ${SQL_EXC_DUZELTME} THEN 1 ELSE 0 END)::int AS icenek_satir
       FROM fb_cost.tuketim
       GROUP BY tarih_str, yil, ay_no, ay
       ORDER BY yil DESC, ay_no DESC
@@ -437,6 +442,9 @@ app.get('/api/alarmlar', async (req, res) => {
       if (esik.tip) { where += ` AND tip = $${params.length+1}`; params.push(esik.tip); }
       if (esik.kategori) { where += ` AND kategori = $${params.length+1}`; params.push(esik.kategori); }
       if (esik.stok_mali) { where += ` AND stok_mali ILIKE $${params.length+1}`; params.push(esik.stok_mali); }
+      if (!ALARM_METRIK_TUTAR.has(esik.metrik)) {
+        where += ` AND (${SQL_EXC_DUZELTME})`;
+      }
 
       const { rows } = await pool.query(
         `SELECT SUM(${esik.metrik}) AS deger FROM fb_cost.tuketim ${where}`,
@@ -505,7 +513,7 @@ app.get('/api/fiyat-analizi', async (req, res) => {
   }
   try {
     const params = [`%${stok_mali.trim()}%`];
-    let where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0`;
+    let where = `WHERE stok_mali ILIKE $1 AND birim_fiyat > 0 AND (${SQL_EXC_DUZELTME})`;
     if (tip) { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
 
     const { rows } = await pool.query(`
@@ -536,7 +544,7 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   const { tarih_baslangic, tarih_bitis, tip } = req.query;
   try {
     const params = [];
-    let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g'`;
+    let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_DUZELTME})`;
     if (tarih_baslangic) { where += ` AND tarih_str >= $${params.length + 1}`; params.push(tarih_baslangic); }
     if (tarih_bitis)     { where += ` AND tarih_str <= $${params.length + 1}`; params.push(tarih_bitis); }
     if (tip)             { where += ` AND tip = $${params.length + 1}`; params.push(tip); }
@@ -634,8 +642,8 @@ app.get('/api/yillik/ozet', async (req, res) => {
           SELECT ay_no,
                  SUM(tutar_tl)  AS tl,
                  SUM(tutar_eur) AS eur,
-                 SUM(pp_tl)     AS pp_tl,
-                 SUM(pp_eur)    AS pp_eur,
+                 SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_tl ELSE 0 END)  AS pp_tl,
+                 SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_eur ELSE 0 END) AS pp_eur,
                  MAX(cost_pax)  AS cost_pax,
                  AVG(NULLIF(kur,0)) AS kur
           FROM fb_cost.tuketim
@@ -708,8 +716,8 @@ app.get('/api/yillik/aylik', async (req, res) => {
           SUM(CASE WHEN tip = 'icenek'  THEN tutar_tl ELSE 0 END) AS icenek_tl,
           SUM(CASE WHEN tip = 'yiyecek' THEN tutar_eur ELSE 0 END) AS yiyecek_eur,
           SUM(CASE WHEN tip = 'icenek'  THEN tutar_eur ELSE 0 END) AS icenek_eur,
-          SUM(pp_tl)     AS pp_tl,
-          SUM(pp_eur)    AS pp_eur,
+          SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_tl ELSE 0 END)  AS pp_tl,
+          SUM(CASE WHEN ${SQL_EXC_DUZELTME} THEN pp_eur ELSE 0 END) AS pp_eur,
           MAX(cost_pax)  AS cost_pax,
           AVG(NULLIF(kur, 0)) AS kur
         FROM fb_cost.tuketim
@@ -827,7 +835,7 @@ app.get('/api/yillik/urunler', async (req, res) => {
                SUM(tuk_miktar) AS tuk_miktar
         FROM fb_cost.tuketim
         WHERE yil = $1 AND tarih_str NOT LIKE '%-15g'
-          AND stok_no IS DISTINCT FROM '__DUZELTME__' ${tipFilter}
+          AND (${SQL_EXC_DUZELTME}) ${tipFilter}
         GROUP BY stok_mali, kategori, tip
         ORDER BY ${sortField} DESC
         LIMIT $${params.length}
@@ -851,7 +859,8 @@ app.get('/api/yillik/urunler', async (req, res) => {
                     THEN AVG(birim_fiyat) / AVG(NULLIF(kur, 0))
                     ELSE NULL END AS ort_fiyat_eur
         FROM fb_cost.tuketim
-        WHERE yil = $1 AND birim_fiyat > 0 AND tarih_str NOT LIKE '%-15g' ${tipFilter}
+        WHERE yil = $1 AND birim_fiyat > 0 AND tarih_str NOT LIKE '%-15g'
+          AND (${SQL_EXC_DUZELTME}) ${tipFilter}
         GROUP BY stok_mali, kategori, tip, ay_no
       ),
       siralanmis AS (
