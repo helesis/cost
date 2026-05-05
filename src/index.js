@@ -1048,6 +1048,45 @@ app.get('/api/classify/results', async (req, res) => {
   }
 });
 
+/** protein_bucket dağılımı (chip listesi) */
+app.get('/api/classify/protein-buckets', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT LOWER(TRIM(protein_bucket)) AS bucket, COUNT(*)::int AS adet
+      FROM fb_cost.product_classifications
+      GROUP BY 1
+      ORDER BY adet DESC, bucket ASC
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error('classify/protein-buckets:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Seçilen bucket’taki ürünler */
+app.get('/api/classify/protein-buckets/urunler', async (req, res) => {
+  const raw = String(req.query.bucket || '').trim().toLowerCase();
+  if (!raw || raw.length > 48 || !/^[a-z0-9_\-ğüşıöç]+$/i.test(raw)) {
+    return res.status(400).json({ error: 'Geçersiz bucket parametresi' });
+  }
+  const limit = Math.min(parseInt(req.query.limit, 10) || 800, 3000);
+  try {
+    const { rows } = await pool.query(
+      `SELECT stok_mali, kategori, food_group, confidence, updated_at
+       FROM fb_cost.product_classifications
+       WHERE LOWER(TRIM(protein_bucket)) = $1
+       ORDER BY stok_mali ASC
+       LIMIT $2`,
+      [raw, limit]
+    );
+    res.json({ bucket: raw, urunler: rows, toplam_donen: rows.length });
+  } catch (err) {
+    console.error('classify/protein-buckets/urunler:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/classify/upload', (req, res, next) => {
   classifyCsvUpload.single('file')(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message || 'Yükleme hatası' });
