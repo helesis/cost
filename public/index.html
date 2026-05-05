@@ -278,6 +278,17 @@
     border-top: none !important;
   }
   .kat-fiyat-urun-ic { padding: 10px 12px 12px 28px; }
+  .kat-fiyat-ref-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(138, 108, 46, 0.16);
+    color: var(--gold);
+    border: 1px solid rgba(138, 108, 46, 0.35);
+    white-space: nowrap;
+  }
   .kat-fiyat-urun-ic .search-results th,
   .kat-fiyat-urun-ic .search-results td { font-size: 11px; }
   .classify-bucket-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
@@ -711,7 +722,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
             <div class="card-title" style="margin-bottom:4px">Kategori Bazında Fiyat Değişimi</div>
-            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem ortalama birim fiyat karşılaştırması. Kategori satırına tıklayınca ürün bazında Δ % listesi açılır; tekrar tıklayınca kapanır.</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem aralığı gösterilir. Ortalamalar: yalnızca son ayda fiyatı olan ve ondan önce referans fiyatı bulunan SKU’lar (eşit ağırlıklı ürün ortalaması). Referans, aralığın ilk ayında yoksa daha eski aylara bakılır.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="form-select" id="kat-fiyat-baslangic" style="width:130px"></select>
@@ -731,8 +742,8 @@
               <tr>
                 <th>Kategori</th>
                 <th>Aralık</th>
-                <th style="text-align:right" id="kat-fiyat-th-ilk">İlk Dönem</th>
-                <th style="text-align:right" id="kat-fiyat-th-son">Son Dönem</th>
+                <th style="text-align:right" id="kat-fiyat-th-ilk">Ref. ort.</th>
+                <th style="text-align:right" id="kat-fiyat-th-son">Son ort.</th>
                 <th style="text-align:right">Δ %</th>
               </tr>
             </thead>
@@ -3444,16 +3455,16 @@ async function katFiyatToggleRow(tr) {
     }
     if (!Array.isArray(urunler) || !urunler.length) {
       ic.innerHTML =
-        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu iki dönemde bu kategoride birim fiyatlı ürün satırı yok.</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu kategoride son dönemde fiyatı olan ve öncesinde referans fiyatı bulunan ürün yok.</div>';
       vcLucide();
       return;
     }
     const eur = vcIsEUR();
-    const thI = `İlk (${curLabel()})`;
+    const thR = `Ref. (${curLabel()})`;
     const thS = `Son (${curLabel()})`;
     ic.innerHTML = `
       <table class="search-results" style="font-size:12px;margin:0">
-        <thead><tr><th>Ürün</th><th style="text-align:right">${thI}</th><th style="text-align:right">${thS}</th><th style="text-align:right">Δ %</th></tr></thead>
+        <thead><tr><th>Ürün</th><th>Kaynak</th><th style="text-align:right">${thR}</th><th style="text-align:right">${thS}</th><th style="text-align:right">Δ %</th></tr></thead>
         <tbody>${urunler
           .map((u) => {
             const fi = eur ? u.ilk_donem_fiyat_eur : u.ilk_donem_fiyat;
@@ -3461,8 +3472,10 @@ async function katFiyatToggleRow(tr) {
             const dlt = eur ? u.degisim_eur_yuzde : u.degisim_yuzde;
             const ilkN = fi != null ? parseFloat(fi) : null;
             const sonN = fs != null ? parseFloat(fs) : null;
+            const rd = u.ref_donem != null && String(u.ref_donem) !== '' ? String(u.ref_donem) : '—';
             return `<tr>
             <td>${escapeHtml(u.stok_mali || '')}</td>
+            <td>${rd !== '—' ? `<span class="kat-fiyat-ref-chip">${escapeHtml(rd)}</span>` : '—'}</td>
             <td style="text-align:right">${ilkN != null && !isNaN(ilkN) ? fmtCur(ilkN) : '—'}</td>
             <td style="text-align:right">${sonN != null && !isNaN(sonN) ? fmtCur(sonN) : '—'}</td>
             <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
@@ -3504,7 +3517,7 @@ async function loadKategoriFiyat() {
   const tip = document.getElementById('kat-fiyat-tip').value;
   const tbody = document.getElementById('kat-fiyat-tablo');
 
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px"><div class="spinner" style="display:inline-block"></div> Yükleniyor...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px"><div class="spinner" style="display:inline-block"></div> Yükleniyor...</td></tr>`;
 
   try {
     const params = new URLSearchParams();
@@ -3518,23 +3531,27 @@ async function loadKategoriFiyat() {
       return;
     }
 
-    document.getElementById('kat-fiyat-th-ilk').textContent = `İlk Dönem (${curLabel()})`;
-    document.getElementById('kat-fiyat-th-son').textContent = `Son Dönem (${curLabel()})`;
+    document.getElementById('kat-fiyat-th-ilk').textContent = `Ref. ort. (${curLabel()})`;
+    document.getElementById('kat-fiyat-th-son').textContent = `Son ort. (${curLabel()})`;
 
     const eur = vcIsEUR();
     tbody.innerHTML = rows.map(r => {
-      const ilk = eur ? +r.ilk_donem_fiyat_eur || 0 : +r.ilk_donem_fiyat || 0;
-      const son = eur ? +r.son_donem_fiyat_eur || 0 : +r.son_donem_fiyat || 0;
+      const nUrun = parseInt(String(r.n_urun || '0'), 10) || 0;
+      const ilkRaw = eur ? r.ilk_donem_fiyat_eur : r.ilk_donem_fiyat;
+      const sonRaw = eur ? r.son_donem_fiyat_eur : r.son_donem_fiyat;
+      const hasAgg = nUrun > 0 && ilkRaw != null && sonRaw != null;
+      const ilk = hasAgg ? parseFloat(ilkRaw) : NaN;
+      const son = hasAgg ? parseFloat(sonRaw) : NaN;
       const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
       const dk = encodeURIComponent(r.kategori || '');
       const dik = escapeHtml(String(r.ilk_donem || ''));
       const dson = escapeHtml(String(r.son_donem || ''));
       return `<tr class="kat-fiyat-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
-        <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong></td>
+        <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong>${nUrun ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${nUrun} ürün)</span>` : ''}</td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
-        <td style="text-align:right">${fmtCur(ilk)}</td>
-        <td style="text-align:right">${fmtCur(son)}</td>
-        <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+        <td style="text-align:right">${hasAgg && !isNaN(ilk) ? fmtCur(ilk) : '—'}</td>
+        <td style="text-align:right">${hasAgg && !isNaN(son) ? fmtCur(son) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null) : '—'}</td>
       </tr>`;
     }).join('');
     vcLucide();

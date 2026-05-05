@@ -573,14 +573,27 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   try {
     const params = [];
     let where = `WHERE birim_fiyat > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
-    if (tarih_baslangic) { where += ` AND tarih_str >= $${params.length + 1}`; params.push(tarih_baslangic); }
-    if (tarih_bitis)     { where += ` AND tarih_str <= $${params.length + 1}`; params.push(tarih_bitis); }
+    if (tarih_baslangic) {
+      where += ` AND tarih_str >= $${params.length + 1}`;
+      params.push(tarih_baslangic);
+    }
+    let bitisParamNum = null;
+    if (tarih_bitis) {
+      bitisParamNum = params.length + 1;
+      where += ` AND tarih_str <= $${bitisParamNum}`;
+      params.push(tarih_bitis);
+    }
     const tipF = tipFilterSql(params, tip);
     where += tipF.clause;
 
-    // Her kategori için ilk ve son dönemi (yil, ay_no sıralı) bul,
-    // o dönemlerdeki ortalama birim_fiyat ve birim_fiyat_eur üzerinden yüzde değişim hesapla.
-    const { rows } = await pool.query(`
+    const histBitisClause = bitisParamNum != null ? ` AND t.tarih_str <= $${bitisParamNum}` : '';
+    const tipHistAliased = tipF.clause ? tipF.clause.replace(/\btip\b/g, 't.tip') : '';
+
+    // Dönem etiketleri: aralıkta kategori başına en erken / en geç ay (önceki mantık).
+    // Rakamlar: yalnızca hem "referans" hem son dönem fiyatı olan SKU'lar;
+    // referans = ilk_dönemde fiyat varsa o, yoksa son_dönemden önceki en yakın ay (tarih_bitis’e kadar).
+    const { rows } = await pool.query(
+      `
       WITH donemler AS (
         SELECT
           kategori,
@@ -602,24 +615,106 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
         FROM donemler
       ),
       ilk AS (SELECT kategori, tarih_str AS ilk_donem, ort_tl AS ilk_tl, ort_eur AS ilk_eur FROM siralanmis WHERE rn_ilk = 1),
-      son AS (SELECT kategori, tarih_str AS son_donem, ort_tl AS son_tl, ort_eur AS son_eur FROM siralanmis WHERE rn_son = 1)
+      son AS (SELECT kategori, tarih_str AS son_donem, ort_tl AS son_tl, ort_eur AS son_eur FROM siralanmis WHERE rn_son = 1),
+      hist AS (
+        SELECT
+          t.kategori,
+          t.stok_mali,
+          t.tarih_str,
+          t.yil,
+          t.ay_no,
+          AVG(t.birim_fiyat)::NUMERIC AS ort_tl,
+          CASE WHEN AVG(NULLIF(t.kur, 0)) > 0
+               THEN (AVG(t.birim_fiyat) / AVG(NULLIF(t.kur, 0)))::NUMERIC
+               ELSE NULL END AS ort_eur
+        FROM fb_cost.tuketim t
+        WHERE t.birim_fiyat > 0
+          AND t.kategori IS NOT NULL
+          AND t.tarih_str NOT LIKE '%-15g'
+          AND (${SQL_EXC_FINANS_PP})
+          ${histBitisClause}
+          ${tipHistAliased}
+        GROUP BY t.kategori, t.stok_mali, t.tarih_str, t.yil, t.ay_no
+      ),
+      sku_son AS (
+        SELECT h.kategori, h.stok_mali, h.ort_tl AS son_tl, h.ort_eur AS son_eur
+        FROM hist h
+        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
+      ),
+      son_meta AS (
+        SELECT h.kategori, MAX(h.yil) AS sy, MAX(h.ay_no) AS sm
+        FROM hist h
+        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
+        GROUP BY h.kategori
+      ),
+      sku_ilk_try AS (
+        SELECT h.kategori, h.stok_mali, h.ort_tl AS ilk_tl, h.ort_eur AS ilk_eur
+        FROM hist h
+        JOIN ilk i ON i.kategori = h.kategori AND h.tarih_str = i.ilk_donem
+      ),
+      sku_ref_lb AS (
+        SELECT DISTINCT ON (ss.kategori, ss.stok_mali)
+          ss.kategori,
+          ss.stok_mali,
+          h.tarih_str AS ref_ts,
+          h.ort_tl AS ref_tl,
+          h.ort_eur AS ref_eur
+        FROM sku_son ss
+        JOIN son_meta sm ON sm.kategori = ss.kategori
+        JOIN hist h ON h.kategori = ss.kategori
+          AND h.stok_mali = ss.stok_mali
+          AND (h.yil < sm.sy OR (h.yil = sm.sy AND h.ay_no < sm.sm))
+        ORDER BY ss.kategori, ss.stok_mali, h.yil DESC, h.ay_no DESC, h.tarih_str DESC
+      ),
+      sku_resolved AS (
+        SELECT
+          ss.kategori,
+          ss.stok_mali,
+          ss.son_tl,
+          ss.son_eur,
+          COALESCE(NULLIF(it.ilk_tl, 0), lb.ref_tl) AS ref_tl,
+          COALESCE(NULLIF(it.ilk_eur, 0), lb.ref_eur) AS ref_eur
+        FROM sku_son ss
+        LEFT JOIN sku_ilk_try it ON it.kategori = ss.kategori AND it.stok_mali = ss.stok_mali
+        LEFT JOIN sku_ref_lb lb ON lb.kategori = ss.kategori AND lb.stok_mali = ss.stok_mali
+        WHERE COALESCE(NULLIF(it.ilk_tl, 0), lb.ref_tl) IS NOT NULL
+          AND COALESCE(NULLIF(it.ilk_tl, 0), lb.ref_tl) > 0
+          AND ss.son_tl IS NOT NULL
+          AND ss.son_tl > 0
+      ),
+      sku_fin AS (
+        SELECT
+          kategori,
+          COUNT(*)::int AS n_urun,
+          AVG(ref_tl) AS ref_avg_tl,
+          AVG(son_tl) AS son_avg_tl,
+          AVG(ref_eur) AS ref_avg_eur,
+          AVG(son_eur) AS son_avg_eur
+        FROM sku_resolved
+        GROUP BY kategori
+      )
       SELECT
-        i.kategori,
-        i.ilk_donem, s.son_donem,
-        i.ilk_tl  AS ilk_donem_fiyat,
-        s.son_tl  AS son_donem_fiyat,
-        i.ilk_eur AS ilk_donem_fiyat_eur,
-        s.son_eur AS son_donem_fiyat_eur,
-        CASE WHEN i.ilk_tl > 0
-             THEN ((s.son_tl - i.ilk_tl) / i.ilk_tl * 100)::NUMERIC
+        ik.kategori,
+        ik.ilk_donem,
+        sn.son_donem,
+        sf.ref_avg_tl  AS ilk_donem_fiyat,
+        sf.son_avg_tl  AS son_donem_fiyat,
+        sf.ref_avg_eur AS ilk_donem_fiyat_eur,
+        sf.son_avg_eur AS son_donem_fiyat_eur,
+        sf.n_urun,
+        CASE WHEN sf.ref_avg_tl > 0
+             THEN ((sf.son_avg_tl - sf.ref_avg_tl) / sf.ref_avg_tl * 100)::NUMERIC
              ELSE NULL END AS degisim_yuzde,
-        CASE WHEN i.ilk_eur > 0
-             THEN ((s.son_eur - i.ilk_eur) / i.ilk_eur * 100)::NUMERIC
+        CASE WHEN sf.ref_avg_eur > 0
+             THEN ((sf.son_avg_eur - sf.ref_avg_eur) / sf.ref_avg_eur * 100)::NUMERIC
              ELSE NULL END AS degisim_eur_yuzde
-      FROM ilk i
-      JOIN son s USING (kategori)
-      ORDER BY ABS(COALESCE(((s.son_tl - i.ilk_tl) / NULLIF(i.ilk_tl, 0) * 100), 0)) DESC
-    `, params);
+      FROM ilk ik
+      JOIN son sn USING (kategori)
+      LEFT JOIN sku_fin sf ON sf.kategori = ik.kategori
+      ORDER BY ABS(COALESCE(((sf.son_avg_tl - sf.ref_avg_tl) / NULLIF(sf.ref_avg_tl, 0) * 100), 0)) DESC NULLS LAST
+      `,
+      params
+    );
 
     res.json(rows);
   } catch (err) {
@@ -628,7 +723,10 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   }
 });
 
-/** Kategori satırıyla aynı ilk/son dönemlerde ürün bazında ortalama birim fiyat değişimi */
+/**
+ * Kategori detayı: son_dönem fiyatı olan ürünler; referans = ilk_dönemde fiyat yoksa son’dan önceki en yakın ay.
+ * Referansı hiç olmayan ürünler listelenmez (kategori toplamına da girmez).
+ */
 app.get('/api/fiyat-analizi/kategori-urunleri', async (req, res) => {
   const kategori = (req.query.kategori || '').trim();
   const ilk = (req.query.ilk_donem || '').trim();
@@ -640,57 +738,93 @@ app.get('/api/fiyat-analizi/kategori-urunleri', async (req, res) => {
   if (!re.test(ilk) || !re.test(son)) return res.status(400).json({ error: 'Geçersiz dönem' });
   try {
     const params = [kategori, ilk, son];
-    let where = `WHERE kategori = $1 AND tarih_str IN ($2, $3) AND birim_fiyat > 0 AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
     const tipF = tipFilterSql(params, tip);
     if (!tipF.ok) return res.json([]);
-    where += tipF.clause;
+    const tipAliased = tipF.clause ? tipF.clause.replace(/\btip\b/g, 't.tip') : '';
+    let catWhere = `WHERE t.kategori = $1 AND t.tarih_str <= $3 AND t.birim_fiyat > 0 AND t.tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
+    catWhere += tipAliased;
 
     const { rows } = await pool.query(
       `
-      WITH per AS (
+      WITH cat_base AS (
         SELECT
-          stok_mali,
-          tarih_str,
-          AVG(birim_fiyat)::NUMERIC AS ort_tl,
+          t.stok_mali,
+          t.tarih_str,
+          t.yil,
+          t.ay_no,
+          AVG(t.birim_fiyat)::NUMERIC AS ort_tl,
           CASE
-            WHEN AVG(NULLIF(kur, 0)) > 0
-            THEN (AVG(birim_fiyat) / AVG(NULLIF(kur, 0)))::NUMERIC
+            WHEN AVG(NULLIF(t.kur, 0)) > 0
+            THEN (AVG(t.birim_fiyat) / AVG(NULLIF(t.kur, 0)))::NUMERIC
             ELSE NULL
           END AS ort_eur
-        FROM fb_cost.tuketim
-        ${where}
-        GROUP BY stok_mali, tarih_str
+        FROM fb_cost.tuketim t
+        ${catWhere}
+        GROUP BY t.stok_mali, t.tarih_str, t.yil, t.ay_no
       ),
-      agg AS (
-        SELECT
+      son_meta AS (
+        SELECT MAX(yil) AS sy, MAX(ay_no) AS sm FROM cat_base WHERE tarih_str = $3
+      ),
+      son_row AS (
+        SELECT stok_mali, ort_tl, ort_eur FROM cat_base WHERE tarih_str = $3
+      ),
+      ilk_row AS (
+        SELECT stok_mali, ort_tl, ort_eur FROM cat_base WHERE tarih_str = $2
+      ),
+      before_son AS (
+        SELECT cb.*
+        FROM cat_base cb
+        CROSS JOIN son_meta sm
+        WHERE cb.yil < sm.sy OR (cb.yil = sm.sy AND cb.ay_no < sm.sm)
+      ),
+      latest_ref AS (
+        SELECT DISTINCT ON (stok_mali)
           stok_mali,
-          MAX(CASE WHEN tarih_str = $2 THEN ort_tl END) AS ilk_tl,
-          MAX(CASE WHEN tarih_str = $3 THEN ort_tl END) AS son_tl,
-          MAX(CASE WHEN tarih_str = $2 THEN ort_eur END) AS ilk_eur,
-          MAX(CASE WHEN tarih_str = $3 THEN ort_eur END) AS son_eur
-        FROM per
-        GROUP BY stok_mali
+          tarih_str AS ref_ts,
+          ort_tl AS ref_tl,
+          ort_eur AS ref_eur
+        FROM before_son
+        ORDER BY stok_mali, yil DESC, ay_no DESC, tarih_str DESC
+      ),
+      ref_merged AS (
+        SELECT
+          sr.stok_mali,
+          sr.ort_tl AS son_tl,
+          sr.ort_eur AS son_eur,
+          COALESCE(NULLIF(ir.ort_tl, 0), lr.ref_tl) AS ref_tl,
+          COALESCE(NULLIF(ir.ort_eur, 0), lr.ref_eur) AS ref_eur,
+          CASE
+            WHEN ir.ort_tl IS NOT NULL AND ir.ort_tl > 0 THEN $2::text
+            ELSE lr.ref_ts
+          END AS ref_donem
+        FROM son_row sr
+        LEFT JOIN ilk_row ir ON ir.stok_mali = sr.stok_mali
+        LEFT JOIN latest_ref lr ON lr.stok_mali = sr.stok_mali
+        WHERE COALESCE(NULLIF(ir.ort_tl, 0), lr.ref_tl) IS NOT NULL
+          AND COALESCE(NULLIF(ir.ort_tl, 0), lr.ref_tl) > 0
+          AND sr.ort_tl IS NOT NULL
+          AND sr.ort_tl > 0
       )
       SELECT
         stok_mali,
-        ilk_tl AS ilk_donem_fiyat,
+        ref_donem,
+        ref_tl AS ilk_donem_fiyat,
         son_tl AS son_donem_fiyat,
-        ilk_eur AS ilk_donem_fiyat_eur,
+        ref_eur AS ilk_donem_fiyat_eur,
         son_eur AS son_donem_fiyat_eur,
         CASE
-          WHEN ilk_tl > 0
-          THEN ((son_tl - ilk_tl) / ilk_tl * 100)::NUMERIC
+          WHEN ref_tl > 0
+          THEN ((son_tl - ref_tl) / ref_tl * 100)::NUMERIC
           ELSE NULL
         END AS degisim_yuzde,
         CASE
-          WHEN ilk_eur > 0
-          THEN ((son_eur - ilk_eur) / ilk_eur * 100)::NUMERIC
+          WHEN ref_eur > 0
+          THEN ((son_eur - ref_eur) / ref_eur * 100)::NUMERIC
           ELSE NULL
         END AS degisim_eur_yuzde
-      FROM agg
-      WHERE ilk_tl IS NOT NULL OR son_tl IS NOT NULL
+      FROM ref_merged
       ORDER BY
-        ABS(COALESCE((son_tl - ilk_tl) / NULLIF(ilk_tl, 0) * 100, 0)) DESC NULLS LAST,
+        ABS(COALESCE((son_tl - ref_tl) / NULLIF(ref_tl, 0) * 100, 0)) DESC NULLS LAST,
         stok_mali ASC
       `,
       params
