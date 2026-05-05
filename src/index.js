@@ -628,6 +628,81 @@ app.get('/api/fiyat-analizi/kategoriler', async (req, res) => {
   }
 });
 
+/** Kategori satırıyla aynı ilk/son dönemlerde ürün bazında ortalama birim fiyat değişimi */
+app.get('/api/fiyat-analizi/kategori-urunleri', async (req, res) => {
+  const kategori = (req.query.kategori || '').trim();
+  const ilk = (req.query.ilk_donem || '').trim();
+  const son = (req.query.son_donem || '').trim();
+  const tip = req.query.tip;
+  if (!kategori) return res.status(400).json({ error: 'kategori zorunlu' });
+  if (!ilk || !son) return res.status(400).json({ error: 'ilk_donem ve son_donem zorunlu' });
+  const re = /^\d{4}-\d{2}(-15g)?$/;
+  if (!re.test(ilk) || !re.test(son)) return res.status(400).json({ error: 'Geçersiz dönem' });
+  try {
+    const params = [kategori, ilk, son];
+    let where = `WHERE kategori = $1 AND tarih_str IN ($2, $3) AND birim_fiyat > 0 AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
+    const tipF = tipFilterSql(params, tip);
+    if (!tipF.ok) return res.json([]);
+    where += tipF.clause;
+
+    const { rows } = await pool.query(
+      `
+      WITH per AS (
+        SELECT
+          stok_mali,
+          tarih_str,
+          AVG(birim_fiyat)::NUMERIC AS ort_tl,
+          CASE
+            WHEN AVG(NULLIF(kur, 0)) > 0
+            THEN (AVG(birim_fiyat) / AVG(NULLIF(kur, 0)))::NUMERIC
+            ELSE NULL
+          END AS ort_eur
+        FROM fb_cost.tuketim
+        ${where}
+        GROUP BY stok_mali, tarih_str
+      ),
+      agg AS (
+        SELECT
+          stok_mali,
+          MAX(CASE WHEN tarih_str = $2 THEN ort_tl END) AS ilk_tl,
+          MAX(CASE WHEN tarih_str = $3 THEN ort_tl END) AS son_tl,
+          MAX(CASE WHEN tarih_str = $2 THEN ort_eur END) AS ilk_eur,
+          MAX(CASE WHEN tarih_str = $3 THEN ort_eur END) AS son_eur
+        FROM per
+        GROUP BY stok_mali
+      )
+      SELECT
+        stok_mali,
+        ilk_tl AS ilk_donem_fiyat,
+        son_tl AS son_donem_fiyat,
+        ilk_eur AS ilk_donem_fiyat_eur,
+        son_eur AS son_donem_fiyat_eur,
+        CASE
+          WHEN ilk_tl > 0
+          THEN ((son_tl - ilk_tl) / ilk_tl * 100)::NUMERIC
+          ELSE NULL
+        END AS degisim_yuzde,
+        CASE
+          WHEN ilk_eur > 0
+          THEN ((son_eur - ilk_eur) / ilk_eur * 100)::NUMERIC
+          ELSE NULL
+        END AS degisim_eur_yuzde
+      FROM agg
+      WHERE ilk_tl IS NOT NULL OR son_tl IS NOT NULL
+      ORDER BY
+        ABS(COALESCE((son_tl - ilk_tl) / NULLIF(ilk_tl, 0) * 100, 0)) DESC NULLS LAST,
+        stok_mali ASC
+      `,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('fiyat-analizi/kategori-urunleri:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // YILLIK ANALİZ API'LERİ
 // ─────────────────────────────────────────────────────────────────────────────

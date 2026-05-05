@@ -261,6 +261,25 @@
   .fiyat-urun-chip--ice { border-color: rgba(70, 130, 180, 0.35); color: #2a5f8f; }
   .fiyat-urun-chip--ice:hover { border-color: #4682b4; }
   .fiyat-urun-chip--ice.active { background: rgba(70, 130, 180, 0.14); box-shadow: 0 0 0 1px rgba(70, 130, 180, 0.3); }
+  .kat-fiyat-kat-row { cursor: pointer; }
+  .kat-fiyat-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
+  .kat-fiyat-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
+  .kat-fiyat-twist {
+    display: inline-block;
+    width: 1em;
+    font-size: 10px;
+    opacity: 0.7;
+    vertical-align: middle;
+    margin-right: 4px;
+  }
+  .kat-fiyat-urun-detay > td {
+    padding: 0 !important;
+    background: var(--bg-alt, rgba(0, 0, 0, 0.03));
+    border-top: none !important;
+  }
+  .kat-fiyat-urun-ic { padding: 10px 12px 12px 28px; }
+  .kat-fiyat-urun-ic .search-results th,
+  .kat-fiyat-urun-ic .search-results td { font-size: 11px; }
   .classify-bucket-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
   .classify-bucket-chip {
     cursor: pointer;
@@ -692,7 +711,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
             <div class="card-title" style="margin-bottom:4px">Kategori Bazında Fiyat Değişimi</div>
-            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem ortalama birim fiyat karşılaştırması</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem ortalama birim fiyat karşılaştırması. Kategori satırına tıklayınca ürün bazında Δ % listesi açılır; tekrar tıklayınca kapanır.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="form-select" id="kat-fiyat-baslangic" style="width:130px"></select>
@@ -3213,6 +3232,7 @@ function initFiyatPage() {
         fiyatAnalizEt({ tam: true, exactStokMali: stok });
       });
     }
+    bindKategoriFiyatExpandOnce();
     fiyatPageInited = true;
     loadKategoriFiyat();
   }
@@ -3383,6 +3403,101 @@ function renderDelta(v) {
   return `<span style="color:${col};font-weight:600;display:inline-flex;align-items:center;gap:2px;justify-content:flex-end"><i data-lucide="${ic}" class="delta-icon"></i> ${fmtN(Math.abs(v), 2)}%</span>`;
 }
 
+function katFiyatDecodeK(raw) {
+  try {
+    return decodeURIComponent(raw || '');
+  } catch (_) {
+    return raw || '';
+  }
+}
+
+async function katFiyatToggleRow(tr) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('kat-fiyat-urun-detay')) {
+    next.remove();
+    tr.classList.remove('kat-fiyat-expanded');
+    const tw = tr.querySelector('.kat-fiyat-twist');
+    if (tw) tw.textContent = '▸';
+    return;
+  }
+  const k = katFiyatDecodeK(tr.getAttribute('data-k') || '');
+  const ilk = tr.getAttribute('data-ilk') || '';
+  const son = tr.getAttribute('data-son') || '';
+  const tip = document.getElementById('kat-fiyat-tip')?.value || '';
+  const det = document.createElement('tr');
+  det.className = 'kat-fiyat-urun-detay';
+  det.innerHTML = '<td colspan="5"><div class="kat-fiyat-urun-ic"><div class="loading" style="padding:12px">Yükleniyor…</div></div></td>';
+  tr.after(det);
+  tr.classList.add('kat-fiyat-expanded');
+  const tw = tr.querySelector('.kat-fiyat-twist');
+  if (tw) tw.textContent = '▾';
+  try {
+    const params = new URLSearchParams({ kategori: k, ilk_donem: ilk, son_donem: son });
+    if (tip) params.append('tip', tip);
+    const urunler = await fetch('/api/fiyat-analizi/kategori-urunleri?' + params.toString()).then((r) => r.json());
+    const ic = det.querySelector('.kat-fiyat-urun-ic');
+    if (!ic) return;
+    if (urunler && urunler.error) {
+      ic.innerHTML = `<div style="padding:12px;color:var(--red)">${escapeHtml(urunler.error)}</div>`;
+      vcLucide();
+      return;
+    }
+    if (!Array.isArray(urunler) || !urunler.length) {
+      ic.innerHTML =
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu iki dönemde bu kategoride birim fiyatlı ürün satırı yok.</div>';
+      vcLucide();
+      return;
+    }
+    const eur = vcIsEUR();
+    const thI = `İlk (${curLabel()})`;
+    const thS = `Son (${curLabel()})`;
+    ic.innerHTML = `
+      <table class="search-results" style="font-size:12px;margin:0">
+        <thead><tr><th>Ürün</th><th style="text-align:right">${thI}</th><th style="text-align:right">${thS}</th><th style="text-align:right">Δ %</th></tr></thead>
+        <tbody>${urunler
+          .map((u) => {
+            const fi = eur ? u.ilk_donem_fiyat_eur : u.ilk_donem_fiyat;
+            const fs = eur ? u.son_donem_fiyat_eur : u.son_donem_fiyat;
+            const dlt = eur ? u.degisim_eur_yuzde : u.degisim_yuzde;
+            const ilkN = fi != null ? parseFloat(fi) : null;
+            const sonN = fs != null ? parseFloat(fs) : null;
+            return `<tr>
+            <td>${escapeHtml(u.stok_mali || '')}</td>
+            <td style="text-align:right">${ilkN != null && !isNaN(ilkN) ? fmtCur(ilkN) : '—'}</td>
+            <td style="text-align:right">${sonN != null && !isNaN(sonN) ? fmtCur(sonN) : '—'}</td>
+            <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+          </tr>`;
+          })
+          .join('')}</tbody>
+      </table>`;
+    vcLucide();
+  } catch (e) {
+    const ic = det.querySelector('.kat-fiyat-urun-ic');
+    if (ic) ic.innerHTML = `<div style="padding:12px;color:var(--red)">${escapeHtml(e.message)}</div>`;
+    vcLucide();
+  }
+}
+
+function katFiyatOnTbodyClick(e) {
+  const tr = e.target.closest('tr.kat-fiyat-kat-row');
+  if (!tr) return;
+  void katFiyatToggleRow(tr);
+}
+
+function bindKategoriFiyatExpandOnce() {
+  const tb = document.getElementById('kat-fiyat-tablo');
+  if (!tb || tb.dataset.expandBound === '1') return;
+  tb.dataset.expandBound = '1';
+  tb.addEventListener('click', katFiyatOnTbodyClick);
+  tb.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const tr = e.target.closest('tr.kat-fiyat-kat-row');
+    if (!tr || !tb.contains(tr)) return;
+    e.preventDefault();
+    void katFiyatToggleRow(tr);
+  });
+}
+
 async function loadKategoriFiyat() {
   const bas = document.getElementById('kat-fiyat-baslangic').value;
   const bit = document.getElementById('kat-fiyat-bitis').value;
@@ -3411,8 +3526,11 @@ async function loadKategoriFiyat() {
       const ilk = eur ? +r.ilk_donem_fiyat_eur || 0 : +r.ilk_donem_fiyat || 0;
       const son = eur ? +r.son_donem_fiyat_eur || 0 : +r.son_donem_fiyat || 0;
       const dlt = eur ? r.degisim_eur_yuzde : r.degisim_yuzde;
-      return `<tr>
-        <td><strong>${r.kategori}</strong></td>
+      const dk = encodeURIComponent(r.kategori || '');
+      const dik = escapeHtml(String(r.ilk_donem || ''));
+      const dson = escapeHtml(String(r.son_donem || ''));
+      return `<tr class="kat-fiyat-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
+        <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong></td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
         <td style="text-align:right">${fmtCur(ilk)}</td>
         <td style="text-align:right">${fmtCur(son)}</td>
