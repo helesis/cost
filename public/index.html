@@ -261,6 +261,36 @@
   .fiyat-urun-chip--ice { border-color: rgba(70, 130, 180, 0.35); color: #2a5f8f; }
   .fiyat-urun-chip--ice:hover { border-color: #4682b4; }
   .fiyat-urun-chip--ice.active { background: rgba(70, 130, 180, 0.14); box-shadow: 0 0 0 1px rgba(70, 130, 180, 0.3); }
+  .fiyat-pax-hl {
+    cursor: help;
+    border-bottom: 1px dotted rgba(138, 108, 46, 0.4);
+    border-bottom-color: color-mix(in srgb, var(--text-dim) 55%, transparent);
+  }
+  .fiyat-pax-popover {
+    display: none;
+    position: fixed;
+    z-index: 10050;
+    width: 320px;
+    background: var(--card-bg, var(--bg));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+    padding: 10px 12px 8px;
+    pointer-events: auto;
+  }
+  .fiyat-pax-popover-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 6px;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .fiyat-pax-popover-chart {
+    height: 200px;
+    width: 100%;
+    position: relative;
+  }
   .kat-fiyat-kat-row { cursor: pointer; }
   .kat-fiyat-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
   .kat-fiyat-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
@@ -692,7 +722,7 @@
           <button class="btn btn-primary" onclick="fiyatAnalizEt()">Analiz Et</button>
         </div>
         <div id="fiyat-urun-chips-host" class="fiyat-urun-chips-host" style="display:none">
-          <div class="fiyat-urun-chips-caption">Aramaya uyan ürünler — çipe tıklayınca yalnızca grafik ve tablo güncellenir (arama metni aynı kalır)</div>
+          <div class="fiyat-urun-chips-caption">Aramaya uyan ürünler — çipe tıklayınca yalnızca grafik ve tablo güncellenir (arama metni aynı kalır). Ürün adının <strong>ilk harfinin</strong> üzerine gelince tüm dönemlerde kişi başı tüketim grafiği açılır.</div>
           <div class="fiyat-urun-chips" id="fiyat-urun-chips" role="list"></div>
         </div>
       </div>
@@ -1750,6 +1780,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
   el.addEventListener('click', e => {
     e.preventDefault();
     const page = el.dataset.page;
+    if (page !== 'fiyat') fiyatPaxPopoverHide();
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -2371,6 +2402,7 @@ async function init() {
         classifyRefreshStats();
       }
     }, 400);
+    initFiyatPaxPopoverBindings();
   } catch (e) {
     toast('Veri yüklenemedi. Dosya yüklü mü?', 'error');
   }
@@ -3123,6 +3155,255 @@ let chartFiyat;
 let fiyatPageInited = false;
 let fiyatSecilenStok = null;
 let fiyatChipTimer = null;
+let chartFiyatPaxPopover = null;
+let fiyatPaxPopoverHideT = null;
+let fiyatPaxPopoverShowT = null;
+let fiyatPaxPopoverReqId = 0;
+let fiyatPaxPopoverAbort = null;
+
+function fiyatPaxSplitUrun(stok) {
+  const s = String(stok || '');
+  const ch = Array.from(s);
+  if (!ch.length) return { first: '', rest: '' };
+  return { first: ch[0], rest: ch.slice(1).join('') };
+}
+
+/** tipApi: boş = hem g hem mL (API tip yok); aksi halde yiyecek | icenek */
+function fiyatPaxUrunHlHtml(stok, tipApi) {
+  const { first, rest } = fiyatPaxSplitUrun(stok);
+  if (!first) return fiyatChipEscHtml(stok);
+  const tit = 'İlk harfe gelince: tüm dönemlerde kişi başı tüketim';
+  const tipAttr = tipApi ? fiyatChipEscAttr(String(tipApi)) : '';
+  return `<span class="fiyat-pax-hl" data-stok="${fiyatChipEscAttr(stok)}" data-tip="${tipAttr}" title="${fiyatChipEscAttr(tit)}">${fiyatChipEscHtml(first)}</span>${fiyatChipEscHtml(rest)}`;
+}
+
+function fiyatPaxPopoverPosition(anchorEl) {
+  const pop = document.getElementById('fiyat-pax-popover');
+  if (!pop || !anchorEl) return;
+  const r = anchorEl.getBoundingClientRect();
+  const w = 320;
+  const h = 248;
+  let left = r.left;
+  let top = r.bottom + 8;
+  if (left + w > window.innerWidth - 10) left = Math.max(10, window.innerWidth - w - 10);
+  if (left < 10) left = 10;
+  if (top + h > window.innerHeight - 10) top = Math.max(10, r.top - h - 8);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+}
+
+function fiyatPaxPopoverHide() {
+  const pop = document.getElementById('fiyat-pax-popover');
+  if (pop) {
+    pop.style.display = 'none';
+    pop.setAttribute('aria-hidden', 'true');
+  }
+  if (chartFiyatPaxPopover) {
+    try { chartFiyatPaxPopover.destroy(); } catch (e) {}
+    chartFiyatPaxPopover = null;
+  }
+  if (fiyatPaxPopoverAbort) {
+    try { fiyatPaxPopoverAbort.abort(); } catch (e) {}
+    fiyatPaxPopoverAbort = null;
+  }
+}
+
+function fiyatPaxPopoverHideSoon() {
+  clearTimeout(fiyatPaxPopoverHideT);
+  fiyatPaxPopoverHideT = setTimeout(fiyatPaxPopoverHide, 340);
+}
+
+function fiyatPaxPopoverCancelHide() {
+  clearTimeout(fiyatPaxPopoverHideT);
+}
+
+function fiyatPaxPopoverOnDelegateOver(e) {
+  const page = document.getElementById('page-fiyat');
+  if (!page || !page.classList.contains('active')) return;
+  const hl = e.target.closest('.fiyat-pax-hl');
+  if (!hl || !page.contains(hl)) return;
+  fiyatPaxPopoverCancelHide();
+  clearTimeout(fiyatPaxPopoverShowT);
+  fiyatPaxPopoverShowT = setTimeout(() => { void fiyatPaxPopoverShowFor(hl); }, 90);
+}
+
+function fiyatPaxPopoverOnDelegateOut(e) {
+  const page = document.getElementById('page-fiyat');
+  if (!page) return;
+  const hl = e.target.closest('.fiyat-pax-hl');
+  if (!hl || !page.contains(hl)) return;
+  const rel = e.relatedTarget;
+  if (rel && (hl.contains(rel) || rel.closest('#fiyat-pax-popover'))) return;
+  clearTimeout(fiyatPaxPopoverShowT);
+  fiyatPaxPopoverHideSoon();
+}
+
+async function fiyatPaxPopoverShowFor(hl) {
+  const page = document.getElementById('page-fiyat');
+  if (!page || !page.classList.contains('active')) return;
+  const stok = hl.getAttribute('data-stok');
+  if (!stok) return;
+  const tipRaw = (hl.getAttribute('data-tip') || '').trim();
+  const pop = document.getElementById('fiyat-pax-popover');
+  const titleEl = document.getElementById('fiyat-pax-popover-title');
+  const canvas = document.getElementById('chart-fiyat-pax-popover');
+  if (!pop || !titleEl || !canvas) return;
+
+  fiyatPaxPopoverReqId += 1;
+  const myId = fiyatPaxPopoverReqId;
+  if (fiyatPaxPopoverAbort) {
+    try { fiyatPaxPopoverAbort.abort(); } catch (e) {}
+  }
+  fiyatPaxPopoverAbort = new AbortController();
+
+  fiyatPaxPopoverPosition(hl);
+  pop.style.display = 'block';
+  pop.setAttribute('aria-hidden', 'false');
+  titleEl.textContent = stok + ' — yükleniyor…';
+
+  if (chartFiyatPaxPopover) {
+    try { chartFiyatPaxPopover.destroy(); } catch (e) {}
+    chartFiyatPaxPopover = null;
+  }
+
+  const u = new URL('/api/urun/pax-hacim-seri', window.location.origin);
+  u.searchParams.set('stok_mali', stok);
+  if (tipRaw) u.searchParams.set('tip', tipRaw);
+
+  try {
+    const res = await fetch(u.toString(), { signal: fiyatPaxPopoverAbort.signal });
+    const data = await res.json();
+    if (myId !== fiyatPaxPopoverReqId) return;
+    if (!res.ok) {
+      titleEl.textContent = stok + ' — ' + (data && data.error ? data.error : 'Hata');
+      return;
+    }
+    if (!Array.isArray(data) || !data.length) {
+      titleEl.textContent = stok + ' — dönem verisi yok';
+      return;
+    }
+    titleEl.textContent = stok + ' — kişi başı tüketim (tüm dönemler)';
+    const labels = data.map((d) => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
+    const grData = data.map((d) => {
+      const v = d.pp_gr;
+      if (v == null || isNaN(+v)) return null;
+      return +v;
+    });
+    const clData = data.map((d) => {
+      const v = d.pp_cl;
+      if (v == null || isNaN(+v)) return null;
+      return +v * 10;
+    });
+    let showGr = grData.some((v) => v != null);
+    let showCl = clData.some((v) => v != null);
+    if (tipRaw === 'yiyecek') showCl = false;
+    if (tipRaw === 'icenek') showGr = false;
+
+    const datasets = [];
+    const scales = { x: { grid: { color: 'rgba(0,0,0,0.05)' } } };
+    if (showGr) {
+      datasets.push({
+        label: 'g / pax',
+        data: grData,
+        borderColor: '#8a6c2e',
+        backgroundColor: 'rgba(138,108,46,0.12)',
+        yAxisID: showCl ? 'y' : 'y',
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+        pointRadius: 2
+      });
+    }
+    if (showCl) {
+      datasets.push({
+        label: 'mL / pax',
+        data: clData,
+        borderColor: '#2a5f8f',
+        backgroundColor: 'rgba(42,95,143,0.12)',
+        yAxisID: showCl && showGr ? 'y1' : 'y',
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+        pointRadius: 2
+      });
+    }
+    if (!datasets.length) {
+      titleEl.textContent = stok + ' — ölçülebilir seri yok';
+      return;
+    }
+    if (showGr && showCl) {
+      scales.y = {
+        position: 'left',
+        beginAtZero: false,
+        title: { display: true, text: 'g / pax', color: '#8a6c2e' },
+        ticks: { color: '#8a6c2e', callback: (v) => fmtN(v, 0) },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+      };
+      scales.y1 = {
+        position: 'right',
+        beginAtZero: false,
+        title: { display: true, text: 'mL / pax', color: '#2a5f8f' },
+        ticks: { color: '#2a5f8f', callback: (v) => fmtN(v, 0) },
+        grid: { drawOnChartArea: false }
+      };
+    } else {
+      const ic = showCl;
+      const color = ic ? '#2a5f8f' : '#8a6c2e';
+      scales.y = {
+        beginAtZero: false,
+        title: { display: true, text: ic ? 'mL / pax' : 'g / pax', color },
+        ticks: { color, callback: (v) => fmtN(v, 0) },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+      };
+    }
+
+    const ctx = canvas.getContext('2d');
+    chartFiyatPaxPopover = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.y;
+                if (v == null || isNaN(v)) return `${ctx.dataset.label}: —`;
+                return `${ctx.dataset.label}: ${fmtN(v, 0)}`;
+              }
+            }
+          }
+        },
+        scales
+      }
+    });
+    requestAnimationFrame(() => {
+      try { chartFiyatPaxPopover && chartFiyatPaxPopover.resize(); } catch (e) {}
+    });
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    if (myId !== fiyatPaxPopoverReqId) return;
+    titleEl.textContent = stok + ' — ' + (e && e.message ? e.message : 'Hata');
+  }
+}
+
+function initFiyatPaxPopoverBindings() {
+  if (window.__fiyatPaxPopoverBound) return;
+  window.__fiyatPaxPopoverBound = true;
+  const page = document.getElementById('page-fiyat');
+  if (page) {
+    page.addEventListener('mouseover', fiyatPaxPopoverOnDelegateOver);
+    page.addEventListener('mouseout', fiyatPaxPopoverOnDelegateOut);
+  }
+  const pop = document.getElementById('fiyat-pax-popover');
+  if (pop) {
+    pop.addEventListener('mouseenter', fiyatPaxPopoverCancelHide);
+    pop.addEventListener('mouseleave', fiyatPaxPopoverHideSoon);
+  }
+}
 
 function fiyatChipEscHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -3169,7 +3450,9 @@ async function refreshFiyatUrunChips() {
         const tipCls = ice ? 'fiyat-urun-chip--ice' : 'fiyat-urun-chip--yiy';
         const active = sel && sel === r.stok_mali ? ' active' : '';
         const tit = fiyatChipEscAttr((r.kategori || '').slice(0, 160));
-        return `<button type="button" role="listitem" class="fiyat-urun-chip ${tipCls}${active}" data-stok="${fiyatChipEscAttr(r.stok_mali)}" title="${tit}"><span class="fiyat-urun-chip-txt">${fiyatChipEscHtml(r.stok_mali)}</span></button>`;
+        const tipApi = tip ? (ice ? 'icenek' : 'yiyecek') : '';
+        const nameHtml = fiyatPaxUrunHlHtml(r.stok_mali, tipApi);
+        return `<button type="button" role="listitem" class="fiyat-urun-chip ${tipCls}${active}" data-stok="${fiyatChipEscAttr(r.stok_mali)}" title="${tit}"><span class="fiyat-urun-chip-txt">${nameHtml}</span></button>`;
       })
       .join('');
   } catch (e) {
@@ -3474,7 +3757,7 @@ async function katFiyatToggleRow(tr) {
             const sonN = fs != null ? parseFloat(fs) : null;
             const rd = u.ref_donem != null && String(u.ref_donem) !== '' ? String(u.ref_donem) : '—';
             return `<tr>
-            <td>${escapeHtml(u.stok_mali || '')}</td>
+            <td>${fiyatPaxUrunHlHtml(u.stok_mali || '', tip)}</td>
             <td>${rd !== '—' ? `<span class="kat-fiyat-ref-chip">${escapeHtml(rd)}</span>` : '—'}</td>
             <td style="text-align:right">${ilkN != null && !isNaN(ilkN) ? fmtCur(ilkN) : '—'}</td>
             <td style="text-align:right">${sonN != null && !isNaN(sonN) ? fmtCur(sonN) : '—'}</td>
@@ -4025,5 +4308,12 @@ vcLucide();
 setupUpload();
 init();
 </script>
+
+  <div id="fiyat-pax-popover" class="fiyat-pax-popover" aria-hidden="true">
+    <div id="fiyat-pax-popover-title" class="fiyat-pax-popover-title"></div>
+    <div class="fiyat-pax-popover-chart">
+      <canvas id="chart-fiyat-pax-popover"></canvas>
+    </div>
+  </div>
 </body>
 </html>

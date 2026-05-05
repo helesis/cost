@@ -292,14 +292,54 @@ app.get('/api/kategoriler', async (req, res) => {
   }
 });
 
-// ── API: Ürün — tüm aylar kişi başı hacim (içecek: cl, yiyecek: gr) ───────────
+// ── API: Ürün — tüm aylar kişi başı hacim (içecek: cL → gösterimde ×10 mL; yiyecek: kg tabanı → g/pax)
+// tip atlanırsa her iki seri de döner (Hepsi / karışık kullanım).
 app.get('/api/urun/pax-hacim-seri', async (req, res) => {
-  const tip = normalizeTipInput(String(req.query.tip || '').trim());
+  const tipRaw = String(req.query.tip || '').trim();
+  const tipNorm = tipRaw ? normalizeTipInput(tipRaw) : null;
   const stok_mali = String(req.query.stok_mali || '').trim();
-  if (!stok_mali || !tip) {
-    return res.status(400).json({ error: 'tip (yiyecek veya içecek) ve stok_mali gerekli' });
+  if (!stok_mali) {
+    return res.status(400).json({ error: 'stok_mali gerekli' });
+  }
+  if (tipRaw && !tipNorm) {
+    return res.status(400).json({ error: 'tip geçersiz (yiyecek veya içecek)' });
   }
   try {
+    if (tipNorm === 'yiyecek' || tipNorm === 'icenek') {
+      const { rows } = await pool.query(
+        `
+        SELECT
+          tarih_str,
+          yil,
+          ay_no,
+          MAX(ay) AS ay,
+          MAX(cost_pax) AS cost_pax,
+          CASE
+            WHEN $2::text = 'icenek' THEN
+              (100.0 * SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))
+            ELSE NULL::numeric
+          END AS pp_cl,
+          CASE
+            WHEN $2::text = 'yiyecek' THEN
+              (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))
+            ELSE NULL::numeric
+          END AS pp_gr
+        FROM fb_cost.tuketim
+        WHERE stok_mali = $1
+          AND (
+            ($2::text = 'icenek' AND tip IN ('icenek', 'icecek'))
+            OR ($2::text = 'yiyecek' AND tip = 'yiyecek')
+          )
+          AND tarih_str NOT LIKE '%-15g'
+        GROUP BY tarih_str, yil, ay_no
+        HAVING SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN 1 ELSE 0 END) > 0
+        ORDER BY yil ASC, ay_no ASC, tarih_str ASC
+        `,
+        [stok_mali, tipNorm]
+      );
+      return res.json(rows);
+    }
+
     const { rows } = await pool.query(
       `
       SELECT
@@ -308,31 +348,22 @@ app.get('/api/urun/pax-hacim-seri', async (req, res) => {
         ay_no,
         MAX(ay) AS ay,
         MAX(cost_pax) AS cost_pax,
-        CASE
-          WHEN $2::text = 'icenek' THEN
-            (100.0 * SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))
-          ELSE NULL::numeric
-        END AS pp_cl,
-        CASE
-          WHEN $2::text = 'yiyecek' THEN
-            (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))
-          ELSE NULL::numeric
-        END AS pp_gr
+        (100.0 * SUM(CASE WHEN tip IN ('icenek', 'icecek') AND ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END)
+          / NULLIF(MAX(cost_pax), 0))::numeric AS pp_cl,
+        (SUM(CASE WHEN tip = 'yiyecek' AND ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END)
+          / NULLIF(MAX(cost_pax), 0))::numeric AS pp_gr
       FROM fb_cost.tuketim
       WHERE stok_mali = $1
-        AND (
-          ($2::text = 'icenek' AND tip IN ('icenek', 'icecek'))
-          OR ($2::text = 'yiyecek' AND tip = 'yiyecek')
-        )
         AND tarih_str NOT LIKE '%-15g'
       GROUP BY tarih_str, yil, ay_no
       HAVING SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN 1 ELSE 0 END) > 0
       ORDER BY yil ASC, ay_no ASC, tarih_str ASC
       `,
-      [stok_mali, tip]
+      [stok_mali]
     );
     res.json(rows);
   } catch (err) {
+    console.error('urun/pax-hacim-seri:', err);
     res.status(500).json({ error: err.message });
   }
 });
