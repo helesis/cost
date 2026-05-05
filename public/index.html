@@ -3058,6 +3058,36 @@ async function vcSilDonem(tarihStr, tip) {
   }
 }
 
+/** Kategori fiyat kartı: önceki ay → bugünün ayı (veri yoksa son iki dönem). */
+function pickFiyatKategoriDonemleri(sortedAsc) {
+  if (!sortedAsc.length) return { bas: '', bit: '' };
+  const now = new Date();
+  const cy = now.getFullYear();
+  const cm = now.getMonth() + 1;
+  let py = cy;
+  let pm = cm - 1;
+  if (pm < 1) {
+    pm = 12;
+    py--;
+  }
+  function findTs(y, m) {
+    const c = sortedAsc.filter((d) => d.yil === y && d.ay_no === m);
+    if (!c.length) return null;
+    const pref = c.find((d) => !String(d.tarih_str || '').endsWith('-15g'));
+    return (pref || c[0]).tarih_str;
+  }
+  const bas = findTs(py, pm);
+  const bit = findTs(cy, cm);
+  if (bas && bit) return { bas, bit };
+  if (sortedAsc.length >= 2) {
+    return {
+      bas: sortedAsc[sortedAsc.length - 2].tarih_str,
+      bit: sortedAsc[sortedAsc.length - 1].tarih_str
+    };
+  }
+  return { bas: sortedAsc[0].tarih_str, bit: sortedAsc[0].tarih_str };
+}
+
 // ── FİYAT ANALİZİ ─────────────────────────────────────────────────────────────
 let chartFiyat;
 let fiyatPageInited = false;
@@ -3132,13 +3162,26 @@ function initFiyatPage() {
   if (!fiyatPageInited) {
     const bas = document.getElementById('kat-fiyat-baslangic');
     const bit = document.getElementById('kat-fiyat-bitis');
+    const kTip = document.getElementById('kat-fiyat-tip');
+    const uTip = document.getElementById('fiyat-tip');
+    if (kTip) kTip.value = '';
+    if (uTip) uTip.value = '';
     if (donemler && donemler.length) {
       const sorted = [...donemler].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
-      const opts = sorted.map(d => `<option value="${d.tarih_str}">${d.tarih_str}</option>`).join('');
+      const opts = sorted
+        .map((d) => {
+          const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
+          const etiket = `${d.ay} ${d.yil}${kismi ? ' (15 gün)' : ''}`;
+          return `<option value="${d.tarih_str}">${etiket}</option>`;
+        })
+        .join('');
       bas.innerHTML = opts;
       bit.innerHTML = opts;
-      bas.value = sorted[0].tarih_str;
-      bit.value = sorted[sorted.length - 1].tarih_str;
+      const { bas: basV, bit: bitV } = pickFiyatKategoriDonemleri(sorted);
+      bas.value = basV;
+      bit.value = bitV;
+      if (!bas.value) bas.value = sorted[0].tarih_str;
+      if (!bit.value) bit.value = sorted[sorted.length - 1].tarih_str;
     }
     const fq = document.getElementById('fiyat-q');
     const ft = document.getElementById('fiyat-tip');
