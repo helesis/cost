@@ -1034,7 +1034,7 @@ app.get('/api/classify/results', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit, 10) || 80, 500);
     const offset = parseInt(req.query.offset, 10) || 0;
     const { rows } = await pool.query(
-      `SELECT id, stok_mali, kategori, protein_bucket, food_group, confidence, gerekce, notes,
+      `SELECT id, stok_mali, kategori, protein_bucket, food_group, cost_proxy, confidence, gerekce, notes,
               model_name, prompt_version, created_at, updated_at
        FROM fb_cost.product_classifications
        ORDER BY updated_at DESC
@@ -1073,7 +1073,7 @@ app.get('/api/classify/protein-buckets/urunler', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 800, 3000);
   try {
     const { rows } = await pool.query(
-      `SELECT stok_mali, kategori, food_group, confidence, updated_at
+      `SELECT stok_mali, kategori, food_group, cost_proxy, confidence, updated_at
        FROM fb_cost.product_classifications
        WHERE LOWER(TRIM(protein_bucket)) = $1
        ORDER BY stok_mali ASC

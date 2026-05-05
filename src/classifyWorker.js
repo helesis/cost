@@ -22,10 +22,17 @@ async function countPairStats(pool, { skipExisting }) {
   ${sqlAllPairsCTE()}
   SELECT
     (SELECT COUNT(*)::int FROM all_pairs) AS total_pairs,
-    (SELECT COUNT(*)::int FROM all_pairs ap WHERE NOT EXISTS (
-      SELECT 1 FROM fb_cost.product_classifications p
-      WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
-    )) AS unclassified_pairs,
+    (SELECT COUNT(*)::int FROM all_pairs ap WHERE
+      NOT EXISTS (
+        SELECT 1 FROM fb_cost.product_classifications p
+        WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
+      )
+      OR EXISTS (
+        SELECT 1 FROM fb_cost.product_classifications p
+        WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
+        AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '')
+      )
+    ) AS unclassified_pairs,
     (SELECT COUNT(*)::int FROM fb_cost.product_classifications) AS saved_rows
   `;
   const { rows } = await pool.query(q);
@@ -55,9 +62,16 @@ async function fetchNextPair(pool, skipExisting, cursor) {
     SELECT ap.stok_mali, ap.kategori
     FROM all_pairs ap
     WHERE (
-      $1::boolean = true AND NOT EXISTS (
-        SELECT 1 FROM fb_cost.product_classifications p
-        WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
+      $1::boolean = true AND (
+        NOT EXISTS (
+          SELECT 1 FROM fb_cost.product_classifications p
+          WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
+        )
+        OR EXISTS (
+          SELECT 1 FROM fb_cost.product_classifications p
+          WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
+          AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '')
+        )
       )
     ) OR (
       $1::boolean = false AND (
@@ -78,12 +92,13 @@ async function fetchNextPair(pool, skipExisting, cursor) {
 async function upsertClassification(pool, row) {
   const sql = `
   INSERT INTO fb_cost.product_classifications (
-    stok_mali, kategori, protein_bucket, food_group, confidence, gerekce, notes,
+    stok_mali, kategori, protein_bucket, food_group, cost_proxy, confidence, gerekce, notes,
     model_name, prompt_version, raw_response, updated_at
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
   ON CONFLICT (stok_mali, kategori_norm) DO UPDATE SET
     protein_bucket = EXCLUDED.protein_bucket,
     food_group = EXCLUDED.food_group,
+    cost_proxy = EXCLUDED.cost_proxy,
     confidence = EXCLUDED.confidence,
     gerekce = EXCLUDED.gerekce,
     notes = EXCLUDED.notes,
@@ -97,6 +112,7 @@ async function upsertClassification(pool, row) {
     row.kategori,
     row.protein_bucket,
     row.food_group,
+    row.cost_proxy != null ? row.cost_proxy : null,
     row.confidence,
     row.gerekce,
     row.notes,
@@ -177,6 +193,7 @@ async function runJobLoop(pool, { skipExisting }) {
             kategori: pair.kategori,
             protein_bucket: 'diger',
             food_group: 'diger',
+            cost_proxy: 'MEDIUM',
             confidence: 'düşük',
             gerekce: 'Veritabanı kaydı başarısız',
             notes: (e.message || String(e)).slice(0, 2000),

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS fb_cost.product_classifications (
   confidence      TEXT NOT NULL,
   gerekce         TEXT,
   notes           TEXT,
+  cost_proxy      TEXT,
   model_name      TEXT,
   prompt_version  TEXT,
   raw_response    TEXT,
@@ -21,7 +22,7 @@ CREATE TABLE IF NOT EXISTS fb_cost.product_classifications (
 
 CREATE INDEX IF NOT EXISTS idx_product_classifications_stok ON fb_cost.product_classifications (stok_mali);
 
-COMMENT ON TABLE fb_cost.product_classifications IS 'LLM ile stok_mali+kategori için protein_bucket ve food_group';
+COMMENT ON TABLE fb_cost.product_classifications IS 'LLM ile stok_mali+kategori için protein_bucket, food_group ve cost_proxy (HIGH|MEDIUM|LOW)';
 
 -- Manuel / CSV ile eklenen, tüketimde henüz olmayan çiftler
 CREATE TABLE IF NOT EXISTS fb_cost.product_classify_queue (

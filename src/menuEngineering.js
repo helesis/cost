@@ -97,7 +97,49 @@ async function fetchAggregates(pool, baslangic, bitis, tip, sqlExcFinans) {
   return rows;
 }
 
-function buildAnalyzedItems(rawRows, thresholdPct, cfg) {
+const ALLOWED_COST_FROM_DB = new Set(['HIGH', 'MEDIUM', 'LOW']);
+
+/** product_classifications.cost_proxy: önce (stok_mali, kategori) tam eşleşme, yoksa aynı stok için en güncel. */
+async function fetchCostProxyMap(pool, rawRows) {
+  const map = new Map();
+  if (!rawRows.length || !pool) return map;
+  const stoks = [...new Set(rawRows.map((r) => r.item_name))];
+  const { rows } = await pool.query(
+    `
+    SELECT stok_mali, kategori, cost_proxy, updated_at
+    FROM fb_cost.product_classifications
+    WHERE stok_mali = ANY($1::text[])
+    `,
+    [stoks]
+  );
+  const byStok = new Map();
+  for (const r of rows) {
+    if (!byStok.has(r.stok_mali)) byStok.set(r.stok_mali, []);
+    byStok.get(r.stok_mali).push(r);
+  }
+  function resolve(stok, kat) {
+    const list = byStok.get(stok) || [];
+    const katNorm = kat == null || kat === '' ? '' : String(kat);
+    const scored = list.map((p) => ({
+      p,
+      exact: (p.kategori || '') === katNorm ? 1 : 0,
+      t: new Date(p.updated_at || 0).getTime()
+    }));
+    if (!scored.length) return null;
+    scored.sort((a, b) => b.exact - a.exact || b.t - a.t);
+    const cp = scored[0].p.cost_proxy;
+    if (cp == null || String(cp).trim() === '') return null;
+    const u = String(cp).trim().toUpperCase();
+    return ALLOWED_COST_FROM_DB.has(u) ? u : null;
+  }
+  for (const r of rawRows) {
+    const key = `${r.item_name}\0${r.category || ''}`;
+    if (!map.has(key)) map.set(key, resolve(r.item_name, r.category));
+  }
+  return map;
+}
+
+function buildAnalyzedItems(rawRows, thresholdPct, cfg, costProxyMap) {
   const N = rawRows.length;
   const cutoff = N === 0 ? 0 : Math.max(1, Math.ceil((N * thresholdPct) / 100));
   const totalQty = rawRows.reduce((s, r) => s + (+r.consumption_quantity || 0), 0);
@@ -107,7 +149,9 @@ function buildAnalyzedItems(rawRows, thresholdPct, cfg) {
     const pct = totalQty > 0 ? (100 * qty) / totalQty : 0;
     const rank = idx + 1;
     const consumptionTier = rank <= cutoff ? 'HIGH' : 'LOW';
-    const costProxy = classifyCostProxy(r.item_name, cfg);
+    const ckey = `${r.item_name}\0${r.category || ''}`;
+    const fromDb = costProxyMap && costProxyMap.get(ckey);
+    const costProxy = fromDb || classifyCostProxy(r.item_name, cfg);
     const segment = assignSegment(consumptionTier, costProxy);
     return {
       item_name: r.item_name,
@@ -218,8 +262,9 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
   }
 
   const raw = await fetchAggregates(pool, baslangic, bitis, tip || '', sqlExcFinans);
+  const costProxyMap = await fetchCostProxyMap(pool, raw);
   const cfg = getCostProxyConfig();
-  const itemsFull = buildAnalyzedItems(raw, threshold_pct, cfg);
+  const itemsFull = buildAnalyzedItems(raw, threshold_pct, cfg, costProxyMap);
 
   const filtered = filterItems(itemsFull, {
     q: String(query.q || '').trim(),

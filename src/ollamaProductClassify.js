@@ -3,11 +3,11 @@
 const http = require('http');
 const https = require('https');
 
-const PROMPT_VERSION = 'v1_protein_food_group_classification';
+const PROMPT_VERSION = 'v2_protein_food_group_cost_proxy';
 
 const SYSTEM_PROMPT = `Rol: Sen bir F&B maliyet, menü analizi ve ürün sınıflandırma uzmanısın.
 
-Görevin, verilen stok_mali ve kategori bilgisini iki ayrı sınıflandırmaya tabi tutmaktır:
+Görevin, verilen stok_mali ve kategori bilgisini üç sınıflandırmaya tabi tutmaktır:
 
 1) protein_bucket
 Zorunlu kovalar:
@@ -29,6 +29,13 @@ food_group kuralları:
 - Taze sebze/meyve, donuk sebze/meyve, püre meyve, konserve sebze/meyve: meyve_sebze
 - Baharat, sos, çay, kahve, şeker, reçel, çikolata, tatlı, katkı, içecek hammaddesi gibi ürünler: diger
 
+3) cost_proxy (Menu engineering — tipik hammadde maliyet yoğunluğu; gerçek fatura/fiyat değil)
+Zorunlu değer (İngilizce büyük harf): HIGH | MEDIUM | LOW
+
+HIGH: Karides, istakoz, kalamar, somon, levrek, ton, premium deniz ürünleri; dana, kuzu, bonfile, antrikot vb. yüksek birim değerli etler.
+MEDIUM: Hindi, orta segment et ürünleri; şarküteri, peynir, tereyağı, zeytinyağı, süt/yoğurt, fıçı ürünler; emin değilsen MEDIUM.
+LOW: Tavuk, pirinç, makarna, bulgur, patates, sebze, ekmek, hamur işi gibi geniş hacimli düşük birim maliyetli girdiler.
+
 Önemli:
 - Her satır için tek protein_bucket ve tek food_group üret.
 - protein_bucket hayvansal ana protein talebini gösterir.
@@ -38,6 +45,7 @@ food_group kuralları:
 - Somon protein_bucket=balik, food_group=et_urunleri olmalıdır.
 - Karides protein_bucket=deniz, food_group=et_urunleri olmalıdır.
 - Zeytinyağı protein_bucket=diger, food_group=yag olmalıdır.
+- cost_proxy yalnızca HIGH, MEDIUM veya LOW olmalı (tam bu yazım).
 - Açıklama yazma.
 - Markdown kullanma.
 - Sadece tek JSON obje döndür.
@@ -48,6 +56,7 @@ JSON şeması:
   "kategori": "string veya null",
   "protein_bucket": "dana|kuzu|tavuk|balik|deniz|hindi|diger",
   "food_group": "karbonhidrat|et_urunleri|sut_urunleri|meyve_sebze|sarkuteri|yag|diger",
+  "cost_proxy": "HIGH|MEDIUM|LOW",
   "confidence": "yüksek|orta|düşük",
   "gerekce": "string",
   "notes": "string veya null"
@@ -55,6 +64,7 @@ JSON şeması:
 
 const ALLOW_PROTEIN = new Set(['dana', 'kuzu', 'tavuk', 'balik', 'deniz', 'hindi', 'diger']);
 const ALLOW_FOOD = new Set(['karbonhidrat', 'et_urunleri', 'sut_urunleri', 'meyve_sebze', 'sarkuteri', 'yag', 'diger']);
+const ALLOW_COST = new Set(['HIGH', 'MEDIUM', 'LOW']);
 const ALLOW_CONF = new Set(['yüksek', 'orta', 'düşük']);
 
 function buildUserPayload(stok_mali, kategori) {
@@ -157,6 +167,20 @@ function normalizeAndFix(obj, stok_mali, kategori, fixNotes) {
     confidence = 'düşük';
   }
 
+  const costRaw = String(obj.cost_proxy ?? '').trim().toLocaleLowerCase('tr-TR');
+  let cost_proxy;
+  if (['high', 'yüksek', 'yuksek'].includes(costRaw)) cost_proxy = 'HIGH';
+  else if (['low', 'düşük', 'dusuk'].includes(costRaw)) cost_proxy = 'LOW';
+  else if (['medium', 'orta', 'med'].includes(costRaw)) cost_proxy = 'MEDIUM';
+  else {
+    const u = String(obj.cost_proxy ?? '').trim().toUpperCase();
+    cost_proxy = ALLOW_COST.has(u) ? u : null;
+  }
+  if (!cost_proxy) {
+    notesParts.push(`Geçersiz cost_proxy "${obj.cost_proxy}" → MEDIUM`);
+    cost_proxy = 'MEDIUM';
+  }
+
   const gerekce = String(obj.gerekce || '').slice(0, 2000);
   const notes = [obj.notes, notesParts.join('; ')].filter(Boolean).join('; ') || null;
 
@@ -165,6 +189,7 @@ function normalizeAndFix(obj, stok_mali, kategori, fixNotes) {
     kategori: kategori === undefined ? null : kategori,
     protein_bucket,
     food_group,
+    cost_proxy,
     confidence,
     gerekce,
     notes
@@ -220,6 +245,7 @@ async function classifyProductWithRetries(stok_mali, kategori) {
     kategori: kategori === undefined ? null : kategori,
     protein_bucket: 'diger',
     food_group: 'diger',
+    cost_proxy: 'MEDIUM',
     confidence: 'düşük',
     gerekce: 'LLM çağrısı başarısız',
     notes: lastErr.slice(0, 2000),
@@ -235,5 +261,6 @@ module.exports = {
   classifyProductWithRetries,
   getOllamaConfig,
   ALLOW_PROTEIN,
-  ALLOW_FOOD
+  ALLOW_FOOD,
+  ALLOW_COST
 };

@@ -1014,7 +1014,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">Ürün Sınıflandırma</div>
-        <div class="page-sub">Ollama (gemma2:27b) ile protein_bucket ve food_group; Tüketim ve Talep analizinde kullanılır</div>
+        <div class="page-sub">Ollama (gemma2:27b) ile protein_bucket, food_group ve menu engineering için cost_proxy (HIGH/MEDIUM/LOW). «Yalnız eksikler» satırı olmayan veya cost_proxy boş çiftleri tamamlar.</div>
       </div>
     </div>
     <div class="page-body">
@@ -1055,7 +1055,7 @@
           <div class="table-wrap" style="max-height:360px;overflow:auto">
             <table class="search-results" style="font-size:12px">
               <thead>
-                <tr><th>stok_mali</th><th>kategori</th><th>food_group</th><th>güven</th><th>güncellendi</th></tr>
+                <tr><th>stok_mali</th><th>kategori</th><th>food_group</th><th>cost</th><th>güven</th><th>güncellendi</th></tr>
               </thead>
               <tbody id="classify-bucket-detail-tablo"></tbody>
             </table>
@@ -1068,7 +1068,7 @@
           <table class="search-results" style="font-size:12px">
             <thead>
               <tr>
-                <th>stok_mali</th><th>kategori</th><th>protein</th><th>food_group</th><th>güven</th><th>güncellendi</th>
+                <th>stok_mali</th><th>kategori</th><th>protein</th><th>food_group</th><th>cost</th><th>güven</th><th>güncellendi</th>
               </tr>
             </thead>
             <tbody id="classify-results-tablo"></tbody>
@@ -1864,27 +1864,27 @@ async function classifySelectBucket(bucket) {
   if (!det || !tit || !tb) return;
   det.style.display = 'block';
   tit.textContent = `${CLASSIFY_BUCKET_TR[bucket] || bucket} — yükleniyor…`;
-  tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:12px">Yükleniyor…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:12px">Yükleniyor…</td></tr>';
   try {
     const u = '/api/classify/protein-buckets/urunler?' + new URLSearchParams({ bucket }).toString();
     const data = await fetch(u).then((r) => r.json());
     if (data.error) {
       tit.textContent = `${CLASSIFY_BUCKET_TR[bucket] || bucket}`;
-      tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red)">${escapeHtml(data.error)}</td></tr>`;
+      tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red)">${escapeHtml(data.error)}</td></tr>`;
       return;
     }
     const list = data.urunler || [];
     tit.textContent = `${CLASSIFY_BUCKET_TR[bucket] || bucket} — ${list.length} ürün`;
     if (!list.length) {
-      tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim)">Kayıt yok</td></tr>';
+      tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">Kayıt yok</td></tr>';
       return;
     }
     tb.innerHTML = list.map((x) => {
       const u2 = x.updated_at ? new Date(x.updated_at).toLocaleString('tr-TR') : '';
-      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.food_group || '')}</td><td>${escapeHtml(x.confidence || '')}</td><td>${u2}</td></tr>`;
+      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.food_group || '')}</td><td>${escapeHtml(x.cost_proxy || '—')}</td><td>${escapeHtml(x.confidence || '')}</td><td>${u2}</td></tr>`;
     }).join('');
   } catch (e) {
-    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red)">${escapeHtml(e.message)}</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red)">${escapeHtml(e.message)}</td></tr>`;
   }
   vcLucide();
 }
@@ -1895,13 +1895,13 @@ async function classifyLoadResults() {
     const tb = document.getElementById('classify-results-tablo');
     if (!tb) return;
     if (!Array.isArray(rows)) {
-      tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">Liste yüklenemedi</td></tr>';
+      tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">Liste yüklenemedi</td></tr>';
       return;
     }
     tb.innerHTML = rows.map(x => {
       const u = x.updated_at ? new Date(x.updated_at).toLocaleString('tr-TR') : '';
-      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.protein_bucket)}</td><td>${escapeHtml(x.food_group)}</td><td>${escapeHtml(x.confidence)}</td><td>${u}</td></tr>`;
-    }).join('') || '<tr><td colspan="6" style="color:var(--text-dim)">Kayıt yok — migrasyon çalıştırıldı mı?</td></tr>';
+      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.protein_bucket)}</td><td>${escapeHtml(x.food_group)}</td><td>${escapeHtml(x.cost_proxy || '—')}</td><td>${escapeHtml(x.confidence)}</td><td>${u}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="color:var(--text-dim)">Kayıt yok — migrasyon çalıştırıldı mı?</td></tr>';
     vcLucide();
   } catch (e) { /* */ }
   finally {
