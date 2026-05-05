@@ -1722,6 +1722,11 @@ async function classifyRefreshStats() {
     if (j.lastError) hint.push('Uyarı: ' + j.lastError);
     if (j.pauseReason) hint.push(j.pauseReason);
     document.getElementById('classify-job-hint').textContent = hint.join(' · ') || (j.running ? '' : 'Beklemede');
+    const wasRunning = window._classifyJobWasRunning;
+    window._classifyJobWasRunning = !!j.running;
+    if (wasRunning && !j.running && document.querySelector('.tab-content.active')?.id === 'page-tuketim-talep') {
+      loadTalepAnaliz();
+    }
     if (j.running) {
       const now = Date.now();
       if (!window._classifyLastTableAt) window._classifyLastTableAt = 0;

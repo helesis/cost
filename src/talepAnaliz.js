@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * Tüketim & Talep analizleri — kural tabanlı sınıflandırma (stok_mali / kategori metni).
- * Yiyecek (tip=yiyecek) satırları; finans düzeltme satırları hariç.
+ * Tüketim & Talep analizleri — yiyecek satırları için:
+ * - protein_bucket / food_group önceliği: fb_cost.product_classifications (LLM), yoksa kural tabanlı SQL.
+ * - Join: satır başına tek sınıflandırma (önce aynı kategori, yoksa stok için en güncel kayıt).
  */
 
 const STOK_NO_DUZELTME = '__DUZELTME__';
@@ -94,9 +95,21 @@ const SQL_COST_LOW_JOINED = `(
   OR (${SQL_MACRO_KATEGORI_T}) IN ('karbonhidrat','şarküteri','süt ürünleri')
 )`;
 
+/**
+ * tuketim satırı başına tek sınıflandırma: önce (stok_mali, kategori) tam eşleşmesi,
+ * yoksa aynı stok_mali için en güncel kayıt (kategori metni farklı olsa da LLM çıktısı kullanılır).
+ */
 const JOIN_CLASSIFICATION = `
-LEFT JOIN fb_cost.product_classifications pc
-  ON pc.stok_mali = t.stok_mali AND (pc.kategori IS NOT DISTINCT FROM t.kategori)
+LEFT JOIN LATERAL (
+  SELECT pc2.id, pc2.protein_bucket, pc2.food_group
+  FROM fb_cost.product_classifications pc2
+  WHERE pc2.stok_mali = t.stok_mali
+  ORDER BY
+    (pc2.kategori IS NOT DISTINCT FROM t.kategori) DESC,
+    pc2.updated_at DESC NULLS LAST,
+    pc2.id DESC
+  LIMIT 1
+) pc ON TRUE
 `;
 
 function pct(part, total) {
