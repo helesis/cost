@@ -596,7 +596,7 @@
   <div id="page-kategori" class="tab-content">
     <div class="page-header">
       <div>
-        <div class="page-title">Kategori Dağılımı</div>
+        <div class="page-title">Kategoriler</div>
         <div class="page-sub">Dönem bazında kategori maliyetleri</div>
       </div>
       <div style="display:flex;gap:8px">
@@ -610,7 +610,7 @@
     <div class="page-body kat-page-body">
       <div class="kat-row-2col kat-row-kategori-ust">
         <div class="card kat-card-block">
-          <div class="card-title">Kategori pasta grafik</div>
+          <div class="card-title">Kategori Dağılımı</div>
           <div class="chart-wrap"><canvas id="chart-kat-pasta"></canvas></div>
         </div>
         <div class="card kat-card-block">
@@ -635,6 +635,7 @@
                     <th>Ürün (stok)</th>
                     <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
                     <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
+                    <th style="text-align:right" id="kat-urun-th-ppg">Pax başı (g)</th>
                     <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
                   </tr>
                 </thead>
@@ -644,9 +645,9 @@
           </div>
         </div>
         <div class="card kat-card-block" id="kat-urun-seri-card">
-          <div class="card-title">Kişi başı tüketim — tüm aylar</div>
+          <div class="card-title">Kişi başı tüketim — dönemler</div>
           <div class="kat-urun-alt-fill">
-            <p id="kat-urun-seri-hint">Soldaki ürün listesinden bir satıra tıklayın. Yiyecek: kişi başı kütle <strong>g</strong>; içecek: kişi başı hacim <strong>mL</strong> (SI).</p>
+            <p id="kat-urun-seri-hint">Soldaki ürün listesinden bir satıra tıklayın. Tam aylar ve varsa <strong>15 günlük</strong> kısmi dönemler (eksende “Mayıs 2026 (15 gün)” gibi) birlikte çizilir. Yiyecek: kişi başı kütle <strong>g</strong>; içecek: kişi başı hacim <strong>mL</strong> (SI).</p>
             <div id="kat-urun-chart-wrap" style="display:none">
               <div id="kat-urun-chart-baslik"></div>
               <div class="chart-wrap kat-urun-seri-chart"><canvas id="chart-kat-urun-seri"></canvas></div>
@@ -1360,6 +1361,70 @@ const COLORS = [
   '#c4a45a','#5a9e7a','#6a8dc4','#c47a7a','#d4a45a',
   '#4a3a1e','#1d4a33','#1a3050','#4a1d1d','#5a3a10',
 ];
+
+/** Kategori donut: dilim üzerinde kısa ad + genel tutar içindeki pay % */
+const katDonutInsideLabelsInlinePlugin = {
+  id: 'katDonutInsideLabels',
+  afterDatasetsDraw(chart) {
+    const ds = chart.data.datasets[0];
+    const pctArr = ds.katPayPct;
+    const nameArr = ds.katInsideNames;
+    if (!pctArr || !chart.getDatasetMeta(0).data) return;
+
+    const ctx = chart.ctx;
+    const meta = chart.getDatasetMeta(0);
+    const fmtPct = (n) =>
+      `${new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(n)}%`;
+
+    meta.data.forEach((element, i) => {
+      const pct = Number(pctArr[i]) || 0;
+      const nameLine = String(nameArr && nameArr[i] != null ? nameArr[i] : chart.data.labels[i] ?? '');
+      const start = element.startAngle;
+      const end = element.endAngle;
+      const span = Math.abs(end - start);
+      if (span < 0.11 || (pct < 1.25 && span < 0.2)) return;
+
+      let pt;
+      try {
+        if (typeof element.getCenterPoint === 'function') pt = element.getCenterPoint(true);
+        else if (typeof element.tooltipPosition === 'function') pt = element.tooltipPosition(true);
+      } catch (e) {
+        pt = null;
+      }
+      if (!pt || pt.x == null || pt.y == null) return;
+
+      const lines =
+        span < 0.32 || pct < 2.8 ? [fmtPct(pct)] : [nameLine, fmtPct(pct)];
+
+      const lh = span < 0.38 ? 11 : 12;
+      ctx.save();
+      ctx.font =
+        span < 0.38 ? '600 10px system-ui, -apple-system, sans-serif' : '600 11px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const blockH = lines.length > 1 ? lh * (lines.length - 1) : 0;
+      let yi = pt.y - blockH / 2;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+
+      lines.forEach((line) => {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+        ctx.strokeText(line, pt.x, yi);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillText(line, pt.x, yi);
+        yi += lh;
+      });
+      ctx.restore();
+    });
+  }
+};
+
+function katDonutTruncateInsideName(txt, max) {
+  const s = String(txt || '').trim();
+  if (s.length <= max) return s;
+  return s.slice(0, Math.max(0, max - 1)) + '…';
+}
 
 // ── Menu Engineering (consumption-based) ────────────────────────────────────
 let chartMeMatrix = null;
@@ -2608,6 +2673,13 @@ function resetKatUrunStokChart() {
   document.querySelectorAll('#kat-urun-tablo tr.kat-urun-stok-active').forEach(tr => tr.classList.remove('kat-urun-stok-active'));
 }
 
+/** /api/urun/pax-hacim-seri satırından eksen etiketi (−15g kısmi dönemler “15 gün” ile ayrılır). */
+function paxHacimSeriAyEtiketi(row) {
+  const ts = String(row.tarih_str || '');
+  const base = (`${row.ay || ''} ${row.yil}`).trim() || ts;
+  return ts.endsWith('-15g') ? `${base} (15 gün)` : base;
+}
+
 async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
   const wrap = document.getElementById('kat-urun-chart-wrap');
   const titleEl = document.getElementById('kat-urun-chart-baslik');
@@ -2615,7 +2687,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
   if (!wrap || !titleEl) return;
 
   const icenek = tip === 'icenek' || tip === 'icecek';
-  titleEl.textContent = `${stok_mali} — Kişi başı tüketim · tüm aylar`;
+  titleEl.textContent = `${stok_mali} — Kişi başı tüketim · dönemler`;
 
   try {
     const tipQ = icenek ? 'icenek' : 'yiyecek';
@@ -2635,7 +2707,7 @@ async function loadKatUrunPaxHacimSeri(stok_mali, tip) {
       return;
     }
     if (seriHint) seriHint.style.display = 'none';
-    const labels = data.map(d => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
+    const labels = data.map((d) => paxHacimSeriAyEtiketi(d));
     const yKey = icenek ? 'pp_cl' : 'pp_gr';
     const ys = data.map((d) => {
       const v = d[yKey];
@@ -2721,11 +2793,14 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const wrap = document.getElementById('kat-urun-wrap');
   const baslik = document.getElementById('kat-urun-baslik');
   const thPp = document.getElementById('kat-urun-th-pp');
+  const thPpg = document.getElementById('kat-urun-th-ppg');
   const thBf = document.getElementById('kat-urun-th-bf');
   const thTut = document.getElementById('kat-urun-th-tutar');
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
   if (thPp) thPp.textContent = `Pax başı (${curLabel()})`;
+  const ice = tip === 'icenek' || tip === 'icecek';
+  if (thPpg) thPpg.textContent = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
   if (thBf) thBf.textContent = `Birim fiyat (${curLabel()})`;
   if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
   if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
@@ -2746,17 +2821,27 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
       return;
     }
     const sorted = [...list].sort((a, b) => (pickCur(b, 'pp') || 0) - (pickCur(a, 'pp') || 0));
+    const iceTip = tip === 'icenek' || tip === 'icecek';
     if (hint) hint.style.display = 'none';
     if (wrap) wrap.style.display = '';
     document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => {
       const bf = vcIsEUR()
         ? (parseFloat(r.birim_fiyat_ort_eur) || 0)
         : (parseFloat(r.birim_fiyat_ort_tl) || 0);
+      let physCell = '—';
+      if (iceTip) {
+        const cl = r.pp_cl != null ? parseFloat(r.pp_cl) : NaN;
+        if (!Number.isNaN(cl)) physCell = `${fmtN(cl * 10, 0)}`;
+      } else {
+        const gr = r.pp_gr != null ? parseFloat(r.pp_gr) : NaN;
+        if (!Number.isNaN(gr)) physCell = fmtN(gr, 0);
+      }
       return `
       <tr data-stok="${encodeURIComponent(r.stok_mali)}">
         <td>${escapeHtml(r.stok_mali)}</td>
         <td style="text-align:right">${fmtCur(bf)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
+        <td style="text-align:right">${physCell}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>`;
     }).join('');
@@ -2785,20 +2870,47 @@ async function renderKategori() {
   const rows = await fetch(`/api/kategoriler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}`).then(r => r.json());
   const toplam = rows.reduce((s, r) => s + pickCur(r, 'tutar'), 0);
 
+  const katTop10 = rows.slice(0, 10);
+  const katLbl = katTop10.map((r) => r.kategori?.split(' - ')[1] || r.kategori);
+
   if (chartKatPasta) chartKatPasta.destroy();
   chartKatPasta = new Chart(document.getElementById('chart-kat-pasta'), {
     type: 'doughnut',
     data: {
-      labels: rows.slice(0,10).map(r => r.kategori?.split(' - ')[1] || r.kategori),
-      datasets: [{ data: rows.slice(0,10).map(r => pickCur(r, 'tutar')), backgroundColor: COLORS, borderWidth:0 }]
+      labels: katLbl,
+      datasets: [
+        {
+          data: katTop10.map((r) => pickCur(r, 'tutar')),
+          backgroundColor: COLORS,
+          borderWidth: 0,
+          katPayPct: katTop10.map((r) => (toplam > 0 ? (pickCur(r, 'tutar') / toplam) * 100 : 0)),
+          katInsideNames: katLbl.map((lb) => katDonutTruncateInsideName(lb, 26))
+        }
+      ]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{position:'right',labels:{font:{size:11}}},
-        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${fmtCur(ctx.parsed)}` } }
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = Number(ctx.raw) || 0;
+              const pctRaw = ctx.dataset.katPayPct ? ctx.dataset.katPayPct[ctx.dataIndex] : null;
+              const pct =
+                pctRaw != null && !Number.isNaN(Number(pctRaw))
+                  ? Number(pctRaw)
+                  : toplam > 0
+                    ? (v / toplam) * 100
+                    : 0;
+              return `${ctx.label}: ${fmtCur(v)} (${fmtN(pct, 1)}%)`;
+            }
+          }
+        }
       }
-    }
+    },
+    plugins: [katDonutInsideLabelsInlinePlugin]
   });
 
   document.getElementById('kat-tablo-th-deger').textContent = `Tutar (${curLabel()})`;
@@ -3283,7 +3395,7 @@ async function fiyatPaxPopoverShowFor(hl) {
       return;
     }
     titleEl.textContent = stok + ' — kişi başı tüketim (tüm dönemler)';
-    const labels = data.map((d) => (`${d.ay || ''} ${d.yil}`).trim() || d.tarih_str);
+    const labels = data.map((d) => paxHacimSeriAyEtiketi(d));
     const grData = data.map((d) => {
       const v = d.pp_gr;
       if (v == null || isNaN(+v)) return null;
