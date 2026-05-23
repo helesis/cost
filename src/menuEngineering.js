@@ -35,18 +35,17 @@ function classifyCostProxy(itemName, cfg) {
   return 'UNKNOWN';
 }
 
-function costProxyToX(cost) {
-  switch (cost) {
-    case 'LOW':
-      return 0.15;
-    case 'MEDIUM':
-      return 0.5;
-    case 'HIGH':
-      return 0.85;
-    default:
-      return 0.5;
-  }
+/** LOW=1 … HIGH=3 kademeli proxy → [0,1] üzerinde ln(kademe)/ln(3); UNKNOWN MEDIUM ile aynı. */
+function costProxyToMatrixX(cost) {
+  const rank =
+    cost === 'LOW' ? 1 : cost === 'HIGH' ? 3 : cost === 'MEDIUM' ? 2 : 2;
+  const d = Math.log(3);
+  if (!(d > 0)) return 0.5;
+  return Math.log(rank) / d;
 }
+
+const ME_LOG_X_MED = Math.log(2) / Math.log(3);
+const QUADRANT_SPLIT_X_DEFAULT = (ME_LOG_X_MED + 1) / 2;
 
 const SEGMENT_SUGGESTIONS = {
   STARS: 'Korunmalı',
@@ -83,6 +82,8 @@ async function fetchAggregates(pool, baslangic, bitis, tip, sqlExcFinans) {
     SELECT
       stok_mali AS item_name,
       SUM(ABS(COALESCE(tuk_miktar, 0)))::float8 AS consumption_quantity,
+      SUM(COALESCE(tutar_tl, 0))::float8 AS amount_tl,
+      SUM(COALESCE(tutar_eur, 0))::float8 AS amount_eur,
       MAX(kategori) AS category
     FROM fb_cost.tuketim
     WHERE tarih_str >= $1 AND tarih_str <= $2
@@ -139,14 +140,21 @@ async function fetchCostProxyMap(pool, rawRows) {
   return map;
 }
 
-function buildAnalyzedItems(rawRows, thresholdPct, cfg, costProxyMap) {
+function buildAnalyzedItems(rawRows, thresholdPct, cfg, costProxyMap, currency) {
+  const useEur = currency === 'EUR';
   const N = rawRows.length;
   const cutoff = N === 0 ? 0 : Math.max(1, Math.ceil((N * thresholdPct) / 100));
   const totalQty = rawRows.reduce((s, r) => s + (+r.consumption_quantity || 0), 0);
+  const totalAmount = rawRows.reduce(
+    (s, r) => s + (+(useEur ? r.amount_eur : r.amount_tl) || 0),
+    0
+  );
 
   return rawRows.map((r, idx) => {
     const qty = +r.consumption_quantity || 0;
-    const pct = totalQty > 0 ? (100 * qty) / totalQty : 0;
+    const pctQty = totalQty > 0 ? (100 * qty) / totalQty : 0;
+    const amount = +(useEur ? r.amount_eur : r.amount_tl) || 0;
+    const pctAmount = totalAmount > 0 ? (100 * amount) / totalAmount : 0;
     const rank = idx + 1;
     const consumptionTier = rank <= cutoff ? 'HIGH' : 'LOW';
     const ckey = `${r.item_name}\0${r.category || ''}`;
@@ -157,14 +165,18 @@ function buildAnalyzedItems(rawRows, thresholdPct, cfg, costProxyMap) {
       item_name: r.item_name,
       category: r.category,
       consumption_quantity: qty,
-      consumption_pct: +pct.toFixed(4),
+      consumption_pct: +pctQty.toFixed(4),
+      amount_tl: +(r.amount_tl || 0),
+      amount_eur: +(r.amount_eur || 0),
+      amount_share_pct: +pctAmount.toFixed(4),
+      matrix_currency: useEur ? 'EUR' : 'TL',
       rank,
       consumption_tier: consumptionTier,
       cost_proxy: costProxy,
       segment,
       suggestion: SEGMENT_SUGGESTIONS[segment] || '',
-      matrix_x: costProxyToX(costProxy),
-      matrix_y: +pct.toFixed(4)
+      matrix_x: costProxyToMatrixX(costProxy),
+      matrix_y: +pctAmount.toFixed(4)
     };
   });
 }
@@ -221,9 +233,6 @@ function paretoSeries(items) {
   });
 }
 
-/** matrix_x: LOW=0.15, MEDIUM=0.5, HIGH=0.85 — dikey çizgi MED–HIGH ortası */
-const QUADRANT_SPLIT_X_DEFAULT = (0.5 + 0.85) / 2;
-
 function computeQuadrantSplits(filtered, threshold_pct) {
   if (!filtered.length) {
     return { quadrant_split_x: QUADRANT_SPLIT_X_DEFAULT, quadrant_split_y: 0 };
@@ -235,9 +244,9 @@ function computeQuadrantSplits(filtered, threshold_pct) {
   const firstLow = sortedByQty[cutoff];
   let quadrant_split_y = 0;
   if (lastHigh && firstLow) {
-    quadrant_split_y = (lastHigh.consumption_pct + firstLow.consumption_pct) / 2;
+    quadrant_split_y = (lastHigh.amount_share_pct + firstLow.amount_share_pct) / 2;
   } else if (lastHigh) {
-    quadrant_split_y = lastHigh.consumption_pct * 0.5;
+    quadrant_split_y = lastHigh.amount_share_pct * 0.5;
   }
   return { quadrant_split_x: QUADRANT_SPLIT_X_DEFAULT, quadrant_split_y };
 }
@@ -264,7 +273,11 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
   const raw = await fetchAggregates(pool, baslangic, bitis, tip || '', sqlExcFinans);
   const costProxyMap = await fetchCostProxyMap(pool, raw);
   const cfg = getCostProxyConfig();
-  const itemsFull = buildAnalyzedItems(raw, threshold_pct, cfg, costProxyMap);
+
+  const curRaw = String(query.currency || 'TL').toUpperCase().trim();
+  const currency = curRaw === 'EUR' ? 'EUR' : 'TL';
+
+  const itemsFull = buildAnalyzedItems(raw, threshold_pct, cfg, costProxyMap, currency);
 
   const filtered = filterItems(itemsFull, {
     q: String(query.q || '').trim(),
@@ -278,12 +291,13 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
     baslangic,
     bitis,
     tip: tip || null,
-    itemsFullCount: itemsFull.length
+    itemsFullCount: itemsFull.length,
+    currency
   };
 }
 
 async function analyze(pool, query, sqlExcFinans) {
-  const { filtered, threshold_pct, baslangic, bitis, tip, itemsFullCount } = await computeFilteredItems(
+  const { filtered, threshold_pct, baslangic, bitis, tip, itemsFullCount, currency } = await computeFilteredItems(
     pool,
     query,
     sqlExcFinans
@@ -313,6 +327,7 @@ async function analyze(pool, query, sqlExcFinans) {
   const matrix = filtered.map((r) => ({
     item_name: r.item_name,
     consumption_pct: r.consumption_pct,
+    amount_share_pct: r.amount_share_pct,
     segment: r.segment,
     cost_proxy: r.cost_proxy,
     x: r.matrix_x,
@@ -322,7 +337,7 @@ async function analyze(pool, query, sqlExcFinans) {
   let matrixOut = matrix;
   let matrix_truncated = false;
   if (matrixOut.length > MATRIX_CHART_MAX) {
-    matrixOut = [...matrixOut].sort((a, b) => b.consumption_pct - a.consumption_pct).slice(0, MATRIX_CHART_MAX);
+    matrixOut = [...matrixOut].sort((a, b) => b.amount_share_pct - a.amount_share_pct).slice(0, MATRIX_CHART_MAX);
     matrix_truncated = true;
   }
 
@@ -334,6 +349,7 @@ async function analyze(pool, query, sqlExcFinans) {
     matrix: matrixOut,
     matrix_truncated,
     matrix_total_points: matrix.length,
+    matrix_currency: currency,
     rows,
     totalRows: filtered.length,
     unfiltered_sku: itemsFullCount,

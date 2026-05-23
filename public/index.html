@@ -610,7 +610,7 @@
     <div class="page-body kat-page-body">
       <div class="kat-row-2col kat-row-kategori-ust">
         <div class="card kat-card-block">
-          <div class="card-title">Kategori Dağılımı</div>
+          <div class="card-title">Kategori Dağılımı (Toplam Tutara Göre%)</div>
           <div class="chart-wrap"><canvas id="chart-kat-pasta"></canvas></div>
         </div>
         <div class="card kat-card-block">
@@ -935,7 +935,9 @@
     </div>
     <div class="page-body">
       <div class="me-disclaimer">
-        Bu analiz, satış ve kârlılık verisi olmadan yalnızca tüketim miktarlarına göre yapılmıştır. Sonuçlar operasyonel yönlendirme amaçlıdır.
+        Bu analiz, satış/kârlılık modeli yerine yükleme dosyasındaki tüketim miktarı ve tutarları (satır <strong>tutar_tl</strong> / <strong>tutar_eur</strong>) kullanır.
+        SKU segmentleri hâlâ <strong>miktar</strong> sıralaması ve seçilen üst yüzde eşiği ile belirlenir; 2×2 matrisin <strong>Y ekseni</strong> seçtiğiniz para birimi (EUR/TL) için <strong>toplam tutara göre pay %</strong> olarak çizilir.
+        <strong>X ekseni</strong>, maliyet proxy kademesi (LOW / MEDIUM / HIGH) için <strong>ln(kademe)/ln(3)</strong> ile 0–1 aralığına yerleştirilir (aynı sütte daha okunabilir aralıklar). Sonuçlar operasyonel yönlendirme amaçlıdır.
       </div>
 
       <div class="card mb-20">
@@ -1006,7 +1008,7 @@
 
         <div class="me-charts-layout">
           <div class="card me-matrix-card">
-            <div class="card-title">2×2 Matrix — maliyet proxy × tüketim payı %</div>
+            <div class="card-title" id="me-matrix-chart-title">2×2 Matrix — maliyet proxy × tutar payı %</div>
             <div class="chart-wrap"><canvas id="chart-me-matrix"></canvas></div>
             <p id="me-matrix-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:8px 0 0"></p>
           </div>
@@ -1353,6 +1355,7 @@ function vcRerenderActive() {
     else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyat(); }
     else if (id === 'page-yillik')   yillikAnalizYenile();
     else if (id === 'page-tuketim-talep') loadTalepAnaliz();
+    else if (id === 'page-menu-engineering') loadMenuEngineeringData(false);
   } catch (e) { /* sessiz */ }
 }
 
@@ -1474,6 +1477,7 @@ function meBuildQuery(forExport) {
   const tip = document.getElementById('me-tip')?.value || '';
   if (tip) u.set('tip', tip);
   u.set('threshold_pct', document.getElementById('me-threshold')?.value || '30');
+  u.set('currency', vcIsEUR() ? 'EUR' : 'TL');
   const q = (document.getElementById('me-q')?.value || '').trim();
   if (q) u.set('q', q);
   const seg = document.getElementById('me-segment')?.value || '';
@@ -1564,8 +1568,11 @@ function meDestroyMeCharts() {
   if (chartMePareto) { try { chartMePareto.destroy(); } catch (e) {} chartMePareto = null; }
 }
 
-/** matrix_x ile uyumlu: MED–HIGH sınırı (backend ile aynı) */
-const ME_QUADRANT_SPLIT_X = (0.5 + 0.85) / 2;
+/** matrix_x ile uyumlu: ln(kademe)/ln(3) ve MED–HIGH quadrant sınırı (backend ile aynı) */
+const ME_MATRIX_LOG_X_MED = Math.log(2) / Math.log(3);
+const ME_MATRIX_X_BOUND_LOW_MED = ME_MATRIX_LOG_X_MED / 2;
+const ME_MATRIX_X_BOUND_MED_HIGH = (ME_MATRIX_LOG_X_MED + 1) / 2;
+const ME_QUADRANT_SPLIT_X = ME_MATRIX_X_BOUND_MED_HIGH;
 
 function meQuadrantPlugin(splitX, splitY) {
   return {
@@ -1627,6 +1634,10 @@ function meQuadrantPlugin(splitX, splitY) {
 function meRenderMeCharts(data) {
   meDestroyMeCharts();
   const matrix = data.matrix || [];
+  const matCurLbl = data.matrix_currency === 'EUR' ? 'EUR' : 'TL';
+  const mTitle = document.getElementById('me-matrix-chart-title');
+  if (mTitle) mTitle.textContent = `2×2 Matrix — maliyet proxy × tutar payı % (${matCurLbl})`;
+
   const canvasM = document.getElementById('chart-me-matrix');
   const canvasP = document.getElementById('chart-me-pareto');
   if (!canvasM || !canvasP) return;
@@ -1673,9 +1684,12 @@ function meRenderMeCharts(data) {
             label(ctx) {
               const m = matrix[ctx.dataIndex];
               if (!m) return '';
+              const amt = Number(m.amount_share_pct);
+              const pctAmt = Number.isFinite(amt) ? amt : Number(m.consumption_pct);
               return [
                 m.item_name,
-                `Pay: ${fmtN(m.consumption_pct, 2)}%`,
+                `Tutar payı (${matCurLbl}): ${fmtN(pctAmt, 2)}%`,
+                `Miktar payı: ${fmtN(Number(m.consumption_pct), 2)}%`,
                 `Segment: ${m.segment}`,
                 `Cost: ${m.cost_proxy}`
               ];
@@ -1687,17 +1701,19 @@ function meRenderMeCharts(data) {
         x: {
           min: 0,
           max: 1,
-          title: { display: true, text: 'Maliyet proxy (düşük → yüksek)' },
+          title: { display: true, text: 'Maliyet proxy (ln kademe, düşük → yüksek)' },
           ticks: {
             callback(v) {
-              if (v <= 0.2) return 'LOW';
-              if (v <= 0.65) return 'MED';
+              const x = typeof v === 'number' ? v : parseFloat(v);
+              if (Number.isNaN(x)) return '';
+              if (x < ME_MATRIX_X_BOUND_LOW_MED) return 'LOW';
+              if (x < ME_MATRIX_X_BOUND_MED_HIGH) return 'MED';
               return 'HIGH';
             }
           }
         },
         y: {
-          title: { display: true, text: 'Tüketim payı %' },
+          title: { display: true, text: `Tutar payı % (${matCurLbl})` },
           beginAtZero: true,
           suggestedMax: ySuggestedMax
         }
