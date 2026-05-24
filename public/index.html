@@ -3227,7 +3227,7 @@ function nnCoerceIngredientsPayload(raw) {
   return [];
 }
 
-/** ingredients API satırını backend alan adlarıyla hizalar (efektif + eski usda_* fallback). */
+/** ingredients API satırını backend alan adlarıyla hizalar (efektif ve legacy usda alanları). */
 function nnNormalizeIngredientRow(raw) {
   const rr = raw && typeof raw === 'object' ? raw : {};
   const usdaAdi = nnPickField(rr, 'usda_efektif_adi', 'usda_adi');
@@ -3363,19 +3363,21 @@ async function nnReloadListsOnly(opts) {
   nnEnsureTableDelegate();
   const durumQs = _nnSeciliDurum ? `?durum=${encodeURIComponent(_nnSeciliDurum)}` : '';
   try {
-    // Dashboard'u ingredients listesini beklemeden summary ile güncelle
-    const summaryPromise = skipSummary
-      ? null
-      : fetch('/api/nutrition/summary')
-          .then(sResp => nnApplySummaryResponse(sResp, true))
-          .catch(e => {
-            console.error('nnReloadListsOnly summary', e);
-            nnRenderLiveDashboard({});
-            return null;
-          });
+    let summaryPromise = null;
+    if (!skipSummary) {
+      summaryPromise = fetch('/api/nutrition/summary')
+        .then((sResp) => nnApplySummaryResponse(sResp, true))
+        .catch((e) => {
+          console.error('nnReloadListsOnly summary', e);
+          nnRenderLiveDashboard({});
+          return null;
+        });
+    }
 
     const rowsPromise = fetch(`/api/nutrition/ingredients${durumQs}`);
-    if (summaryPromise) await summaryPromise;
+    if (summaryPromise) {
+      await summaryPromise;
+    }
     const rowsResp = await rowsPromise;
 
     const rowsRaw = await rowsResp.json().catch(() => []);
