@@ -14,7 +14,9 @@ CSV veya Excel (.xlsx) dosyalarından dönemsel tüketim verilerini PostgreSQL v
 - **Kategori Dağılımı**: Yiyecek / içecek ayrımında kategori bazlı maliyet dağılımı.
 - **Ürün Arama**: Stok malı (ürün) bazında dönemsel hareket takibi.
 - **Alarm Sistemi**: `pp_tl`, `pp_eur`, `pp_gr`, `pp_cl`, `tutar_tl` gibi metriklerde yukarı/aşağı eşik alarmları.
-- **Modern UI**: Voyage Design System tabanlı, Chart.js ile görselleştirme.
+- **Ürün sınıflandırma**: Ollama ile protein bucket / maliyet proxy tahmini.
+- **USDA besin eşlemesi**: FoodData Central eşleştirme ve manuel onay katmanı (Python mikro API + `fb_cost.ingredient_nutrition_*`).
+- **Modern UI**: Voyage Design System tabanlı görünüm, Chart.js grafikleri.
 
 ---
 
@@ -22,7 +24,8 @@ CSV veya Excel (.xlsx) dosyalarından dönemsel tüketim verilerini PostgreSQL v
 
 | Katman | Teknoloji |
 | --- | --- |
-| Backend | Node.js, Express 4 |
+| Backend | Node.js, Express 4 (**/api/nutrition** → yerel FastAPI proxysi) |
+| USDA besin servisi | Python 3 + FastAPI, httpx, psycopg |
 | Veritabanı | PostgreSQL (şema: `fb_cost`) |
 | Frontend | HTML + CSS (Voyage Design System) + Chart.js |
 | Dosya İşleme | Multer, csv-parse, [SheetJS (xlsx)](https://www.npmjs.com/package/xlsx) |
@@ -36,6 +39,8 @@ cost/
 ├── migrate.sql                    # Sıfır kurulum: fb_cost + tuketim (türetilmiş tutar/pp)
 ├── migrate_v2_tuketim_computed.sql # Mevcut DB'yi yeni şemaya taşır (yedek alın)
 ├── migrate_add_grup_column.sql     # Sadece `grup` sütunu ekler (eski kurulumlar)
+├── migrate_ingredient_nutrition_up.sql   # USDA besin tabloları + VIEW + fonksiyon
+├── migrate_ingredient_nutrition_down.sql # Geri alma
 ├── fb_cost_functions.sql          # İsteğe bağlı: SQL tutar fonksiyonları (migrate.sql içinde de var)
 ├── package.json
 ├── src/
@@ -48,6 +53,12 @@ cost/
 │   ├── fb_tarama.py               # Tam ay (ay sonu) Excel tarayıcısı
 │   ├── fb_tarama_15.py            # Kısmi 15 gün (ay ortası) tarayıcısı
 │   └── requirements.txt           # pandas + openpyxl
+├── nutrition_service/
+│   ├── app.py
+│   ├── db.py
+│   ├── usda_client.py
+│   ├── usda_parse.py
+│   └── requirements.txt           # uvicorn / httpx / psycopg
 └── uploads/                       # CSV geçici yükleme klasörü (otomatik)
 ```
 
@@ -85,13 +96,36 @@ cost/
 
    (İkinci kez çalıştırmayın: hata verir ve durur. Yedek: `fb_cost.tuketim_mig_bak`.)
 
-3. (İsteğe bağlı) Veritabanı parolası için ortam değişkeni:
+   **USDA / besin eşlemesi tabloları** (otomatik script verisini daha sonra ekleyecekseniz bile önce boş oluşturabilirsiniz):
+
+   ```bash
+   psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+     -f migrate_ingredient_nutrition_up.sql
+   ```
+
+   Geri alma: `-f migrate_ingredient_nutrition_down.sql` (sıra kritik).
+
+3. Besin/USDA mikro API (Python):
+
+   ```bash
+   cd /path/to/cost
+   python3 -m pip install -r nutrition_service/requirements.txt
+   export USDA_API_KEY=…   # veya kök `.env`
+   python3 -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012
+   ```
+
+   Node `src/index.js` istekleri `NUTRITION_SERVICE_URL` (varsayılan `http://127.0.0.1:3012`) adresine iletir. Tablo verisi için `npm start` + `nutrition_service` birlikte çalışır.
+
+   **Tek nokta okuma**: Uygulamalar doğrudan `fb_cost.ingredient_nutrition` yerine görünüm
+   `fb_cost.v_ingredient_nutrition_resolved` veya SQL fonksiyonu `fb_cost.get_ingredient_nutrition(urun_id)` kullanılmalıdır (`urun_id` = `ingredient_nutrition.id`).
+
+4. (İsteğe bağlı) Veritabanı parolası için ortam değişkeni:
 
    ```bash
    export DB_PASSWORD=your_password
    ```
 
-4. Uygulamayı başlatın:
+5. Uygulamayı başlatın:
 
    ```bash
    npm start
@@ -99,7 +133,7 @@ cost/
    npm run dev
    ```
 
-5. Tarayıcınızda açın: [http://localhost:3010](http://localhost:3010)
+6. Tarayıcınızda açın: [http://localhost:3010](http://localhost:3010)
 
 ---
 
@@ -115,6 +149,8 @@ Ortam değişkenleri `src/index.js` içinde `dotenv` ile okunur (proje kökünde
 | User | `DB_USER` | `postgres` |
 | Password | `DB_PASSWORD` | `postgres` |
 | App Port | `PORT` | `3010` |
+| Besin / USDA mikro API temel URL | `NUTRITION_SERVICE_URL` | `http://127.0.0.1:3012` |
+| USDA FoodData Central anahtarı | `USDA_API_KEY` ya da `USDA_FOOD_DATA_CENTRAL_KEY` | — |
 
 Üretimde sık görülen örnek: `DB_NAME=cost_analysis`, `DB_USER=cost`, `DB_PORT=5434` (PostgreSQL Docker konteynerinin host’a map ettiği port; uygulama ile **aynı** portu kullanın).
 
@@ -157,6 +193,7 @@ Ortam değişkenleri `src/index.js` içinde `dotenv` ile okunur (proje kökünde
 | `GET`  | `/api/alarmlar/esikler` | Alarm eşiklerini listele |
 | `POST` | `/api/alarmlar/esikler` | Yeni alarm eşiği ekle |
 | `DELETE` | `/api/alarmlar/esikler/:id` | Alarm eşiği sil |
+| `*` | `/api/nutrition/...` | USDA / besin: Node → `NUTRITION_SERVICE_URL` (FastAPI) proxysi — özet, liste, manuel USDA, arama |
 
 ---
 

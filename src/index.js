@@ -40,6 +40,65 @@ const ALARM_METRIK_TUTAR = new Set(['tutar_tl', 'tutar_eur']);
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
+
+// ── USDA besin servisi proxy (nutrition_service FastAPI, varsayılan 127.0.0.1:3012) ──
+const NUTRITION_SERVICE_URL = (process.env.NUTRITION_SERVICE_URL || 'http://127.0.0.1:3012').replace(
+  /\/+$/,
+  ''
+);
+app.use(async (req, res, next) => {
+  if (
+    req.originalUrl &&
+    typeof req.originalUrl === 'string' &&
+    req.originalUrl.startsWith('/api/nutrition')
+  ) {
+    try {
+      const target = `${NUTRITION_SERVICE_URL}${req.originalUrl}`;
+      const headers = {
+        Accept: req.headers.accept || 'application/json',
+      };
+      if (req.headers['accept-language']) {
+        headers['Accept-Language'] = req.headers['accept-language'];
+      }
+      const init = {
+        method: req.method,
+        headers,
+      };
+      let signal;
+      try {
+        signal = AbortSignal.timeout(125000);
+      } catch (_) {
+        signal = undefined;
+      }
+      if (signal) init.signal = signal;
+
+      const hasBody =
+        !['GET', 'HEAD', 'OPTIONS'].includes(req.method || '') &&
+        req.body !== undefined &&
+        req.body !== null &&
+        Object.keys(Object(req.body)).length > 0;
+      if (hasBody) {
+        headers['Content-Type'] = 'application/json';
+        init.body = JSON.stringify(req.body);
+      }
+
+      const r = await fetch(target, init);
+      const buf = Buffer.from(await r.arrayBuffer());
+      const ct = r.headers.get('content-type');
+      res.status(r.status);
+      if (ct) res.setHeader('Content-Type', ct);
+      return res.send(buf);
+    } catch (err) {
+      return res.status(502).json({
+        error:
+          'Besin (USDA) servisi kullanılamıyor — Python nutrition_service başlatın ve USDA_API_KEY tanımlayın.',
+        detail: err && err.message ? err.message : String(err),
+      });
+    }
+  }
+  return next();
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Eski giriş adresi → ana sayfa

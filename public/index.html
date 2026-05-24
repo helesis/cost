@@ -214,6 +214,177 @@
     margin-top: 6px;
   }
 
+  /* USDA besin eşlemesi */
+  .nn-wrap { margin-bottom: 20px; }
+  .nn-hint-bar {
+    font-size: 13px; color: var(--text-dim); margin-bottom: 16px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px;
+    line-height: 1.5;
+  }
+  .nn-cards {
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    margin-bottom: 16px;
+  }
+  .nn-card-kpi {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  .nn-card-kpi:hover { border-color: var(--gold-light); background: rgba(138,108,46,0.08); }
+  .nn-card-kpi.active-filter { outline: 2px solid var(--gold); outline-offset: 0; }
+  .nn-card-kpi-val { font-size: 22px; font-weight: 700; color: var(--gold); }
+  .nn-card-kpi-lbl {
+    margin-top: 4px;
+    font-size: 11px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    line-height: 1.3;
+  }
+  .nn-grid-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    align-items: start;
+    min-height: 420px;
+  }
+  .nn-drawer-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    z-index: 800;
+    display: none;
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+    visibility: hidden;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding-right: clamp(16px, 4vw, 36px);
+  }
+  .nn-drawer-mask.open {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding-top: 48px;
+  }
+  .nn-drawer {
+    width: min(440px, 96vw);
+    max-height: 92vh;
+    overflow: hidden;
+    border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-right: none;
+    box-shadow: -8px 0 44px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform .22s cubic-bezier(.4,.1,.4,1);
+  }
+  .nn-drawer-mask.open .nn-drawer { transform: translateX(0); }
+  .nn-drawer-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .nn-drawer-titlewrap { flex: 1; min-width: 0; }
+  .nn-drawer-titlewrap h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+  .nn-drawer-sub { margin: 4px 0 0; font-size: 11px; color: var(--text-dim); }
+  .nn-drawer-body {
+    overflow: auto;
+    padding: 12px 16px 120px;
+    flex: 1;
+    font-size: 13px;
+  }
+  .nn-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 3px 8px;
+    border-radius: 7px;
+    white-space: nowrap;
+  }
+  .nn-badge-otomatik {
+    background: rgba(52,128,93, 0.2);
+    color: #347f5c;
+  }
+  .nn-badge-kontrol {
+    background: rgba(217,169,73, 0.25);
+    color: #956c1c;
+  }
+  .nn-badge-eslesmedi {
+    background: rgba(201,72,71, 0.2);
+    color: #b73a38;
+  }
+  .nn-badge-manuel_onayli {
+    background: rgba(70,120,182, 0.2);
+    color: #37639a;
+  }
+  .nn-small-label { font-size: 11px; color: var(--text-xdim); text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 6px; }
+  .nn-search-row input.form-input {
+    width: 100%;
+    padding: 8px 11px;
+  }
+  .nn-usda-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 340px;
+    overflow: auto;
+  }
+  .nn-usda-item {
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    background: var(--surface2);
+  }
+  .nn-usda-item-top { display:flex; justify-content: space-between; align-items:flex-start; gap:8px }
+  .nn-micro { font-family: inherit; margin-top:4px; font-size:11px; color:var(--text-dim); line-height:1.45;}
+  .nn-form-grid input.form-input {
+    width:100%;
+    padding:6px 8px;
+    font-size:12px;
+  }
+  .nn-form-grid label { font-size:10px; display:block;margin-bottom:2px;color:var(--text-dim);}
+  .nn-form-grid div { padding: 4px; }
+  #nn-ingredient-tablo tbody tr[data-id] {
+    cursor: pointer;
+  }
+  #nn-ingredient-tablo tbody tr[data-id]:hover {
+    background: rgba(138,108,46,0.1);
+  }
+  #nn-ingredient-tablo tbody tr.nn-row-active {
+    background: rgba(42,98,154, 0.12);
+    outline: 1px solid rgba(42,98,154, 0.4);
+  }
+  .nn-muted { color: var(--text-dim); font-style: italic; font-size: 12px;}
+  .nn-close-x {
+    background:transparent; border:none; cursor:pointer; font-size:20px;line-height:1;
+    padding: 4px; color:var(--text-dim);
+    border-radius:var(--radius);
+  }
+  .nn-close-x:hover { color: var(--gold); background: var(--surface2);}
+  .nn-mini-table { border-collapse: collapse; margin-top:6px; font-size:11px; width:100%; }
+  .nn-mini-table th, .nn-mini-table td { padding: 3px 6px 3px 0; text-align:left; border-bottom:1px solid var(--border); vertical-align: top; }
+
   .me-charts-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -504,6 +675,9 @@
     </a>
     <a class="nav-item" data-page="siniflandirma" href="#">
       <i class="nav-icon" data-lucide="tags"></i> Ürün Sınıflandırma
+    </a>
+    <a class="nav-item" data-page="besin-eslesmesi" href="#">
+      <i class="nav-icon" data-lucide="apple"></i> USDA Besin Eşlemesi
     </a>
     <a class="nav-item" data-page="yukle" href="#">
       <i class="nav-icon" data-lucide="upload-cloud"></i> Veri Yükle
@@ -1213,7 +1387,104 @@
     </div>
   </div>
 
-  <!-- ── VERİ YÜKLE ─────────────────────────────────────────────────────── -->
+  <!-- ── USDA BESİN EŞLEMESİ ─────────────────────────────────────────────── -->
+  <div id="page-besin-eslesmesi" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">USDA besin değeri eşleştirmesi</div>
+        <div class="page-sub">Önce tablolar ve arayüz — otomatik doldurma betiği ayrı adımda çalıştırılacak. Makro/mineraller 100&nbsp;g referansına göredir.</div>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="nnReload()">Listeyi yenile</button>
+    </div>
+    <div class="page-body">
+      <p class="nn-hint-bar">
+        <strong>Yapı:</strong>
+        Liste ve grafikleri <code>fb_cost.ingredient_nutrition</code> + manuel katman üzerinden okur (çözümleme görünümü 
+        <code>fb_cost.v_ingredient_nutrition_resolved</code>). Python servisi için:
+        <code>pip install -r nutrition_service/requirements.txt</code> ve
+        <code>python -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012</code>;
+        USDA anahtarı: <code>USDA_API_KEY</code> (.env).
+      </p>
+      <section class="card nn-wrap mb-20">
+        <div class="card-title">Özet</div>
+        <div id="nn-kpi-cards" class="nn-cards">
+          <span class="nn-muted">Özet için yükleniyor…</span>
+        </div>
+      </section>
+      <div class="card nn-wrap">
+        <div class="card-title">Ürün listesi (tüketim miktarı desc.)</div>
+        <div class="table-wrap nn-grid-main">
+          <table class="search-results" style="font-size:12px">
+            <thead>
+              <tr>
+                <th>Ürün</th><th>Durum</th><th>USDA</th><th>Güven</th><th>Makro (100&nbsp;g)</th>
+              </tr>
+            </thead>
+            <tbody id="nn-ingredient-tablo"><tr><td colspan="5" class="nn-muted" style="padding:20px;text-align:center">Yükleniyor…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sağ yan panel overlay -->
+  <div id="nn-drawer-mask" class="nn-drawer-mask" role="presentation" onclick="nnCloseDrawerIf(event)" aria-hidden="true">
+    <aside id="nn-drawer" class="nn-drawer" onclick="event.stopPropagation()" aria-label="Manuel USDA eşlemesi paneli">
+      <div class="nn-drawer-head">
+        <div class="nn-drawer-titlewrap">
+          <h3 id="nn-drawer-heading">Ürün</h3>
+          <p class="nn-drawer-sub" id="nn-drawer-lines"></p>
+        </div>
+        <button type="button" class="nn-close-x" onclick="nnCloseDrawer()" aria-label="Kapat">×</button>
+      </div>
+      <div class="nn-drawer-body">
+        <div class="nn-small-label">Otomatik önerilen eşleşme</div>
+        <div id="nn-auto-block"></div>
+        <div class="nn-small-label">Betik yazılı adaylar (alternatif USDA)</div>
+        <div id="nn-alt-block"></div>
+        <div class="nn-small-label">Canlı USDA araması (Foundation + SR Legacy)</div>
+        <div class="nn-search-row">
+          <input type="text" id="nn-usda-search-input" class="form-input" placeholder="İngilizce veya Türkçe terim yazın…" autocomplete="off">
+          <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px" onclick="nnRunUsdaSearch()">ARA</button>
+        </div>
+        <div id="nn-usda-search-status" style="margin-top:6px;font-size:11px;color:var(--text-dim)"></div>
+        <div id="nn-usda-search-list" class="nn-usda-list"></div>
+        <div class="nn-small-label">Manuel TürKomp veya elle değer (100&nbsp;g)</div>
+        <form id="nn-manual-entry-form">
+          <div style="margin-bottom:8px">
+            <label class="sr-only" for="nn-manual-src">Kaynak</label>
+            <select id="nn-manual-src" class="form-input" style="max-width:220px;margin-bottom:6px;font-size:12px">
+              <option value="turkomp">TürKomp</option>
+              <option value="elle">El girilen</option>
+            </select>
+          </div>
+          <div id="nn-form-grid" class="nn-form-grid" style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap: 4px 8px;">
+            <div><label for="nn-f-protein">Protein g</label><input id="nn-f-protein" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-yag">Yağ g</label><input id="nn-f-yag" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-carb">Karbonhidrat g</label><input id="nn-f-carb" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-enerji">Enerji kcal</label><input id="nn-f-enerji" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-su">Su g</label><input id="nn-f-su" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div></div>
+            <div><label for="nn-f-sodyum">Na mg</label><input id="nn-f-sodyum" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-potasyum">K mg</label><input id="nn-f-potasyum" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-kalsiyum">Ca mg</label><input id="nn-f-kalsiyum" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-demir">Fe mg</label><input id="nn-f-demir" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-mg">Mg mg</label><input id="nn-f-mg" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-phos">P mg</label><input id="nn-f-phos" type="number" step="any" class="form-input nn-manual-field"></div>
+            <div><label for="nn-f-zn">Zn mg</label><input id="nn-f-zn" type="number" step="any" class="form-input nn-manual-field"></div>
+          </div>
+          <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label for="nn-f-user">Seçen kullanıcı</label><input id="nn-f-user" type="text" class="form-input" style="font-size:12px;padding:7px"></div>
+            <div style="grid-column:1/-1;"><label for="nn-f-note">Not</label><textarea id="nn-f-note" class="form-input" rows="2" style="font-size:12px;padding:8px;width:100%"></textarea></div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+            <button type="submit" class="btn btn-secondary btn-sm">TürKomp / elle kaydet</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+  </div>
+
   <div id="page-yukle" class="tab-content">
     <div class="page-header">
       <div>
@@ -2321,6 +2592,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
     if (page === 'siniflandirma') { classifyRefreshStats(); classifyLoadResults(); }
+    if (page === 'besin-eslesmesi') { nnReload(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
   });
 });
@@ -2540,6 +2812,370 @@ function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── USDA besin eşlemesi (nutrition_service FastAPI proxied /api/nutrition) ───
+let _nnSeciliDurum = null;
+let _nnActiveRowId = null;
+let _nnUsdaDeb = null;
+
+function nnFmtNut(v, frac = 2) {
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return fmtN(n, frac);
+}
+
+function nnDurumBadge(es) {
+  const lbl = ({
+    otomatik: 'Otomatik',
+    kontrol_gerekli: 'Kontrol',
+    eslesmedi: 'Yok',
+    manuel_onayli: 'Manuel',
+  }[es]) || escapeHtml(es);
+  const cls = ({
+    otomatik: 'nn-badge-otomatik',
+    kontrol_gerekli: 'nn-badge-kontrol',
+    eslesmedi: 'nn-badge-eslesmedi',
+    manuel_onayli: 'nn-badge-manuel_onayli',
+  }[es]) || '';
+  return `<span class="nn-badge ${cls}">${lbl}</span>`;
+}
+
+function nnMacroLine(rr) {
+  const p = nnFmtNut(rr.protein);
+  const f = nnFmtNut(rr.yag);
+  const c = nnFmtNut(rr.karbonhidrat);
+  const en = rr.enerji != null && rr.enerji !== '' ? `${nnFmtNut(rr.enerji, 0)} kcal` : '—';
+  return `<span>${p} g P · ${f} g F · ${c} g C · ${en}</span>`;
+}
+
+function nnEnsureTableDelegate() {
+  const tb = document.getElementById('nn-ingredient-tablo');
+  if (!tb || tb.dataset.nnDel) return;
+  tb.dataset.nnDel = '1';
+  tb.addEventListener('click', ev => {
+    const tr = ev.target.closest('tr[data-id]');
+    if (!tr) return;
+    const id = +tr.dataset.id;
+    document.querySelectorAll('#nn-ingredient-tablo tbody tr[data-id]').forEach(el => el.classList.remove('nn-row-active'));
+    tr.classList.add('nn-row-active');
+    nnOpenDrawer(id);
+  });
+}
+
+function nnRenderKpis(s) {
+  const host = document.getElementById('nn-kpi-cards');
+  if (!host) return;
+  const agg = s && typeof s === 'object' ? s : {};
+  const meta = [
+    ['toplam', 'Toplam kayıt', 'Tüm kayıtlar'],
+    ['otomatik', 'Otomatik', 'USDA doğrudan uydu'],
+    ['kontrol_gerekli', 'Kontrol gerekli', 'Doğrulama önerildi'],
+    ['eslesmedi', 'Eşleşmedi', 'Bulunamadı / boş'],
+    ['manuel_onayli', 'Manuel onay', 'İnsan seçimi ya da TürKomp']
+  ];
+  host.innerHTML = meta.map(([k, short, hint]) => {
+    const raw = k === 'toplam' ? agg.toplam : agg[k];
+    const cls = (_nnSeciliDurum === k || (_nnSeciliDurum === null && k === 'toplam'))
+      ? 'nn-card-kpi active-filter'
+      : 'nn-card-kpi';
+    return `<article class="${cls}" title="${escapeHtml(hint)}"
+               data-filter="${escapeHtml(k)}" onclick="nnKpiTap('${k}')">
+        <div class="nn-card-kpi-val">${raw != null ? raw : '0'}</div>
+        <div class="nn-card-kpi-lbl">${escapeHtml(short)}</div>
+      </article>`;
+  }).join('');
+}
+
+window.nnKpiTap = async function nnKpiTap(k) {
+  if (k === 'toplam') _nnSeciliDurum = null;
+  else _nnSeciliDurum = k === _nnSeciliDurum ? null : k;
+  await nnReloadListsOnly();
+};
+
+function nnHydrateManualForm(mRow) {
+  const ids = [
+    ['protein','nn-f-protein'],
+    ['yag','nn-f-yag'],
+    ['karbonhidrat','nn-f-carb'],
+    ['enerji','nn-f-enerji'],
+    ['su','nn-f-su'],
+    ['sodyum','nn-f-sodyum'],
+    ['potasyum','nn-f-potasyum'],
+    ['kalsiyum','nn-f-kalsiyum'],
+    ['demir','nn-f-demir'],
+    ['magnezyum','nn-f-mg'],
+    ['fosfor','nn-f-phos'],
+    ['cinko','nn-f-zn']
+  ];
+  ids.forEach(([k, gid])=>{
+    const el = document.getElementById(gid);
+    const v = mRow && (mRow[k] != null) ? String(mRow[k]) : '';
+    if (el) el.value = v;
+  });
+  const usr = document.getElementById('nn-f-user');
+  const nt = document.getElementById('nn-f-note');
+  const ks = document.getElementById('nn-manual-src');
+  if (usr) usr.value = mRow && mRow.secen_kullanici ? mRow.secen_kullanici : '';
+  if (nt) nt.value = mRow && mRow.not_metni ? mRow.not_metni : '';
+  if (ks && mRow && mRow.kaynak) ks.value = mRow.kaynak === 'elle' ? 'elle' : 'turkomp';
+}
+
+async function nnReloadListsOnly() {
+  nnEnsureTableDelegate();
+  const durumQs = _nnSeciliDurum ? `?durum=${encodeURIComponent(_nnSeciliDurum)}` : '';
+  try {
+    const [sResp, rowsResp] = await Promise.all([
+      fetch('/api/nutrition/summary'),
+      fetch(`/api/nutrition/ingredients${durumQs}`)
+    ]);
+    const sumRaw = await sResp.json().catch(() => ({}));
+    const rowsRaw = await rowsResp.json().catch(() => []);
+
+    if (!sResp.ok) {
+      const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
+      toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
+      nnRenderKpis({});
+    } else {
+      nnRenderKpis(sumRaw);
+    }
+
+    if (!rowsResp.ok) {
+      const msg = typeof rowsRaw.detail === 'string' ? rowsRaw.detail : JSON.stringify(rowsRaw.detail || {});
+      toast(`Liste: ${msg} (${rowsResp.status})`, 'error');
+      nnRenderIngredientRows([]);
+      return;
+    }
+    nnRenderIngredientRows(Array.isArray(rowsRaw) ? rowsRaw : []);
+  } catch (e) {
+    toast(`Besin bağlantı: ${e.message}`, 'error');
+    nnRenderKpis({});
+    nnRenderIngredientRows([]);
+  }
+}
+
+async function nnReload() {
+  try {
+    await nnReloadListsOnly();
+    vcLucide();
+  } catch (e) {
+    toast(`Besin özeti/API: ${e.message}`, 'error');
+    const tb = document.getElementById('nn-ingredient-tablo');
+    if (tb) {
+      tb.innerHTML =
+        '<tr><td colspan="5" style="padding:20px;color:var(--text-dim)">' +
+        'Servis bağlantısı kurulamadı. Varsayılan <code>http://127.0.0.1:3012</code> üzerinde ' +
+        '<code>uvicorn nutrition_service.app:app</code> sürecinin çalıştığını ve Node proxy\'nin yanıtladığını doğrulayın.</td></tr>';
+    }
+  }
+}
+
+function nnRenderIngredientRows(rows) {
+  const tb = document.getElementById('nn-ingredient-tablo');
+  if (!tb) return;
+  if (!rows.length) {
+    tb.innerHTML =
+      `<tr><td colspan="5" style="padding:20px;color:var(--text-dim)">Henüz satır yok — migrasyon yapıldıktan sonra doldurma betiği çalıştırılacak.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = rows.map(rr => `
+    <tr data-id="${Number(rr.id)||0}">
+      <td><strong>${escapeHtml(rr.urun_adi || '')}</strong>
+        ${rr.veri_kaynagi ? `<div style=\"font-size:10px;color:var(--text-dim)\">${escapeHtml(String(rr.veri_kaynagi))}${rr.manuel_override_var ? ' · override' : ''}</div>` : ''}</td>
+      <td>${nnDurumBadge(rr.eslesme_durumu)}</td>
+      <td style=\"max-width:180px\">
+        ${rr.usda_efektif_adi ? `<div>${escapeHtml(rr.usda_efektif_adi)}</div>
+        <small style=\"color:var(--text-dim)\">fdc:${escapeHtml(rr.usda_efektif_fdc_id != null ? String(rr.usda_efektif_fdc_id) : '—')}</small>` : '<span class=\"nn-muted\">—</span>'}
+      </td>
+      <td>${nnFmtNut(rr.guven_skoru, 0)}</td>
+      <td style=\"white-space:normal\">${nnMacroLine(rr)}</td>
+    </tr>`).join('');
+}
+
+function nnCloseDrawer() {
+  const m = document.getElementById('nn-drawer-mask');
+  if (m) { m.classList.remove('open'); m.setAttribute('aria-hidden','true'); }
+}
+
+window.nnCloseDrawerIf = function nnCloseDrawerIf(ev) {
+  if (ev && ev.target.id === 'nn-drawer-mask') nnCloseDrawer();
+};
+
+window.nnManualFromUsda = async function nnManualFromUsda(fdc, descHint) {
+  if (!_nnActiveRowId) {
+    toast('Önce liste satırından ürün seçin', 'error');
+    return;
+  }
+  const noteEl = document.getElementById('nn-f-note');
+  const usrEl = document.getElementById('nn-f-user');
+  const payload = {
+    fdc_id: +fdc,
+    secen_kullanici: usrEl && usrEl.value ? usrEl.value : null,
+    not_metni: noteEl && noteEl.value ? noteEl.value : (descHint || null),
+  };
+  const r = await fetch(`/api/nutrition/ingredients/${_nnActiveRowId}/manual-from-usda`,{
+    method: 'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload)});
+  const d = await r.json().catch(()=>({}));
+  if (!r.ok) {
+    toast(d.detail || d.error || `USDA seçimi kaydı başarısız (${r.status})`, 'error');
+    return;
+  }
+  toast(`USDA fdc:${fdc} manuel olarak kaydedildi`, 'info');
+  await nnReloadListsOnly();
+  await nnOpenDrawer(_nnActiveRowId);
+};
+
+async function nnOpenDrawer(id) {
+  _nnActiveRowId = id;
+  const panel = document.getElementById('nn-drawer-mask');
+  if (panel) { panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); }
+  const r = await fetch(`/api/nutrition/ingredients/${id}`);
+  const d = await r.json();
+  const err = (!r.ok) && (d.detail || d.error);
+  document.getElementById('nn-drawer-heading').textContent =
+    err ? 'Hata' : (d.resolved?.urun_adi || d.otomatik_eslesme?.urun_adi || `Ürün #${id}`);
+  const subParts = [];
+  if (d.resolved?.temiz_arama_terimi) subParts.push(`temiz: ${d.resolved.temiz_arama_terimi}`);
+  if (d.resolved?.tuketim_miktari != null) subParts.push(`tük.: ${fmtN(Number(d.resolved.tuketim_miktari)||0)}`);
+  document.getElementById('nn-drawer-lines').textContent = subParts.join(' · ');
+
+  const ob = document.getElementById('nn-auto-block');
+  if (ob && d.otomatik_eslesme){
+    const a = d.otomatik_eslesme;
+    ob.innerHTML = `<table class="nn-mini-table">
+      <tr><td>fdc</td><td>${escapeHtml(a.usda_fdc_id)}</td></tr>
+      <tr><td>adı</td><td>${escapeHtml(a.usda_adi||'')}</td></tr>
+      <tr><td>makrolar</td><td>${nnMacroLine(a)}</td></tr></table>${!d.usda_env_ok ? `<p style=\"margin-top:6px;color:#b73a38;font-size:11px\">USDA_API_KEY .env eksik — canlı arama çalışmaz.</p>` : ''}`;
+  }
+
+  const al = document.getElementById('nn-alt-block');
+  if (al) {
+    const raw = d.alternatif_usda_kaynak;
+    if (Array.isArray(raw) && raw.length){
+      al.innerHTML = raw.slice(0, 5).map(x => {
+        const fidRaw = x.fdcId ?? x.fdc_id;
+        const fid = fidRaw != null ? +fidRaw : NaN;
+        const desc = escapeHtml(String(x.description ?? x.usda_adi ?? JSON.stringify(x)).slice(0, 380));
+        return `<article class=\"nn-usda-item\">
+          <div class=\"nn-usda-item-top\">
+            <div style=\"flex:1;min-width:0\">${desc}</div>
+            ${Number.isFinite(fid) ? `<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"nnManualFromUsda(${fid},'')\">USDA seç</button>` : ''}
+          </div>
+        </article>`;
+      }).join('');
+    } else if (typeof raw === 'object' && raw && !Array.isArray(raw)) {
+      al.innerHTML = `<span class=\"nn-muted\">Nesne formatı (${Object.keys(raw).length} anahtar) — gelecek batch bunu sırayla yazacaktır.</span>`;
+    } else {
+      al.innerHTML = '<span class="nn-muted">Henüz betikten aday yazılmadı.</span>';
+    }
+  }
+
+  nnHydrateManualForm(d.manual);
+  vcLucide();
+}
+
+window.nnRunUsdaSearch = async function nnRunUsdaSearch(force) {
+  const inp = document.getElementById('nn-usda-search-input');
+  const st = document.getElementById('nn-usda-search-status');
+  const list = document.getElementById('nn-usda-search-list');
+  if (!inp||!list) return;
+  const q = inp.value.trim();
+  if (q.length < 2) {
+    list.innerHTML = '';
+    if (st) st.textContent = q.length ? 'En az iki karakter…' : '';
+    return;
+  }
+  if (st) st.textContent='USDA ile aranıyor…';
+  list.innerHTML = '';
+  try {
+    const r = await fetch('/api/nutrition/usda/search',{
+      method: 'POST', headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ query: q, page_size: 14, fetch_nutrients: true }),
+    });
+    const d = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(typeof d.detail==='string' ? d.detail : (d.detail ? JSON.stringify(d.detail) : (d.error||'hata')));
+    const foods = d.foods||[];
+    if (st) st.textContent=`${foods.length} sonuç (toplam yaklaşım: ${''+ (d.totalHits||'—')})`;
+    list.innerHTML = foods.map(f=>{
+      const fid = f.fdcId;
+      const dsc = escapeHtml(f.description||'');
+      const dataT = escapeHtml((f.dataType||f.scientificName||'')+'');
+      return `<article class=\"nn-usda-item\">
+          <div class=\"nn-usda-item-top\">
+            <div>${dsc}<div style=\"color:var(--text-dim);font-size:10px;margin-top:2px\">fdc ${fid||'—'} ${dataT?` · ${dataT}`:''}</div></div>
+            <button type="button" class="btn btn-primary btn-sm" ${fid ? `onclick="nnManualFromUsda(${fid},'')"` : 'disabled'}>Seç ve kaydet</button>
+          </div>
+          <div class=\"nn-micro\">${nnMacroLine({
+            protein: f.protein, yag:f.yag, karbonhidrat:f.karbonhidrat,
+            enerji:f.enerji, su:f.su
+          })}</div>
+        </article>`;
+    }).join('')||'<span class=\"nn-muted\">Boş liste</span>';
+  }catch(e){ if(st) st.textContent = String(e.message); toast(String(e.message),'error'); }
+};
+
+(function nnManualFormBind(){
+  const f=document.getElementById('nn-manual-entry-form');
+  if (!f||f.dataset.nnFb) return;
+  f.dataset.nnFb='1';
+  f.addEventListener('submit', async ev=>{
+    ev.preventDefault();
+    if (!_nnActiveRowId){ toast('Önce liste satırı seçin','error');return;}
+    const srcEl=document.getElementById('nn-manual-src');
+    const body={
+      kaynak:(srcEl&&srcEl.value)||'turkomp',
+      secen_kullanici: valOrNull(document.getElementById('nn-f-user')),
+      not_metni: valOrNull(document.getElementById('nn-f-note')),
+      protein:parseNum(document.getElementById('nn-f-protein')),
+      yag:parseNum(document.getElementById('nn-f-yag')),
+      karbonhidrat:parseNum(document.getElementById('nn-f-carb')),
+      enerji:parseNum(document.getElementById('nn-f-enerji')),
+      su:parseNum(document.getElementById('nn-f-su')),
+      sodyum:parseNum(document.getElementById('nn-f-sodyum')),
+      potasyum:parseNum(document.getElementById('nn-f-potasyum')),
+      kalsiyum:parseNum(document.getElementById('nn-f-kalsiyum')),
+      demir:parseNum(document.getElementById('nn-f-demir')),
+      magnezyum:parseNum(document.getElementById('nn-f-mg')),
+      fosfor:parseNum(document.getElementById('nn-f-phos')),
+      cinko:parseNum(document.getElementById('nn-f-zn')),
+    };
+    const hasNut = ['protein','yag','karbonhidrat','enerji','su','sodyum','potasyum','kalsiyum','demir','magnezyum','fosfor','cinko']
+      .some(k=>body[k]!=null);
+    if (!hasNut) {toast('En az bir besin alanı dolu olmalı','error');return;}
+    const res=await fetch(`/api/nutrition/ingredients/${_nnActiveRowId}/manual-entry`,{
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const out=await res.json().catch(()=>({}));
+    if(!res.ok){toast(out.detail||out.error||'Kayıt hatası','error');return;}
+    toast('Manuel TürKomp/el kaydı güncellendi','info');
+    await nnReloadListsOnly();
+    await nnOpenDrawer(_nnActiveRowId);
+  });
+
+  function valOrNull(inp){
+    if (!inp)return null;
+    const t=inp.value.trim();
+    return t? t:null;
+  }
+  function parseNum(inp){
+    if (!inp)return null;
+    const t=inp.value.trim();
+    if (!t)return null;
+    const n=Number(t);
+    return Number.isFinite(n)? n:null;
+  }
+})();
+
+(function nnDebouncedSearchBind(){
+  const inp=document.getElementById('nn-usda-search-input');
+  if (!inp||inp.dataset.nnDeb) return;
+  inp.dataset.nnDeb='1';
+  inp.addEventListener('input', ()=>{
+    clearTimeout(_nnUsdaDeb);
+    _nnUsdaDeb = setTimeout(()=>{ nnRunUsdaSearch(true); }, 480);
+  });
+})();
+
 
 /** Alarm/eşik sayıları DB biriminde (pp_cl=cL); gösterimde mL için ×10. */
 function fmtOlcumDegeri(metrik, v, frac) {
