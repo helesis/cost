@@ -1615,7 +1615,7 @@
         <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:4px">YÜKLENMİŞ DÖNEMLER</div>
           <p class="yukle-donem-hint">Tablo: solda dönem; yiyecek ve içecek yükleme durumu çiplerle. Çip üzerindeki × yalnız o veri setini siler; «Tümünü sil» hem yiyecek hem içecek satırlarını kaldırır.</p>
-          <div id="yuklu-donemler"></div>
+          <div id="yuklu-donemler"><span style="font-size:12px;color:var(--text-dim)">Yükleniyor…</span></div>
         </div>
       </div>
     </div>
@@ -2697,7 +2697,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'trend') renderTrend();
     if (page === 'kategori') renderKategori();
     if (page === 'alarmlar') { loadAlarmlar(); loadEsikler(); }
-    if (page === 'yukle') loadYukluDonemler();
+    if (page === 'yukle') yukleInitTab();
     if (page === 'fiyat') initFiyatPage();
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
@@ -4726,9 +4726,14 @@ async function esikSil(id) {
 }
 
 // ── CSV / Excel Upload (çoklu dosya) ─────────────────────────────────────────
+async function yukleInitTab() {
+  await loadYukluDonemler();
+}
+
 function setupUpload() {
   const zone  = document.getElementById('upload-zone');
   const input = document.getElementById('file-input');
+  if (!zone || !input) return;
 
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
@@ -4762,6 +4767,7 @@ function setupUpload() {
 async function uploadFiles(fileList) {
   if (!fileList || !fileList.length) return;
   const sonuc = document.getElementById('upload-sonuc');
+  if (!sonuc) return;
   sonuc.style.display = 'block';
   const n = fileList.length;
   sonuc.innerHTML = `<div class="loading"><div class="spinner"></div> Yükleniyor (${n} dosya)...</div>`;
@@ -4795,34 +4801,51 @@ function vcEsc(s) {
 }
 
 async function loadYukluDonemler() {
-  const rows = await fetch('/api/donemler').then(r => r.json()).catch(() => []);
-  window._yukluDonemCache = rows;
   const el = document.getElementById('yuklu-donemler');
-  if (!rows.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
-    return;
+  if (!el) return;
+  el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Yükleniyor…</span>';
+  try {
+    const resp = await fetch('/api/donemler');
+    const rows = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const msg = (rows && rows.error) ? rows.error : `HTTP ${resp.status}`;
+      el.innerHTML = `<span style="font-size:12px;color:var(--danger,#c94847)">Dönem listesi yüklenemedi: ${escapeHtml(msg)}</span>`;
+      return;
+    }
+    if (!Array.isArray(rows)) {
+      el.innerHTML = '<span style="font-size:12px;color:var(--danger,#c94847)">Dönem listesi yüklenemedi (geçersiz yanıt)</span>';
+      return;
+    }
+    window._yukluDonemCache = rows;
+    if (!rows.length) {
+      el.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Henüz veri yüklenmemiş</span>';
+      return;
+    }
+    const enc = (s) => encodeURIComponent(s || '');
+    const num = (v) => +v || 0;
+    el.innerHTML =
+      '<div class="table-wrap"><table class="yukle-donem-table">' +
+      '<thead><tr><th>Dönem</th><th>Yiyecek</th><th>İçecek</th></tr></thead><tbody>' +
+      rows.map((d) => {
+        const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
+        const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
+        const ts = enc(d.tarih_str);
+        const ny = num(d.yiyecek_satir);
+        const ni = num(d.icenek_satir);
+        const chipY = ny > 0
+          ? `<span class="yukle-chip yukle-chip-yiyecek"><span class="yukle-chip-label">Yiyecek · ${ny.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="yiyecek" title="Yiyecek veri setini sil" aria-label="Yiyeceği sil">×</button></span>`
+          : '<span class="yukle-empty">—</span>';
+        const chipI = ni > 0
+          ? `<span class="yukle-chip yukle-chip-icenek"><span class="yukle-chip-label">İçecek · ${ni.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="icenek" title="İçecek veri setini sil" aria-label="İçeceği sil">×</button></span>`
+          : '<span class="yukle-empty">—</span>';
+        return `<tr><td><div class="yukle-donem-cell"><span class="yukle-donem-etiket">${vcEsc(etiket)}</span><button type="button" class="btn btn-secondary btn-sm yukle-row-del-all" data-tstr="${ts}" title="Bu döneme ait tüm satırları sil (yiyecek + içecek)">Tümünü sil</button></div></td><td>${chipY}</td><td>${chipI}</td></tr>`;
+      }).join('') +
+      '</tbody></table></div>';
+    vcLucide();
+  } catch (e) {
+    console.error('loadYukluDonemler', e);
+    el.innerHTML = `<span style="font-size:12px;color:var(--danger,#c94847)">Dönem listesi hatası: ${escapeHtml(e.message)}</span>`;
   }
-  const enc = (s) => encodeURIComponent(s || '');
-  const num = (v) => +v || 0;
-  el.innerHTML =
-    '<div class="table-wrap"><table class="yukle-donem-table">' +
-    '<thead><tr><th>Dönem</th><th>Yiyecek</th><th>İçecek</th></tr></thead><tbody>' +
-    rows.map((d) => {
-      const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
-      const etiket = `${d.ay} ${d.yil}${kismi ? ' (15g)' : ''}`;
-      const ts = enc(d.tarih_str);
-      const ny = num(d.yiyecek_satir);
-      const ni = num(d.icenek_satir);
-      const chipY = ny > 0
-        ? `<span class="yukle-chip yukle-chip-yiyecek"><span class="yukle-chip-label">Yiyecek · ${ny.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="yiyecek" title="Yiyecek veri setini sil" aria-label="Yiyeceği sil">×</button></span>`
-        : '<span class="yukle-empty">—</span>';
-      const chipI = ni > 0
-        ? `<span class="yukle-chip yukle-chip-icenek"><span class="yukle-chip-label">İçecek · ${ni.toLocaleString('tr-TR')} satır</span><button type="button" class="yukle-chip-x" data-tstr="${ts}" data-tip="icenek" title="İçecek veri setini sil" aria-label="İçeceği sil">×</button></span>`
-        : '<span class="yukle-empty">—</span>';
-      return `<tr><td><div class="yukle-donem-cell"><span class="yukle-donem-etiket">${vcEsc(etiket)}</span><button type="button" class="btn btn-secondary btn-sm yukle-row-del-all" data-tstr="${ts}" title="Bu döneme ait tüm satırları sil (yiyecek + içecek)">Tümünü sil</button></div></td><td>${chipY}</td><td>${chipI}</td></tr>`;
-    }).join('') +
-    '</tbody></table></div>';
-  vcLucide();
 }
 
 async function vcSilDonem(tarihStr, tip) {
