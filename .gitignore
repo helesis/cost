@@ -53,6 +53,10 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+
 # ── Test / Coverage ───────────────────────────────────────────────────────────
 coverage/
 .nyc_output/
