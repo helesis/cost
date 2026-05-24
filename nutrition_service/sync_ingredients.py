@@ -167,7 +167,7 @@ def _match_product(row: dict) -> dict:
     # 2) USDA arama
     payload = foods_search_sync(query=llm_term, page_size=15)
     foods = payload.get("foods") or []
-    ranked = rank_usda_foods(llm_term, foods, top_n=5)
+    ranked = rank_usda_foods(llm_term, foods, top_n=15)
     best = ranked[0] if ranked else None
 
     if not best:
@@ -187,7 +187,7 @@ def _match_product(row: dict) -> dict:
             note="USDA sonuç yok",
         )
 
-    # 3) rapidfuzz skor (best.score = gerçek token_sort_ratio)
+    # 3) rapidfuzz skor (best.score = token_set_ratio, tüm adaylar arasından en yüksek)
     fuzzy_score = best.score
 
     # 4) LLM anlamsal onay

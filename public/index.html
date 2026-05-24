@@ -715,9 +715,15 @@
           <div class="card-title">Yiyecek vs İçecek Dağılımı</div>
           <div class="chart-wrap"><canvas id="chart-dagilim"></canvas></div>
         </div>
-        <div class="card">
-          <div class="card-title">Pax Başına Maliyet (€)</div>
-          <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-title" id="ozet-pp-maliyet-title">Pax Başına Maliyet (€)</div>
+            <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Pax Başına Tüketim</div>
+            <div class="chart-wrap"><canvas id="chart-pp-tuketim"></canvas></div>
+          </div>
         </div>
       </div>
     </div>
@@ -765,34 +771,13 @@
       </div>
 
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">5. Düşük / sıfır tüketim</div>
-        <div class="talep-two-col">
-          <div class="talep-subcard">
-            <h4>Bu dönem kullanılmayan ürünler</h4>
-            <p class="talep-note">Geçmişte tüketimi olan, bu dönemde tutarı 0 olan SKUs (örnek liste).</p>
-            <ul class="talep-list" id="talep-pasif-list"></ul>
-          </div>
-          <div class="talep-subcard">
-            <h4>Çok düşük tutarlı tüketim</h4>
-            <p class="talep-note">Dönem içi pozitif ama toplamın ~%0,3’ünün altında kalan ürünler.</p>
-            <div class="table-wrap" style="max-height:240px;overflow:auto">
-              <table class="search-results" style="font-size:12px">
-                <thead><tr><th>Ürün</th><th style="text-align:right" id="talep-dusuk-th">Tutar</th></tr></thead>
-                <tbody id="talep-dusuk-tablo"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">6. Maliyet sürücüsü (dolaylı)</div>
+        <div class="card-title">5. Maliyet sürücüsü (dolaylı)</div>
         <p class="talep-note" id="talep-cost-aciklama"></p>
         <div class="talep-kpi" id="talep-cost-kpi"></div>
       </div>
 
       <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
-        <div class="card-title">7. Üretim karmaşıklığı (aktif SKU)</div>
+        <div class="card-title">6. Üretim karmaşıklığı (aktif SKU)</div>
         <p class="talep-note">Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.</p>
         <div class="talep-kpi" id="talep-komp-kpi"></div>
         <div class="chart-wrap" style="height:300px;margin-top:16px"><canvas id="chart-talep-complexity"></canvas></div>
@@ -1576,7 +1561,7 @@ let ozetData = [], donemler = [];
 const talepParetoDetailCache = new Map();
 let talepParetoTooltipHideTimer = null;
 let talepParetoTooltipEl = null;
-let chartDagilim, chartPpEur, chartTrend, chartKur, chartKatPasta, chartUrun, chartKatUrunSeri;
+let chartDagilim, chartPpEur, chartPpTuketim, chartTrend, chartKur, chartKatPasta, chartUrun, chartKatUrunSeri;
 /** @type {string|null} Tam kategori adı (DB); kategori sayfası sağ panel */
 let katSeciliKategori = null;
 
@@ -3443,23 +3428,6 @@ async function loadTalepAnaliz() {
       }
     });
 
-    const pasif = data.bu_donem_pasif_urunler || [];
-    const ul = document.getElementById('talep-pasif-list');
-    if (ul) {
-      ul.innerHTML = pasif.length
-        ? pasif.map(s => `<li>${escapeHtml(s)}</li>`).join('')
-        : '<li style="color:var(--text-dim)">Kayıt yok (önceki dönemde hareket görünmüyor veya hepsi bu ay da kullanıldı).</li>';
-    }
-    const dusukTh = document.getElementById('talep-dusuk-th');
-    if (dusukTh) dusukTh.textContent = 'Tutar (' + curLabel() + ')';
-    const dusuk = data.dusuk_tuketim_urunler || [];
-    const dusukTb = document.getElementById('talep-dusuk-tablo');
-    if (dusukTb) {
-      dusukTb.innerHTML = dusuk.length
-        ? dusuk.map(r => `<tr><td>${escapeHtml(r.stok_mali)}</td><td style="text-align:right">${fmtCur(vcIsEUR() ? r.tutar_eur : r.tutar_tl)}</td></tr>`).join('')
-        : '<tr><td colspan="2" style="color:var(--text-dim)">Eşik altı kayıt yok</td></tr>';
-    }
-
     const cd = data.cost_driver || {};
     const costAc = document.getElementById('talep-cost-aciklama');
     if (costAc) costAc.textContent = cd.aciklama || '';
@@ -3665,7 +3633,7 @@ function renderOzet() {
   const yiyPP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && x.tip==='yiyecek'); return r ? pickCur(r, 'toplam_pp') : null; });
   const icePP = donemSirali.map(d => { const r = ozetData.find(x => x.tarih_str===d && tipRowIsIcenek(x.tip));  return r ? pickCur(r, 'toplam_pp') : null; });
 
-  document.querySelector('#page-ozet .grid-2 .card:nth-child(2) .card-title').textContent = `Pax Başına Maliyet (${curLabel()})`;
+  document.getElementById('ozet-pp-maliyet-title').textContent = `Pax Başına Maliyet (${curLabel()})`;
 
   if (chartPpEur) chartPpEur.destroy();
   chartPpEur = new Chart(document.getElementById('chart-pp-eur'), {
@@ -3684,6 +3652,57 @@ function renderOzet() {
         tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCur(ctx.parsed.y)}` } }
       },
       scales:{ y:{ beginAtZero:false } }
+    }
+  });
+
+  const yiyTuk = donemSirali.map(d => {
+    const r = ozetData.find(x => x.tarih_str === d && x.tip === 'yiyecek');
+    return r ? (+r.toplam_pp_gr || null) : null;
+  });
+  const iceTuk = donemSirali.map(d => {
+    const r = ozetData.find(x => x.tarih_str === d && tipRowIsIcenek(x.tip));
+    return r ? (+r.toplam_pp_cl || 0) * 10 : null;
+  });
+
+  if (chartPpTuketim) chartPpTuketim.destroy();
+  chartPpTuketim = new Chart(document.getElementById('chart-pp-tuketim'), {
+    type: 'line',
+    data: {
+      labels: donemSirali,
+      datasets: [
+        { label:'Yiyecek g / pax', data: yiyTuk, borderColor:'#8a6c2e', backgroundColor:'rgba(138,108,46,.1)', tension:.3, fill:true, yAxisID:'y' },
+        { label:'İçecek mL / pax', data: iceTuk, borderColor:'#2a4d7a', backgroundColor:'rgba(42,77,122,.1)', tension:.3, fill:true, yAxisID:'y1' }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins: {
+        legend:{position:'bottom'},
+        tooltip: {
+          callbacks: {
+            label(ctx) {
+              const u = ctx.dataset.yAxisID === 'y1' ? 'mL' : 'g';
+              return `${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 0)} ${u}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          position:'left',
+          beginAtZero:false,
+          title:{ display:true, text:'g / pax', color:'#8a6c2e' },
+          ticks:{ color:'#8a6c2e', callback: v => fmtN(v, 0) }
+        },
+        y1: {
+          position:'right',
+          beginAtZero:false,
+          title:{ display:true, text:'mL / pax', color:'#2a4d7a' },
+          ticks:{ color:'#2a4d7a', callback: v => fmtN(v, 0) },
+          grid:{ drawOnChartArea:false }
+        }
+      }
     }
   });
 }

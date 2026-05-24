@@ -35,8 +35,8 @@ Kurallar:
 
 _VERIFY_SYSTEM = """Sen gıda eşleştirme denetçisisin.
 Verilen Türkçe otel stok kalemi ile USDA (ABD gıda veritabanı) ürün adının AYNI temel gıda olup olmadığını değerlendir.
-Yalnızca tek kelime yanıt: EVET veya HAYIR.
-Aynı gıda değilse (ör. yumurta vs böğürtlen) HAYIR de."""
+Yanıtına yalnızca tek kelimeyle başla: EVET veya HAYIR. Sonra istersen kısa açıklama ekle.
+Aynı gıda değilse (ör. yumurta vs böğürtlen) HAYIR ile başla."""
 
 
 def _generate(prompt: str, *, system: str, temperature: float = 0.1) -> str | None:
@@ -101,8 +101,43 @@ USDA arama terimi (yalnızca kısa İngilizce):"""
     return term or None
 
 
-_EvetRe = re.compile(r"^\s*EVET\s*$", re.I)
-_HayirRe = re.compile(r"^\s*HAYIR\s*$", re.I)
+_NEGATIVE_RE = re.compile(
+    r"\b(hay[iı]r|hayir|degil|değil|farkl[iı]|farkli|no|not)\b",
+    re.I,
+)
+_POSITIVE_RE = re.compile(
+    r"\b(evet|yes)\b|\b(?:ayn[iı]\s+(?:g[iı]da|temel|ürün|urun)|same\s+food|the\s+same)\b|\b(?:ayn[iı]d[iı]r|ayn[iı])\b",
+    re.I,
+)
+_UNCERTAIN_RE = re.compile(r"\b(belki|san[iı]r|muhtemelen|karars[iı]z|perhaps|maybe)\b", re.I)
+
+
+def _parse_llm_yes_no(text: str) -> bool | None:
+    """
+    LLM yanıtından EVET/HAYIR çıkar.
+    Olumsuzlamaya öncelik ver; tam satır eşleşmesi şart değil.
+    """
+    ans = (text or "").strip()
+    if not ans:
+        return None
+
+    first = re.split(r"[\s,.:;!?]+", ans, maxsplit=1)[0].upper()
+    if first in ("EVET", "YES"):
+        return True
+    if first in ("HAYIR", "NO"):
+        return False
+
+    lower = ans.lower()
+    has_neg = bool(_NEGATIVE_RE.search(lower))
+    has_pos = bool(_POSITIVE_RE.search(lower))
+
+    if has_neg:
+        return False
+    if _UNCERTAIN_RE.search(lower) and not re.search(r"\b(evet|yes)\b", lower, re.I):
+        return None
+    if has_pos:
+        return True
+    return None
 
 
 def verify_same_food(urun_adi: str, usda_adi: str) -> bool | None:
@@ -115,16 +150,11 @@ def verify_same_food(urun_adi: str, usda_adi: str) -> bool | None:
     prompt = f"""Türkçe stok kalemi: "{urun_adi.strip()}"
 USDA ürün adı: "{usda_adi.strip()}"
 
-Aynı temel gıda mı? (EVET veya HAYIR):"""
+Aynı temel gıda mı?
+Yanıtına yalnızca tek kelimeyle başla: EVET veya HAYIR. Sonra istersen kısa açıklama ekle."""
 
     out = _generate(prompt, system=_VERIFY_SYSTEM, temperature=0.0)
     if not out:
         return None
 
-    ans = _first_line(out).upper()
-    if _EvetRe.match(ans) or ans.startswith("EVET"):
-        return True
-    if _HayirRe.match(ans) or ans.startswith("HAYIR") or ans.startswith("NO"):
-        return False
-    # Belirsiz yanıt → güvenli taraf
-    return None
+    return _parse_llm_yes_no(out)
