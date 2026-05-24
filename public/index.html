@@ -1439,7 +1439,9 @@
       <div class="card mb-20" style="max-width:1100px">
         <div class="card-title">Protein bucket’ları</div>
         <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px">Kayıtlı sınıflandırmadaki dağılım. Bir bucket’a tıklayın; altta o gruptaki ürünleri görün.</p>
-        <div id="classify-bucket-chips" class="classify-bucket-chips" role="tablist" aria-label="Protein bucket"></div>
+        <div id="classify-bucket-chips" class="classify-bucket-chips" role="tablist" aria-label="Protein bucket">
+          <span style="font-size:12px;color:var(--text-dim)">Yükleniyor…</span>
+        </div>
         <div id="classify-bucket-detail" class="classify-bucket-detail-wrap" style="display:none">
           <div class="classify-bucket-detail-title" id="classify-bucket-detail-title"></div>
           <div class="table-wrap" style="max-height:360px;overflow:auto">
@@ -1461,7 +1463,7 @@
                 <th>stok_mali</th><th>kategori</th><th>protein</th><th>food_group</th><th>cost</th><th>güven</th><th>güncellendi</th>
               </tr>
             </thead>
-            <tbody id="classify-results-tablo"></tbody>
+            <tbody id="classify-results-tablo"><tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">Yükleniyor…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -2699,31 +2701,43 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'fiyat') initFiyatPage();
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
-    if (page === 'siniflandirma') { classifyRefreshStats(); classifyLoadResults(); }
+    if (page === 'siniflandirma') { classifyInitTab(); }
     if (page === 'besin-eslesmesi') { nnReload(); }
     else { nnStopPolling(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
   });
 });
 
+async function classifyInitTab() {
+  classifyRefreshStats();
+  await classifyLoadResults();
+}
+
 async function classifyRefreshStats() {
+  const hintEl = document.getElementById('classify-job-hint');
   try {
-    const s = await fetch('/api/classify/stats?skip_existing=true').then(r => r.json());
-    if (s.error) return;
+    const resp = await fetch('/api/classify/stats?skip_existing=true');
+    const s = await resp.json().catch(() => ({}));
+    if (!resp.ok || s.error) {
+      const msg = s.error || `HTTP ${resp.status}`;
+      if (hintEl) hintEl.textContent = `İstatistik yüklenemedi: ${msg}`;
+      return;
+    }
     const j = s.job || {};
-    document.getElementById('classify-total').textContent = s.total_pairs ?? '—';
-    document.getElementById('classify-unclassified').textContent = s.unclassified_pairs ?? '—';
-    document.getElementById('classify-saved').textContent = s.saved_rows ?? '—';
-    document.getElementById('classify-processed').textContent = j.processed != null ? j.processed : '—';
-    document.getElementById('classify-success').textContent = j.success != null ? j.success : '—';
-    document.getElementById('classify-failed').textContent = j.failed != null ? j.failed : '—';
-    document.getElementById('classify-avgms').textContent = j.avgMs != null ? j.avgMs : '—';
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('classify-total', s.total_pairs ?? '—');
+    set('classify-unclassified', s.unclassified_pairs ?? '—');
+    set('classify-saved', s.saved_rows ?? '—');
+    set('classify-processed', j.processed != null ? j.processed : '—');
+    set('classify-success', j.success != null ? j.success : '—');
+    set('classify-failed', j.failed != null ? j.failed : '—');
+    set('classify-avgms', j.avgMs != null ? j.avgMs : '—');
     const hint = [];
     if (j.running) hint.push('Çalışıyor…');
     if (j.lastStokMali) hint.push('Son: ' + j.lastStokMali);
     if (j.lastError) hint.push('Uyarı: ' + j.lastError);
     if (j.pauseReason) hint.push(j.pauseReason);
-    document.getElementById('classify-job-hint').textContent = hint.join(' · ') || (j.running ? '' : 'Beklemede');
+    if (hintEl) hintEl.textContent = hint.join(' · ') || (j.running ? '' : 'Beklemede');
     const wasRunning = window._classifyJobWasRunning;
     window._classifyJobWasRunning = !!j.running;
     if (wasRunning && !j.running && document.querySelector('.tab-content.active')?.id === 'page-tuketim-talep') {
@@ -2739,7 +2753,10 @@ async function classifyRefreshStats() {
     } else {
       window._classifyLastTableAt = 0;
     }
-  } catch (e) { /* tablo yok vb. */ }
+  } catch (e) {
+    console.error('classifyRefreshStats', e);
+    if (hintEl) hintEl.textContent = `İstatistik hatası: ${e.message}`;
+  }
 }
 
 async function classifyRun(skipExisting) {
@@ -2795,7 +2812,13 @@ async function classifyLoadProteinBuckets() {
   classifyBindBucketChips();
   host.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Yükleniyor…</span>';
   try {
-    const rows = await fetch('/api/classify/protein-buckets').then(r => r.json());
+    const resp = await fetch('/api/classify/protein-buckets');
+    const rows = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const msg = (rows && rows.error) ? rows.error : `HTTP ${resp.status}`;
+      host.innerHTML = `<span style="font-size:12px;color:var(--red)">Yüklenemedi: ${escapeHtml(msg)}</span>`;
+      return;
+    }
     if (!Array.isArray(rows)) {
       host.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Yüklenemedi</span>';
       return;
@@ -2819,7 +2842,8 @@ async function classifyLoadProteinBuckets() {
     }).join('');
     if (window._classifyBucketSecili) await classifySelectBucket(window._classifyBucketSecili);
   } catch (e) {
-    host.innerHTML = '<span style="font-size:12px;color:var(--red)">Hata</span>';
+    console.error('classifyLoadProteinBuckets', e);
+    host.innerHTML = `<span style="font-size:12px;color:var(--red)">Hata: ${escapeHtml(e.message)}</span>`;
   }
 }
 
@@ -2860,21 +2884,29 @@ async function classifySelectBucket(bucket) {
 }
 
 async function classifyLoadResults() {
+  const tb = document.getElementById('classify-results-tablo');
+  if (!tb) return;
   try {
-    const rows = await fetch('/api/classify/results?limit=100').then(r => r.json());
-    const tb = document.getElementById('classify-results-tablo');
-    if (!tb) return;
+    const resp = await fetch('/api/classify/results?limit=100');
+    const rows = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const msg = (rows && rows.error) ? rows.error : `HTTP ${resp.status}`;
+      tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger,#c94847);padding:16px">Liste yüklenemedi: ${escapeHtml(msg)}</td></tr>`;
+      return;
+    }
     if (!Array.isArray(rows)) {
-      tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">Liste yüklenemedi</td></tr>';
+      tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:16px">Liste yüklenemedi (geçersiz yanıt)</td></tr>';
       return;
     }
     tb.innerHTML = rows.map(x => {
       const u = x.updated_at ? new Date(x.updated_at).toLocaleString('tr-TR') : '';
-      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.protein_bucket)}</td><td>${escapeHtml(x.food_group)}</td><td>${escapeHtml(x.cost_proxy || '—')}</td><td>${escapeHtml(x.confidence)}</td><td>${u}</td></tr>`;
-    }).join('') || '<tr><td colspan="7" style="color:var(--text-dim)">Kayıt yok — migrasyon çalıştırıldı mı?</td></tr>';
+      return `<tr><td>${escapeHtml(x.stok_mali)}</td><td>${escapeHtml(x.kategori || '')}</td><td>${escapeHtml(x.protein_bucket || '')}</td><td>${escapeHtml(x.food_group || '')}</td><td>${escapeHtml(x.cost_proxy || '—')}</td><td>${escapeHtml(x.confidence || '')}</td><td>${u}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" style="color:var(--text-dim);padding:16px;text-align:center">Kayıt yok — migrasyon çalıştırıldı mı?</td></tr>';
     vcLucide();
-  } catch (e) { /* */ }
-  finally {
+  } catch (e) {
+    console.error('classifyLoadResults', e);
+    tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--danger,#c94847);padding:16px">Liste hatası: ${escapeHtml(e.message)}</td></tr>`;
+  } finally {
     await classifyLoadProteinBuckets();
   }
 }
