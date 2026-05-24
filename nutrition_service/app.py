@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,6 +16,8 @@ from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
 
 _ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(_ROOT / ".env")
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Voyage Nutrition / USDA bridge",
@@ -71,8 +74,34 @@ def _row_manual(row_or_none):
     return dict(row_or_none) if row_or_none else None
 
 
+def _ts_to_str(value) -> str | None:
+    """datetime veya db katmanından gelen ISO string → JSON güvenli metin."""
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _empty_summary() -> dict:
+    return {
+        "otomatik": 0,
+        "kontrol_gerekli": 0,
+        "eslesmedi": 0,
+        "manuel_onayli": 0,
+        "toplam": 0,
+        "bekliyor": 0,
+        "islenen": 0,
+        "eslesmedi_aranmis": 0,
+        "ortalama_guven": None,
+        "besin_dolu": 0,
+        "son_islenen": [],
+    }
+
+
 @app.get("/api/nutrition/summary")
 async def summary():
+    agg = _empty_summary()
     try:
         stats = db.fetch_one(
             """
@@ -109,57 +138,39 @@ async def summary():
             LIMIT 5
             """
         )
+
+        if stats:
+            for k in (
+                "toplam",
+                "otomatik",
+                "kontrol_gerekli",
+                "eslesmedi",
+                "manuel_onayli",
+                "bekliyor",
+                "islenen",
+                "eslesmedi_aranmis",
+                "besin_dolu",
+            ):
+                if stats.get(k) is not None:
+                    agg[k] = int(stats[k])
+            og = stats.get("ortalama_guven")
+            if og is not None:
+                agg["ortalama_guven"] = round(float(og), 1)
+
+        for r in recent or []:
+            gs = r.get("guven_skoru")
+            agg["son_islenen"].append(
+                {
+                    "urun_adi": r.get("urun_adi") or "",
+                    "eslesme_durumu": r.get("eslesme_durumu") or "",
+                    "guven_skoru": int(gs) if gs is not None else None,
+                    "updated_at": _ts_to_str(r.get("updated_at")),
+                }
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"veritabanı: {e!s}") from e
+        logger.exception("summary endpoint DB hatası: %s", e)
+        return _empty_summary()
 
-    agg = {
-        "otomatik": 0,
-        "kontrol_gerekli": 0,
-        "eslesmedi": 0,
-        "manuel_onayli": 0,
-        "toplam": 0,
-        "bekliyor": 0,
-        "islenen": 0,
-        "eslesmedi_aranmis": 0,
-        "ortalama_guven": None,
-        "besin_dolu": 0,
-        "son_islenen": [],
-    }
-    if stats:
-        for k in (
-            "toplam",
-            "otomatik",
-            "kontrol_gerekli",
-            "eslesmedi",
-            "manuel_onayli",
-            "bekliyor",
-            "islenen",
-            "eslesmedi_aranmis",
-            "besin_dolu",
-        ):
-            if stats.get(k) is not None:
-                agg[k] = int(stats[k])
-        og = stats.get("ortalama_guven")
-        if og is not None:
-            agg["ortalama_guven"] = round(float(og), 1)
-
-    for r in recent or []:
-        agg["son_islenen"].append(
-            {
-                "urun_adi": r.get("urun_adi") or "",
-                "eslesme_durumu": r.get("eslesme_durumu") or "",
-                "guven_skoru": (
-                    int(r["guven_skoru"])
-                    if r.get("guven_skoru") is not None
-                    else None
-                ),
-                "updated_at": (
-                    r["updated_at"].isoformat()
-                    if r.get("updated_at") is not None
-                    else None
-                ),
-            }
-        )
     return agg
 
 
@@ -217,7 +228,8 @@ async def ingredients_list(
         rows = db.fetch_all(sql, params)
         return rows
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.exception("ingredients endpoint DB hatası: %s", e)
+        return []
 
 
 @app.get("/api/nutrition/ingredients/{ingredient_id:int}")
