@@ -74,21 +74,92 @@ def _row_manual(row_or_none):
 @app.get("/api/nutrition/summary")
 async def summary():
     try:
-        rows = db.fetch_all(
+        stats = db.fetch_one(
             """
-            SELECT eslesme_durumu AS durum, COUNT(*)::int AS adet
+            SELECT
+              COUNT(*)::int AS toplam,
+              COUNT(*) FILTER (WHERE eslesme_durumu = 'otomatik')::int AS otomatik,
+              COUNT(*) FILTER (WHERE eslesme_durumu = 'kontrol_gerekli')::int AS kontrol_gerekli,
+              COUNT(*) FILTER (WHERE eslesme_durumu = 'eslesmedi')::int AS eslesmedi,
+              COUNT(*) FILTER (WHERE eslesme_durumu = 'manuel_onayli')::int AS manuel_onayli,
+              COUNT(*) FILTER (WHERE son_arama_tarihi IS NULL)::int AS bekliyor,
+              COUNT(*) FILTER (WHERE son_arama_tarihi IS NOT NULL)::int AS islenen,
+              COUNT(*) FILTER (
+                WHERE eslesme_durumu = 'eslesmedi' AND son_arama_tarihi IS NOT NULL
+              )::int AS eslesmedi_aranmis,
+              AVG(guven_skoru) FILTER (
+                WHERE eslesme_durumu IN ('otomatik', 'kontrol_gerekli')
+                  AND guven_skoru IS NOT NULL
+              ) AS ortalama_guven,
+              COUNT(*) FILTER (
+                WHERE protein IS NOT NULL OR enerji IS NOT NULL OR yag IS NOT NULL
+              )::int AS besin_dolu
             FROM fb_cost.ingredient_nutrition
-            GROUP BY eslesme_durumu
+            """
+        )
+        recent = db.fetch_all(
+            """
+            SELECT
+              urun_adi,
+              eslesme_durumu,
+              guven_skoru,
+              updated_at
+            FROM fb_cost.ingredient_nutrition
+            ORDER BY updated_at DESC NULLS LAST, id DESC
+            LIMIT 5
             """
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"veritabanı: {e!s}") from e
-    agg = {"otomatik": 0, "kontrol_gerekli": 0, "eslesmedi": 0, "manuel_onayli": 0}
-    for r in rows:
-        d = r.get("durum")
-        if d in agg:
-            agg[d] = r["adet"]
-    agg["toplam"] = sum(agg.values())
+
+    agg = {
+        "otomatik": 0,
+        "kontrol_gerekli": 0,
+        "eslesmedi": 0,
+        "manuel_onayli": 0,
+        "toplam": 0,
+        "bekliyor": 0,
+        "islenen": 0,
+        "eslesmedi_aranmis": 0,
+        "ortalama_guven": None,
+        "besin_dolu": 0,
+        "son_islenen": [],
+    }
+    if stats:
+        for k in (
+            "toplam",
+            "otomatik",
+            "kontrol_gerekli",
+            "eslesmedi",
+            "manuel_onayli",
+            "bekliyor",
+            "islenen",
+            "eslesmedi_aranmis",
+            "besin_dolu",
+        ):
+            if stats.get(k) is not None:
+                agg[k] = int(stats[k])
+        og = stats.get("ortalama_guven")
+        if og is not None:
+            agg["ortalama_guven"] = round(float(og), 1)
+
+    for r in recent or []:
+        agg["son_islenen"].append(
+            {
+                "urun_adi": r.get("urun_adi") or "",
+                "eslesme_durumu": r.get("eslesme_durumu") or "",
+                "guven_skoru": (
+                    int(r["guven_skoru"])
+                    if r.get("guven_skoru") is not None
+                    else None
+                ),
+                "updated_at": (
+                    r["updated_at"].isoformat()
+                    if r.get("updated_at") is not None
+                    else None
+                ),
+            }
+        )
     return agg
 
 

@@ -385,6 +385,102 @@
   .nn-mini-table { border-collapse: collapse; margin-top:6px; font-size:11px; width:100%; }
   .nn-mini-table th, .nn-mini-table td { padding: 3px 6px 3px 0; text-align:left; border-bottom:1px solid var(--border); vertical-align: top; }
 
+  .nn-live-dashboard { padding-bottom: 16px; }
+  .nn-live-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .nn-live-controls {
+    display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-dim);
+  }
+  .nn-live-dot {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
+    font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: #347f5c; opacity: 0.45; transition: opacity .25s;
+  }
+  .nn-live-dot.active { opacity: 1; }
+  .nn-live-dot::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%; background: #347f5c;
+    box-shadow: 0 0 0 0 rgba(52,127,92,.45);
+  }
+  .nn-live-dot.active::before { animation: nn-live-pulse 1.6s ease-in-out infinite; }
+  @keyframes nn-live-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(52,127,92,.45); }
+    50% { box-shadow: 0 0 0 6px rgba(52,127,92,0); }
+  }
+  .nn-live-toggle {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  }
+  .nn-progress-meta {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-size: 12px; color: var(--text-dim); margin-bottom: 8px;
+  }
+  .nn-progress-meta strong { color: var(--text); font-size: 13px; }
+  .nn-progress-track {
+    display: flex; height: 14px; border-radius: 999px; overflow: hidden;
+    background: rgba(0,0,0,.06); border: 1px solid var(--border);
+  }
+  .nn-seg {
+    height: 100%; width: 0; min-width: 0;
+    transition: width .55s cubic-bezier(.4,.1,.4,1);
+  }
+  .nn-seg-otomatik { background: #347f5c; }
+  .nn-seg-kontrol { background: #c99a2f; }
+  .nn-seg-eslesmedi { background: #c94847; }
+  .nn-seg-manuel { background: #37639a; }
+  .nn-seg-bekliyor { background: rgba(120,120,120,.28); }
+  .nn-status-cards {
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 16px 0 12px;
+  }
+  @media (max-width: 900px) { .nn-status-cards { grid-template-columns: repeat(2, 1fr); } }
+  .nn-status-card {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 14px; cursor: pointer; background: var(--surface2);
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+    border-left-width: 4px;
+  }
+  .nn-status-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.06); }
+  .nn-status-card.active-filter { outline: 2px solid var(--gold); outline-offset: 1px; }
+  .nn-status-card[data-durum="otomatik"] { border-left-color: #347f5c; }
+  .nn-status-card[data-durum="kontrol_gerekli"] { border-left-color: #c99a2f; }
+  .nn-status-card[data-durum="eslesmedi"] { border-left-color: #c94847; }
+  .nn-status-card[data-durum="manuel_onayli"] { border-left-color: #37639a; }
+  .nn-status-card-val {
+    font-size: 24px; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .nn-status-card[data-durum="otomatik"] .nn-status-card-val { color: #347f5c; }
+  .nn-status-card[data-durum="kontrol_gerekli"] .nn-status-card-val { color: #956c1c; }
+  .nn-status-card[data-durum="eslesmedi"] .nn-status-card-val { color: #b73a38; }
+  .nn-status-card[data-durum="manuel_onayli"] .nn-status-card-val { color: #37639a; }
+  .nn-status-card-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); margin-top: 4px; }
+  .nn-status-card-pct { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .nn-live-metrics {
+    display: flex; flex-wrap: wrap; gap: 16px 24px; font-size: 12px;
+    color: var(--text-dim); padding: 10px 0 4px; border-top: 1px solid var(--border);
+  }
+  .nn-live-metrics strong { color: var(--text); font-weight: 600; }
+  .nn-live-stream { margin-top: 12px; }
+  .nn-stream-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: hidden; }
+  .nn-stream-item {
+    display: flex; align-items: center; gap: 10px; justify-content: space-between;
+    font-size: 12px; padding: 8px 10px; border-radius: var(--radius);
+    background: var(--surface2); border: 1px solid var(--border);
+    animation: nn-stream-in .35s ease-out;
+  }
+  @keyframes nn-stream-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .nn-stream-name {
+    flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-weight: 500;
+  }
+  .nn-stream-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .nn-stream-score { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; min-width: 28px; text-align: right; }
+
   .me-charts-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1390,10 +1486,37 @@
         <code>python -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012</code>;
         USDA anahtarı: <code>USDA_API_KEY</code> (.env).
       </p>
-      <section class="card nn-wrap mb-20">
-        <div class="card-title">Özet</div>
-        <div id="nn-kpi-cards" class="nn-cards">
-          <span class="nn-muted">Özet için yükleniyor…</span>
+      <section class="card nn-wrap nn-live-dashboard mb-20">
+        <div class="nn-live-head">
+          <div class="card-title" style="margin:0">Canlı ilerleme</div>
+          <div class="nn-live-controls">
+            <span id="nn-live-dot" class="nn-live-dot" aria-hidden="true">canlı</span>
+            <label class="nn-live-toggle">
+              <input type="checkbox" id="nn-live-toggle" checked>
+              Canlı güncelleme
+            </label>
+          </div>
+        </div>
+        <div class="nn-progress-meta">
+          <span id="nn-progress-label"><strong>—</strong></span>
+          <span id="nn-progress-pct">—</span>
+        </div>
+        <div class="nn-progress-track" id="nn-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+          <div id="nn-seg-otomatik" class="nn-seg nn-seg-otomatik" title="Otomatik"></div>
+          <div id="nn-seg-kontrol" class="nn-seg nn-seg-kontrol" title="Kontrol gerekli"></div>
+          <div id="nn-seg-eslesmedi" class="nn-seg nn-seg-eslesmedi" title="Eşleşmedi (aranmış)"></div>
+          <div id="nn-seg-manuel" class="nn-seg nn-seg-manuel" title="Manuel"></div>
+          <div id="nn-seg-bekliyor" class="nn-seg nn-seg-bekliyor" title="Bekliyor"></div>
+        </div>
+        <div id="nn-status-cards" class="nn-status-cards">
+          <span class="nn-muted">Yükleniyor…</span>
+        </div>
+        <div id="nn-live-metrics" class="nn-live-metrics"></div>
+        <div class="nn-live-stream">
+          <div class="nn-small-label" style="margin-top:12px">Son işlenenler</div>
+          <div id="nn-recent-stream" class="nn-stream-list">
+            <span class="nn-muted">Henüz veri yok</span>
+          </div>
         </div>
       </section>
       <div class="card nn-wrap">
@@ -2578,6 +2701,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'tuketim-talep') loadTalepAnaliz();
     if (page === 'siniflandirma') { classifyRefreshStats(); classifyLoadResults(); }
     if (page === 'besin-eslesmesi') { nnReload(); }
+    else { nnStopPolling(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
   });
 });
@@ -2802,6 +2926,210 @@ function escapeHtml(s) {
 let _nnSeciliDurum = null;
 let _nnActiveRowId = null;
 let _nnUsdaDeb = null;
+let _nnPollTimer = null;
+let _nnLiveEnabled = true;
+let _nnLastSummary = null;
+let _nnAnimState = {};
+
+function nnIsBesinTabActive() {
+  return document.querySelector('.tab-content.active')?.id === 'page-besin-eslesmesi';
+}
+
+function nnSetLiveDot(active) {
+  const dot = document.getElementById('nn-live-dot');
+  if (dot) dot.classList.toggle('active', !!active);
+}
+
+function nnStopPolling() {
+  if (_nnPollTimer) {
+    clearInterval(_nnPollTimer);
+    _nnPollTimer = null;
+  }
+  nnSetLiveDot(false);
+}
+
+function nnStartPolling() {
+  nnStopPolling();
+  if (!_nnLiveEnabled || !nnIsBesinTabActive()) return;
+  nnSetLiveDot(true);
+  nnFetchSummary(true);
+  _nnPollTimer = setInterval(() => {
+    if (document.hidden || !_nnLiveEnabled || !nnIsBesinTabActive()) return;
+    nnFetchSummary(true);
+  }, 2000);
+}
+
+function nnInitLiveControls() {
+  const toggle = document.getElementById('nn-live-toggle');
+  if (toggle && !toggle.dataset.bound) {
+    toggle.dataset.bound = '1';
+    toggle.addEventListener('change', () => {
+      _nnLiveEnabled = !!toggle.checked;
+      if (_nnLiveEnabled && nnIsBesinTabActive()) nnStartPolling();
+      else nnStopPolling();
+    });
+  }
+  if (!document.nnVisBound) {
+    document.nnVisBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && _nnLiveEnabled && nnIsBesinTabActive()) {
+        nnFetchSummary(true);
+        nnStartPolling();
+      } else if (document.hidden) {
+        nnSetLiveDot(false);
+      }
+    });
+  }
+}
+
+function nnAnimNumber(el, target, { duration = 450, decimals = 0 } = {}) {
+  if (!el) return;
+  const key = el.id || el.dataset.nnAnimKey;
+  const to = Number(target);
+  if (!Number.isFinite(to)) {
+    el.textContent = '—';
+    return;
+  }
+  const from = key && _nnAnimState[key] != null ? _nnAnimState[key] : (parseFloat(el.dataset.nnVal) || 0);
+  if (Math.abs(from - to) < (decimals ? 0.05 : 0.5)) {
+    el.textContent = decimals ? fmtN(to, decimals) : fmtN(to, 0);
+    el.dataset.nnVal = String(to);
+    if (key) _nnAnimState[key] = to;
+    return;
+  }
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / duration);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const cur = from + (to - from) * eased;
+    el.textContent = decimals ? fmtN(cur, decimals) : fmtN(Math.round(cur), 0);
+    if (p < 1) requestAnimationFrame(step);
+    else {
+      el.textContent = decimals ? fmtN(to, decimals) : fmtN(to, 0);
+      el.dataset.nnVal = String(to);
+      if (key) _nnAnimState[key] = to;
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function nnPct(n, total) {
+  if (!total) return '0%';
+  return fmtN((n / total) * 100, 1) + '%';
+}
+
+function nnRenderLiveDashboard(s) {
+  const agg = s && typeof s === 'object' ? s : {};
+  const toplam = +agg.toplam || 0;
+  const islenen = +agg.islenen || 0;
+  const bekliyor = +agg.bekliyor || 0;
+  const otomatik = +agg.otomatik || 0;
+  const kontrol = +agg.kontrol_gerekli || 0;
+  const eslesmediAr = +agg.eslesmedi_aranmis || 0;
+  const manuel = +agg.manuel_onayli || 0;
+
+  const labelEl = document.getElementById('nn-progress-label');
+  const pctEl = document.getElementById('nn-progress-pct');
+  if (labelEl) {
+    labelEl.innerHTML = `<strong>${fmtN(islenen, 0)} / ${fmtN(toplam, 0)}</strong> işlendi`;
+  }
+  if (pctEl) {
+    const pctDone = toplam ? (islenen / toplam) * 100 : null;
+    const pctStr = pctDone != null ? fmtN(pctDone, 1) + '%' : '—';
+    pctEl.textContent = pctStr + (bekliyor ? ` · ${fmtN(bekliyor, 0)} bekliyor` : '');
+  }
+
+  const seg = (id, n) => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = toplam ? ((n / toplam) * 100).toFixed(3) + '%' : '0%';
+  };
+  seg('nn-seg-otomatik', otomatik);
+  seg('nn-seg-kontrol', kontrol);
+  seg('nn-seg-eslesmedi', eslesmediAr);
+  seg('nn-seg-manuel', manuel);
+  seg('nn-seg-bekliyor', bekliyor);
+
+  const track = document.getElementById('nn-progress-track');
+  if (track) track.setAttribute('aria-valuenow', toplam ? String(Math.round((islenen / toplam) * 100)) : '0');
+
+  const cardsHost = document.getElementById('nn-status-cards');
+  if (cardsHost) {
+    const cardMeta = [
+      ['otomatik', 'Otomatik', +agg.otomatik || 0],
+      ['kontrol_gerekli', 'Kontrol', +agg.kontrol_gerekli || 0],
+      ['eslesmedi', 'Eşleşmedi', +agg.eslesmedi || 0],
+      ['manuel_onayli', 'Manuel', +agg.manuel_onayli || 0],
+    ];
+    cardsHost.innerHTML = cardMeta.map(([k, lbl, cnt]) => {
+      const active = _nnSeciliDurum === k ? ' active-filter' : '';
+      const valId = `nn-card-val-${k}`;
+      return `<article class="nn-status-card${active}" data-durum="${k}" onclick="nnKpiTap('${k}')">
+        <div class="nn-status-card-val" id="${valId}" data-nn-anim-key="${valId}">${fmtN(cnt, 0)}</div>
+        <div class="nn-status-card-lbl">${escapeHtml(lbl)}</div>
+        <div class="nn-status-card-pct">${nnPct(cnt, toplam)}</div>
+      </article>`;
+    }).join('');
+    cardMeta.forEach(([k, , cnt]) => {
+      nnAnimNumber(document.getElementById(`nn-card-val-${k}`), cnt);
+    });
+  }
+
+  const metricsHost = document.getElementById('nn-live-metrics');
+  if (metricsHost) {
+    const og = agg.ortalama_guven;
+    metricsHost.innerHTML = `
+      <span>Toplam kayıt: <strong id="nn-metric-toplam">${fmtN(toplam, 0)}</strong></span>
+      <span>Ort. güven: <strong id="nn-metric-guven">${og != null ? fmtN(og, 1) : '—'}</strong></span>
+      <span>Besin dolu: <strong id="nn-metric-besin">${fmtN(+agg.besin_dolu || 0, 0)}</strong></span>
+      <span>Aranmış eşleşmedi: <strong>${fmtN(eslesmediAr, 0)}</strong></span>`;
+  }
+
+  const streamHost = document.getElementById('nn-recent-stream');
+  const recent = Array.isArray(agg.son_islenen) ? agg.son_islenen : [];
+  if (streamHost) {
+    const prevKey = (_nnLastSummary && _nnLastSummary.son_islenen || [])
+      .map(x => `${x.urun_adi}|${x.updated_at}`).join(';;');
+    const nextKey = recent.map(x => `${x.urun_adi}|${x.updated_at}`).join(';;');
+    if (prevKey !== nextKey) {
+      if (!recent.length) {
+        streamHost.innerHTML = '<span class="nn-muted">Henüz işlenen ürün yok</span>';
+      } else {
+        streamHost.innerHTML = recent.map((r, i) => {
+          const sc = r.guven_skoru != null ? fmtN(r.guven_skoru, 0) : '—';
+          return `<div class="nn-stream-item" style="animation-delay:${i * 40}ms">
+            <span class="nn-stream-name" title="${escapeHtml(r.urun_adi || '')}">${escapeHtml(r.urun_adi || '—')}</span>
+            <span class="nn-stream-meta">
+              ${nnDurumBadge(r.eslesme_durumu)}
+              <span class="nn-stream-score">${sc}</span>
+            </span>
+          </div>`;
+        }).join('');
+      }
+    }
+  }
+  _nnLastSummary = agg;
+}
+
+async function nnFetchSummary(silent) {
+  try {
+    const sResp = await fetch('/api/nutrition/summary');
+    const sumRaw = await sResp.json().catch(() => ({}));
+    if (!sResp.ok) {
+      if (!silent) {
+        const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
+        toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
+      }
+      nnRenderLiveDashboard({});
+      return null;
+    }
+    nnRenderLiveDashboard(sumRaw);
+    return sumRaw;
+  } catch (e) {
+    if (!silent) toast(`Besin özeti: ${e.message}`, 'error');
+    nnRenderLiveDashboard({});
+    return null;
+  }
+}
 
 function nnFmtNut(v, frac = 2) {
   if (v == null || v === '') return '—';
@@ -2849,33 +3177,14 @@ function nnEnsureTableDelegate() {
 }
 
 function nnRenderKpis(s) {
-  const host = document.getElementById('nn-kpi-cards');
-  if (!host) return;
-  const agg = s && typeof s === 'object' ? s : {};
-  const meta = [
-    ['toplam', 'Toplam kayıt', 'Tüm kayıtlar'],
-    ['otomatik', 'Otomatik', 'USDA doğrudan uydu'],
-    ['kontrol_gerekli', 'Kontrol gerekli', 'Doğrulama önerildi'],
-    ['eslesmedi', 'Eşleşmedi', 'Bulunamadı / boş'],
-    ['manuel_onayli', 'Manuel onay', 'İnsan seçimi ya da TürKomp']
-  ];
-  host.innerHTML = meta.map(([k, short, hint]) => {
-    const raw = k === 'toplam' ? agg.toplam : agg[k];
-    const cls = (_nnSeciliDurum === k || (_nnSeciliDurum === null && k === 'toplam'))
-      ? 'nn-card-kpi active-filter'
-      : 'nn-card-kpi';
-    return `<article class="${cls}" title="${escapeHtml(hint)}"
-               data-filter="${escapeHtml(k)}" onclick="nnKpiTap('${k}')">
-        <div class="nn-card-kpi-val">${raw != null ? raw : '0'}</div>
-        <div class="nn-card-kpi-lbl">${escapeHtml(short)}</div>
-      </article>`;
-  }).join('');
+  nnRenderLiveDashboard(s);
 }
 
 window.nnKpiTap = async function nnKpiTap(k) {
   if (k === 'toplam') _nnSeciliDurum = null;
   else _nnSeciliDurum = k === _nnSeciliDurum ? null : k;
-  await nnReloadListsOnly();
+  await nnReloadListsOnly({ skipSummary: true });
+  if (_nnLastSummary) nnRenderLiveDashboard(_nnLastSummary);
 };
 
 function nnHydrateManualForm(mRow) {
@@ -2906,25 +3215,33 @@ function nnHydrateManualForm(mRow) {
   if (ks && mRow && mRow.kaynak) ks.value = mRow.kaynak === 'elle' ? 'elle' : 'turkomp';
 }
 
-async function nnReloadListsOnly() {
+async function nnReloadListsOnly(opts) {
+  const skipSummary = opts && opts.skipSummary;
   nnEnsureTableDelegate();
   const durumQs = _nnSeciliDurum ? `?durum=${encodeURIComponent(_nnSeciliDurum)}` : '';
   try {
-    const [sResp, rowsResp] = await Promise.all([
-      fetch('/api/nutrition/summary'),
-      fetch(`/api/nutrition/ingredients${durumQs}`)
-    ]);
-    const sumRaw = await sResp.json().catch(() => ({}));
-    const rowsRaw = await rowsResp.json().catch(() => []);
-
-    if (!sResp.ok) {
-      const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
-      toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
-      nnRenderKpis({});
+    const fetches = [fetch(`/api/nutrition/ingredients${durumQs}`)];
+    if (!skipSummary) fetches.unshift(fetch('/api/nutrition/summary'));
+    const responses = await Promise.all(fetches);
+    let sResp, rowsResp;
+    if (!skipSummary) {
+      [sResp, rowsResp] = responses;
     } else {
-      nnRenderKpis(sumRaw);
+      rowsResp = responses[0];
     }
 
+    if (!skipSummary) {
+      const sumRaw = await sResp.json().catch(() => ({}));
+      if (!sResp.ok) {
+        const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
+        toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
+        nnRenderLiveDashboard({});
+      } else {
+        nnRenderLiveDashboard(sumRaw);
+      }
+    }
+
+    const rowsRaw = await rowsResp.json().catch(() => []);
     if (!rowsResp.ok) {
       const msg = typeof rowsRaw.detail === 'string' ? rowsRaw.detail : JSON.stringify(rowsRaw.detail || {});
       toast(`Liste: ${msg} (${rowsResp.status})`, 'error');
@@ -2934,16 +3251,19 @@ async function nnReloadListsOnly() {
     nnRenderIngredientRows(Array.isArray(rowsRaw) ? rowsRaw : []);
   } catch (e) {
     toast(`Besin bağlantı: ${e.message}`, 'error');
-    nnRenderKpis({});
+    if (!skipSummary) nnRenderLiveDashboard({});
     nnRenderIngredientRows([]);
   }
 }
 
 async function nnReload() {
+  nnInitLiveControls();
   try {
     await nnReloadListsOnly();
+    nnStartPolling();
     vcLucide();
   } catch (e) {
+    nnStopPolling();
     toast(`Besin özeti/API: ${e.message}`, 'error');
     const tb = document.getElementById('nn-ingredient-tablo');
     if (tb) {
