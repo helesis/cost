@@ -9,6 +9,43 @@ from typing import Any
 from rapidfuzz import fuzz
 
 RAW_BOOST = 3
+HAM_RAW_BOOST = 10
+
+_HAM_DERIVATIVE_WORDS = frozenset(
+    {
+        "bread",
+        "flour",
+        "babyfood",
+        "baby",
+        "pancake",
+        "juice",
+        "dried",
+        "dehydrated",
+        "canned",
+        "cooked",
+        "fried",
+        "pickled",
+        "frozen",
+        "sweetened",
+        "concentrate",
+        "powder",
+        "snacks",
+        "cookie",
+        "cookies",
+        "cracker",
+        "crackers",
+        "muffin",
+        "cake",
+        "pie",
+        "babyfood",
+        "beverage",
+        "beverages",
+        "infant",
+        "formula",
+        "pickle",
+        "pickles",
+    }
+)
 
 _USDA_SUFFIX_RE = re.compile(
     r",\s*(raw|peeled|cooked|frozen|dried|boiled|steamed|blanched)\s*$",
@@ -269,7 +306,31 @@ def _leading_word_boost(query: str, description: str) -> int:
     return 0
 
 
-def fuzzy_match_score(query: str, description: str, data_type: str = "") -> int:
+def _ham_derivative_penalty(query: str, description: str) -> int:
+    """Ham gıda aramasında un/ekmek/babyfood/dehydrated gibi türevlere ek ceza."""
+    q_words = set(re.findall(r"\w+", (query or "").lower()))
+    d_words = set(re.findall(r"\w+", (description or "").lower()))
+    d_lower = (description or "").lower()
+    penalty = 0
+    for word in _HAM_DERIVATIVE_WORDS:
+        if word in d_words and word not in q_words:
+            penalty += 18
+    for mark in ("dehydrated", "dried", "freeze", "frozen", "cooked", "fried", "canned", "pickled"):
+        if mark in d_lower and mark not in (query or "").lower():
+            penalty += 16
+    _, primary = normalize_usda_for_scoring(description)
+    if primary in _HAM_DERIVATIVE_WORDS and primary not in q_words:
+        penalty += 22
+    return min(penalty, 72)
+
+
+def fuzzy_match_score(
+    query: str,
+    description: str,
+    data_type: str = "",
+    *,
+    ham_food_mode: bool = False,
+) -> int:
     """
     token_set_ratio (0–100): kelime sırası / fazla-eksik kelimeye toleranslı.
     USDA virgül formatı ve işlenmiş gıda adları için ek normalizasyon/ceza uygular.
@@ -284,13 +345,22 @@ def fuzzy_match_score(query: str, description: str, data_type: str = "") -> int:
 
     desc_lower = (description or "").lower().strip()
     score = max(int(fuzz.token_set_ratio(q, variant)) for variant in variants)
-    score -= _processing_penalty(q, desc_lower)
-    score -= _extra_token_penalty(q, desc_lower)
-    score -= _compound_mismatch_penalty(q, desc_lower)
-    score += _leading_word_boost(q, desc_lower)
 
-    if "raw" in desc_lower:
-        score = min(100, score + RAW_BOOST)
+    if ham_food_mode:
+        score -= _ham_derivative_penalty(q, desc_lower)
+        score -= _processing_penalty(q, desc_lower)
+        score -= _extra_token_penalty(q, desc_lower)
+        score -= _compound_mismatch_penalty(q, desc_lower)
+        score += _leading_word_boost(q, desc_lower)
+        if "raw" in desc_lower:
+            score = min(100, score + HAM_RAW_BOOST)
+    else:
+        score -= _processing_penalty(q, desc_lower)
+        score -= _extra_token_penalty(q, desc_lower)
+        score -= _compound_mismatch_penalty(q, desc_lower)
+        score += _leading_word_boost(q, desc_lower)
+        if "raw" in desc_lower:
+            score = min(100, score + RAW_BOOST)
 
     if data_type and "branded" in data_type.lower():
         score = max(0, score - 5)
@@ -306,7 +376,8 @@ def rank_usda_foods(
     query: str,
     foods: list[dict[str, Any]],
     *,
-    top_n: int = 15,
+    top_n: int = 25,
+    ham_food_mode: bool = False,
 ) -> list[ScoredCandidate]:
     scored: list[ScoredCandidate] = []
     seen: set[int] = set()
@@ -322,7 +393,7 @@ def rank_usda_foods(
 
         desc = f.get("description") or ""
         dtype = f.get("dataType") or ""
-        sc = fuzzy_match_score(query, desc, dtype)
+        sc = fuzzy_match_score(query, desc, dtype, ham_food_mode=ham_food_mode)
         scored.append(
             ScoredCandidate(
                 fdc_id=fid,
@@ -342,14 +413,17 @@ def decide_match_status(*, fuzzy_score: int | None, llm_approved: bool | None) -
     İki kapılı karar:
     - rapidfuzz ≥ 85 VE LLM EVET → otomatik
     - LLM EVET ve 60 ≤ rapidfuzz < 85 → kontrol_gerekli
-    - LLM HAYIR VEYA rapidfuzz < 60 VEYA LLM yanıt yok → eslesmedi
+    - LLM HAYIR ama rapidfuzz ≥ 85 → kontrol_gerekli (manuel inceleme)
+    - Diğer → eslesmedi
     """
     sc = int(fuzzy_score or 0)
-    if llm_approved is not True:
+    if llm_approved is True:
+        if sc >= 85:
+            return "otomatik"
+        if sc >= 60:
+            return "kontrol_gerekli"
         return "eslesmedi"
-    if sc >= 85:
-        return "otomatik"
-    if sc >= 60:
+    if llm_approved is False and sc >= 85:
         return "kontrol_gerekli"
     return "eslesmedi"
 

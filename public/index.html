@@ -3018,15 +3018,69 @@ function nnPct(n, total) {
   return fmtN((n / total) * 100, 1) + '%';
 }
 
+function nnNormalizeSummary(raw) {
+  const s = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const toplam = +(s.toplam ?? 0) || 0;
+  const otomatik = +(s.otomatik ?? 0) || 0;
+  const kontrol = +(s.kontrol_gerekli ?? 0) || 0;
+  const eslesmedi = +(s.eslesmedi ?? 0) || 0;
+  const manuel = +(s.manuel_onayli ?? 0) || 0;
+  let islenen = +(s.islenen ?? NaN);
+  let bekliyor = +(s.bekliyor ?? NaN);
+  if (!Number.isFinite(islenen) && Number.isFinite(bekliyor)) islenen = Math.max(0, toplam - bekliyor);
+  else if (!Number.isFinite(bekliyor) && Number.isFinite(islenen)) bekliyor = Math.max(0, toplam - islenen);
+  else if (!Number.isFinite(islenen)) islenen = otomatik + kontrol + eslesmedi + manuel;
+  if (!Number.isFinite(bekliyor)) bekliyor = Math.max(0, toplam - islenen);
+  const ogRaw = s.ortalama_guven;
+  const og = ogRaw != null && ogRaw !== '' ? Number(ogRaw) : null;
+  let recent = s.son_islenen;
+  if (!Array.isArray(recent)) recent = [];
+  return {
+    otomatik,
+    kontrol_gerekli: kontrol,
+    eslesmedi,
+    manuel_onayli: manuel,
+    toplam,
+    bekliyor,
+    islenen,
+    eslesmedi_aranmis: +(s.eslesmedi_aranmis ?? 0) || 0,
+    ortalama_guven: Number.isFinite(og) ? og : null,
+    besin_dolu: +(s.besin_dolu ?? 0) || 0,
+    son_islenen: recent.map(r => (r && typeof r === 'object' ? r : {})),
+  };
+}
+
+function nnDurumBadge(es) {
+  const lbl = ({
+    otomatik: 'Otomatik',
+    kontrol_gerekli: 'Kontrol',
+    eslesmedi: 'Yok',
+    manuel_onayli: 'Manuel',
+  }[es]) || escapeHtml(es);
+  const cls = ({
+    otomatik: 'nn-badge-otomatik',
+    kontrol_gerekli: 'nn-badge-kontrol',
+    eslesmedi: 'nn-badge-eslesmedi',
+    manuel_onayli: 'nn-badge-manuel_onayli',
+  }[es]) || '';
+  return `<span class="nn-badge ${cls}">${lbl}</span>`;
+}
+
 function nnRenderLiveDashboard(s) {
-  const agg = s && typeof s === 'object' ? s : {};
-  const toplam = +agg.toplam || 0;
-  const islenen = +agg.islenen || 0;
-  const bekliyor = +agg.bekliyor || 0;
-  const otomatik = +agg.otomatik || 0;
-  const kontrol = +agg.kontrol_gerekli || 0;
-  const eslesmediAr = +agg.eslesmedi_aranmis || 0;
-  const manuel = +agg.manuel_onayli || 0;
+  let agg;
+  try {
+    agg = nnNormalizeSummary(s);
+  } catch (e) {
+    console.error('nnNormalizeSummary', e, s);
+    agg = nnNormalizeSummary({});
+  }
+  const toplam = agg.toplam;
+  const islenen = agg.islenen;
+  const bekliyor = agg.bekliyor;
+  const otomatik = agg.otomatik;
+  const kontrol = agg.kontrol_gerekli;
+  const eslesmediAr = agg.eslesmedi_aranmis;
+  const manuel = agg.manuel_onayli;
 
   const labelEl = document.getElementById('nn-progress-label');
   const pctEl = document.getElementById('nn-progress-pct');
@@ -3052,79 +3106,95 @@ function nnRenderLiveDashboard(s) {
   const track = document.getElementById('nn-progress-track');
   if (track) track.setAttribute('aria-valuenow', toplam ? String(Math.round((islenen / toplam) * 100)) : '0');
 
-  const cardsHost = document.getElementById('nn-status-cards');
-  if (cardsHost) {
-    const cardMeta = [
-      ['otomatik', 'Otomatik', +agg.otomatik || 0],
-      ['kontrol_gerekli', 'Kontrol', +agg.kontrol_gerekli || 0],
-      ['eslesmedi', 'Eşleşmedi', +agg.eslesmedi || 0],
-      ['manuel_onayli', 'Manuel', +agg.manuel_onayli || 0],
-    ];
-    cardsHost.innerHTML = cardMeta.map(([k, lbl, cnt]) => {
-      const active = _nnSeciliDurum === k ? ' active-filter' : '';
-      const valId = `nn-card-val-${k}`;
-      return `<article class="nn-status-card${active}" data-durum="${k}" onclick="nnKpiTap('${k}')">
-        <div class="nn-status-card-val" id="${valId}" data-nn-anim-key="${valId}">${fmtN(cnt, 0)}</div>
-        <div class="nn-status-card-lbl">${escapeHtml(lbl)}</div>
-        <div class="nn-status-card-pct">${nnPct(cnt, toplam)}</div>
-      </article>`;
-    }).join('');
-    cardMeta.forEach(([k, , cnt]) => {
-      nnAnimNumber(document.getElementById(`nn-card-val-${k}`), cnt);
-    });
-  }
+  try {
+    const cardsHost = document.getElementById('nn-status-cards');
+    if (cardsHost) {
+      const cardMeta = [
+        ['otomatik', 'Otomatik', agg.otomatik],
+        ['kontrol_gerekli', 'Kontrol', agg.kontrol_gerekli],
+        ['eslesmedi', 'Eşleşmedi', agg.eslesmedi],
+        ['manuel_onayli', 'Manuel', agg.manuel_onayli],
+      ];
+      cardsHost.innerHTML = cardMeta.map(([k, lbl, cnt]) => {
+        const active = _nnSeciliDurum === k ? ' active-filter' : '';
+        const valId = `nn-card-val-${k}`;
+        return `<article class="nn-status-card${active}" data-durum="${k}" onclick="nnKpiTap('${k}')">
+          <div class="nn-status-card-val" id="${valId}" data-nn-anim-key="${valId}">${fmtN(cnt, 0)}</div>
+          <div class="nn-status-card-lbl">${escapeHtml(lbl)}</div>
+          <div class="nn-status-card-pct">${nnPct(cnt, toplam)}</div>
+        </article>`;
+      }).join('');
+      cardMeta.forEach(([k, , cnt]) => {
+        nnAnimNumber(document.getElementById(`nn-card-val-${k}`), cnt);
+      });
+    }
 
-  const metricsHost = document.getElementById('nn-live-metrics');
-  if (metricsHost) {
-    const og = agg.ortalama_guven;
-    metricsHost.innerHTML = `
-      <span>Toplam kayıt: <strong id="nn-metric-toplam">${fmtN(toplam, 0)}</strong></span>
-      <span>Ort. güven: <strong id="nn-metric-guven">${og != null ? fmtN(og, 1) : '—'}</strong></span>
-      <span>Besin dolu: <strong id="nn-metric-besin">${fmtN(+agg.besin_dolu || 0, 0)}</strong></span>
-      <span>Aranmış eşleşmedi: <strong>${fmtN(eslesmediAr, 0)}</strong></span>`;
-  }
+    const metricsHost = document.getElementById('nn-live-metrics');
+    if (metricsHost) {
+      const og = agg.ortalama_guven;
+      metricsHost.innerHTML = `
+        <span>Toplam kayıt: <strong id="nn-metric-toplam">${fmtN(toplam, 0)}</strong></span>
+        <span>Ort. güven: <strong id="nn-metric-guven">${og != null ? fmtN(og, 1) : '—'}</strong></span>
+        <span>Besin dolu: <strong id="nn-metric-besin">${fmtN(agg.besin_dolu, 0)}</strong></span>
+        <span>Aranmış eşleşmedi: <strong>${fmtN(eslesmediAr, 0)}</strong></span>`;
+    }
 
-  const streamHost = document.getElementById('nn-recent-stream');
-  const recent = Array.isArray(agg.son_islenen) ? agg.son_islenen : [];
-  if (streamHost) {
-    const prevKey = (_nnLastSummary && _nnLastSummary.son_islenen || [])
-      .map(x => `${x.urun_adi}|${x.updated_at}`).join(';;');
-    const nextKey = recent.map(x => `${x.urun_adi}|${x.updated_at}`).join(';;');
-    if (prevKey !== nextKey) {
-      if (!recent.length) {
-        streamHost.innerHTML = '<span class="nn-muted">Henüz işlenen ürün yok</span>';
-      } else {
-        streamHost.innerHTML = recent.map((r, i) => {
-          const sc = r.guven_skoru != null ? fmtN(r.guven_skoru, 0) : '—';
-          return `<div class="nn-stream-item" style="animation-delay:${i * 40}ms">
-            <span class="nn-stream-name" title="${escapeHtml(r.urun_adi || '')}">${escapeHtml(r.urun_adi || '—')}</span>
-            <span class="nn-stream-meta">
-              ${nnDurumBadge(r.eslesme_durumu)}
-              <span class="nn-stream-score">${sc}</span>
-            </span>
-          </div>`;
-        }).join('');
+    const streamHost = document.getElementById('nn-recent-stream');
+    const recent = agg.son_islenen;
+    if (streamHost) {
+      const prevRecent = (_nnLastSummary && Array.isArray(_nnLastSummary.son_islenen))
+        ? _nnLastSummary.son_islenen
+        : [];
+      const prevKey = prevRecent.map(x => `${x.urun_adi}|${x.updated_at}|${x.eslesme_durumu}`).join(';;');
+      const nextKey = recent.map(x => `${x.urun_adi}|${x.updated_at}|${x.eslesme_durumu}`).join(';;');
+      const streamStale = streamHost.textContent.includes('Henüz veri yok') || streamHost.textContent.includes('Yükleniyor');
+      if (prevKey !== nextKey || streamStale) {
+        if (!recent.length) {
+          streamHost.innerHTML = '<span class="nn-muted">Henüz işlenen ürün yok</span>';
+        } else {
+          streamHost.innerHTML = recent.map((r, i) => {
+            const sc = r.guven_skoru != null ? fmtN(r.guven_skoru, 0) : '—';
+            return `<div class="nn-stream-item" style="animation-delay:${i * 40}ms">
+              <span class="nn-stream-name" title="${escapeHtml(r.urun_adi || '')}">${escapeHtml(r.urun_adi || '—')}</span>
+              <span class="nn-stream-meta">
+                ${nnDurumBadge(r.eslesme_durumu)}
+                <span class="nn-stream-score">${sc}</span>
+              </span>
+            </div>`;
+          }).join('');
+        }
       }
     }
+    _nnLastSummary = agg;
+  } catch (e) {
+    console.error('nnRenderLiveDashboard', e, s);
+    const cardsHost = document.getElementById('nn-status-cards');
+    if (cardsHost) {
+      cardsHost.innerHTML = '<span class="nn-muted" style="color:var(--danger,#c94847)">Dashboard render hatası — konsolu kontrol edin</span>';
+    }
   }
-  _nnLastSummary = agg;
+}
+
+async function nnApplySummaryResponse(sResp, silent) {
+  const sumRaw = await sResp.json().catch(() => ({}));
+  if (!sResp.ok) {
+    if (!silent) {
+      const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
+      toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
+    }
+    nnRenderLiveDashboard({});
+    return null;
+  }
+  nnRenderLiveDashboard(sumRaw);
+  return sumRaw;
 }
 
 async function nnFetchSummary(silent) {
   try {
     const sResp = await fetch('/api/nutrition/summary');
-    const sumRaw = await sResp.json().catch(() => ({}));
-    if (!sResp.ok) {
-      if (!silent) {
-        const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
-        toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
-      }
-      nnRenderLiveDashboard({});
-      return null;
-    }
-    nnRenderLiveDashboard(sumRaw);
-    return sumRaw;
+    return await nnApplySummaryResponse(sResp, silent);
   } catch (e) {
+    console.error('nnFetchSummary', e);
     if (!silent) toast(`Besin özeti: ${e.message}`, 'error');
     nnRenderLiveDashboard({});
     return null;
@@ -3136,22 +3206,6 @@ function nnFmtNut(v, frac = 2) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
   return fmtN(n, frac);
-}
-
-function nnDurumBadge(es) {
-  const lbl = ({
-    otomatik: 'Otomatik',
-    kontrol_gerekli: 'Kontrol',
-    eslesmedi: 'Yok',
-    manuel_onayli: 'Manuel',
-  }[es]) || escapeHtml(es);
-  const cls = ({
-    otomatik: 'nn-badge-otomatik',
-    kontrol_gerekli: 'nn-badge-kontrol',
-    eslesmedi: 'nn-badge-eslesmedi',
-    manuel_onayli: 'nn-badge-manuel_onayli',
-  }[es]) || '';
-  return `<span class="nn-badge ${cls}">${lbl}</span>`;
 }
 
 function nnMacroLine(rr) {
@@ -3220,26 +3274,20 @@ async function nnReloadListsOnly(opts) {
   nnEnsureTableDelegate();
   const durumQs = _nnSeciliDurum ? `?durum=${encodeURIComponent(_nnSeciliDurum)}` : '';
   try {
-    const fetches = [fetch(`/api/nutrition/ingredients${durumQs}`)];
-    if (!skipSummary) fetches.unshift(fetch('/api/nutrition/summary'));
-    const responses = await Promise.all(fetches);
-    let sResp, rowsResp;
-    if (!skipSummary) {
-      [sResp, rowsResp] = responses;
-    } else {
-      rowsResp = responses[0];
-    }
+    // Dashboard'u ingredients listesini beklemeden summary ile güncelle
+    const summaryPromise = skipSummary
+      ? null
+      : fetch('/api/nutrition/summary')
+          .then(sResp => nnApplySummaryResponse(sResp, true))
+          .catch(e => {
+            console.error('nnReloadListsOnly summary', e);
+            nnRenderLiveDashboard({});
+            return null;
+          });
 
-    if (!skipSummary) {
-      const sumRaw = await sResp.json().catch(() => ({}));
-      if (!sResp.ok) {
-        const msg = typeof sumRaw.detail === 'string' ? sumRaw.detail : JSON.stringify(sumRaw.detail || {});
-        toast(`Besin özeti: ${msg} (${sResp.status})`, 'error');
-        nnRenderLiveDashboard({});
-      } else {
-        nnRenderLiveDashboard(sumRaw);
-      }
-    }
+    const rowsPromise = fetch(`/api/nutrition/ingredients${durumQs}`);
+    if (summaryPromise) await summaryPromise;
+    const rowsResp = await rowsPromise;
 
     const rowsRaw = await rowsResp.json().catch(() => []);
     if (!rowsResp.ok) {

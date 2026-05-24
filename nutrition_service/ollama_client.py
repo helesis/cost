@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from dataclasses import dataclass
 
 import httpx
 
@@ -15,23 +16,24 @@ _OLLAMA_MODEL = (os.environ.get("OLLAMA_USDA_MODEL") or os.environ.get("OLLAMA_M
 _OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT_SEC", "180"))
 
 _TRANSLATE_SYSTEM = """Sen bir otel F&B (yiyecek-içecek) stok ve USDA FoodData Central uzmanısın.
-Görevin: Türkçe/İngilizce karışık stok kalemi adını USDA'da aranacak KISA İngilizce gıda terimine çevirmek.
+Görevin: Türkçe/İngilizce karışık stok kalemini USDA araması için kısa İngilizce terime çevirmek ve kategorisini belirlemek.
+
+Kategori:
+- ham = çiğ tüketilen / satın alınan temel gıda (sebze, meyve, et, yumurta, süt, balık, taze ürün)
+- islenmis = zaten işlenmiş hammadde (un, şeker, yağ, salça, konserve, toz, sirke, baharat karışımı)
 
 Bağlam:
-- Otel mutfağı hammadde listesi; tedarikçi jargonu olabilir.
-- FLETO / FILETO = fillet
-- SOKLU = on the bone
-- KAFES = whole / carcass (bağlama göre)
-- "BEEF" domates çeşidi olabilir (beefsteak tomato) — et değil
-- AYÇICEK YAG = sunflower oil
-- YUMURTA = egg (eggs)
-- UN = flour (wheat flour)
-- SÜT = milk
+- FLETO / FILETO = fillet · SOKLU = on the bone · KAFES = whole/carcass
+- "BEEF" domates = beefsteak tomato (et değil) · AYÇİÇEK YAĞ = sunflower oil · UN = flour
 
 Kurallar:
-- Yalnızca kısa İngilizce arama terimi yaz (1–4 kelime ideal).
-- Açıklama, cümle, JSON, markdown YAZMA.
-- Gıda değilse (temizlik, ekipman) sadece: NON_FOOD"""
+- TERIM: 1–4 kelime İngilizce arama terimi (raw EKLEME — sonraki adımda eklenir)
+- KATEGORI: yalnızca ham veya islenmis
+- Gıda değilse yalnızca: NON_FOOD
+
+Yanıt formatı (tam iki satır, başka metin yok):
+TERIM: <english term>
+KATEGORI: ham|islenmis"""
 
 _VERIFY_SYSTEM = """Sen gıda eşleştirme denetçisisin.
 Verilen Türkçe otel stok kalemi ile USDA (ABD gıda veritabanı) ürün adının AYNI temel gıda olup olmadığını değerlendir.
@@ -70,9 +72,84 @@ def _first_line(text: str) -> str:
     return line.strip()
 
 
-def translate_food_search_term(urun_adi: str) -> str | None:
+_ISLENMIS_HINT_RE = re.compile(
+    r"\b("
+    r"flour|un|oil|yağ|yag|sugar|şeker|seker|powder|toz|paste|salça|salca|sauce|"
+    r"syrup|vinegar|sirke|concentrate|extract|seasoning|butter|margarine|shortening|"
+    r"starch|nişasta|nisasta|cornmeal|semolina|baking|yeast|maya|salt|tuz|spice|"
+    r"baharat|bouillon|stock\s+cube|sunflower\s+oil|olive\s+oil|canola"
+    r")\b",
+    re.I,
+)
+_TERM_LINE_RE = re.compile(r"(?:TERIM|TERM|TERİM|translation)\s*:\s*(.+)", re.I)
+_KAT_LINE_RE = re.compile(r"KATEGORI\s*:\s*(ham|islenmis|işlenmiş|islenmiş)", re.I)
+
+
+@dataclass
+class FoodSearchTranslation:
+    term: str
+    kategori: str  # ham | islenmis
+
+
+def _normalize_kategori(raw: str | None, term: str, urun_adi: str) -> str:
+    k = (raw or "").lower().strip()
+    k = k.replace("işlenmiş", "islenmis").replace("islenmiş", "islenmis")
+    if k in ("ham", "islenmis"):
+        return k
+    blob = f"{term} {urun_adi}".lower()
+    if _ISLENMIS_HINT_RE.search(blob):
+        return "islenmis"
+    return "ham"
+
+
+def _parse_translate_response(text: str, urun_adi: str) -> FoodSearchTranslation | None:
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    term = ""
+    kategori_raw = None
+
+    for ln in lines:
+        m_t = _TERM_LINE_RE.match(ln)
+        if m_t:
+            term = m_t.group(1).strip()
+            continue
+        m_k = _KAT_LINE_RE.match(ln)
+        if m_k:
+            kategori_raw = m_k.group(1).strip()
+            continue
+
+    if not term and lines:
+        first = _first_line(lines[0])
+        if first.upper() not in ("NON_FOOD", "NON-FOOD", "N/A", "NA"):
+            term = first
+        for ln in lines[1:]:
+            m_k = _KAT_LINE_RE.match(ln)
+            if m_k:
+                kategori_raw = m_k.group(1).strip()
+
+    term = re.sub(r"[^\w\s\-,()/]", " ", term)
+    term = re.sub(r"\s+", " ", term).strip()
+    if not term or len(term) > 120:
+        return None
+    if term.upper() in ("NON_FOOD", "NON-FOOD", "N/A", "NA"):
+        return None
+
+    kategori = _normalize_kategori(kategori_raw, term, urun_adi)
+    return FoodSearchTranslation(term=term, kategori=kategori)
+
+
+def build_usda_search_query(term: str, kategori: str) -> str:
+    """Ham gıdada USDA aramasına 'raw' ekler; işlenmişte terimi olduğu gibi bırakır."""
+    t = (term or "").strip()
+    if not t:
+        return t
+    if kategori == "ham" and "raw" not in t.lower().split():
+        return f"{t} raw"
+    return t
+
+
+def translate_food_search(urun_adi: str) -> FoodSearchTranslation | None:
     """
-    Türkçe stok adı → USDA arama terimi (İngilizce).
+    Türkçe stok adı → USDA arama terimi + kategori (ham/islenmis).
     Başarısızlıkta None.
     """
     raw = (urun_adi or "").strip()
@@ -84,21 +161,22 @@ def translate_food_search_term(urun_adi: str) -> str | None:
 
     prompt = f"""Stok kalemi: "{raw}"{hint_part}
 
-USDA arama terimi (yalnızca kısa İngilizce):"""
+TERIM ve KATEGORI (ham/islenmis):"""
 
-    out = _generate(prompt, system=_TRANSLATE_SYSTEM)
+    out = _generate(prompt, system=_TRANSLATE_SYSTEM, temperature=0.1)
     if not out:
         return None
 
-    term = _first_line(out)
-    if not term or len(term) > 120:
+    if out.strip().upper().startswith("NON_FOOD") or _first_line(out).upper() in ("NON_FOOD", "NON-FOOD"):
         return None
-    if term.upper() in ("NON_FOOD", "NON-FOOD", "N/A", "NA"):
-        return None
-    # Markdown/code blok temizliği
-    term = re.sub(r"[^\w\s\-,()/]", " ", term)
-    term = re.sub(r"\s+", " ", term).strip()
-    return term or None
+
+    return _parse_translate_response(out, raw)
+
+
+def translate_food_search_term(urun_adi: str) -> str | None:
+    """Geriye dönük: yalnızca arama terimi."""
+    tr = translate_food_search(urun_adi)
+    return tr.term if tr else None
 
 
 _NEGATIVE_RE = re.compile(

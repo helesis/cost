@@ -28,7 +28,11 @@ if str(_ROOT) not in sys.path:
 load_dotenv(_ROOT / ".env")
 
 from nutrition_service import db
-from nutrition_service.ollama_client import translate_food_search_term, verify_same_food
+from nutrition_service.ollama_client import (
+    build_usda_search_query,
+    translate_food_search,
+    verify_same_food,
+)
 from nutrition_service.usda_client import food_detail_sync, foods_search_sync
 from nutrition_service.usda_match import (
     ScoredCandidate,
@@ -145,9 +149,9 @@ def stage_a_sync() -> dict:
 def _match_product(row: dict) -> dict:
     urun_adi = row["urun_adi"]
 
-    # 1) LLM çeviri
-    llm_term = translate_food_search_term(urun_adi)
-    if not llm_term:
+    # 1) LLM çeviri + kategori (ham / islenmis)
+    tr = translate_food_search(urun_adi)
+    if not tr:
         return _finalize_row(
             row,
             llm_term=None,
@@ -164,16 +168,19 @@ def _match_product(row: dict) -> dict:
             note="LLM çeviri başarısız — eslesmedi",
         )
 
-    # 2) USDA arama
-    payload = foods_search_sync(query=llm_term, page_size=15)
+    search_q = build_usda_search_query(tr.term, tr.kategori)
+    ham_mode = tr.kategori == "ham"
+
+    # 2) USDA arama (ham gıdada terim + raw)
+    payload = foods_search_sync(query=search_q, page_size=25)
     foods = payload.get("foods") or []
-    ranked = rank_usda_foods(llm_term, foods, top_n=15)
+    ranked = rank_usda_foods(search_q, foods, top_n=25, ham_food_mode=ham_mode)
     best = ranked[0] if ranked else None
 
     if not best:
         return _finalize_row(
             row,
-            llm_term=llm_term,
+            llm_term=search_q,
             ranked=ranked,
             best=None,
             llm_approved=None,
@@ -187,7 +194,7 @@ def _match_product(row: dict) -> dict:
             note="USDA sonuç yok",
         )
 
-    # 3) rapidfuzz skor (best.score = token_set_ratio, tüm adaylar arasından en yüksek)
+    # 3) rapidfuzz skor (tüm adaylar arasından en yüksek)
     fuzzy_score = best.score
 
     # 4) LLM anlamsal onay
@@ -195,7 +202,7 @@ def _match_product(row: dict) -> dict:
 
     # 5) Karar
     durum = decide_match_status(fuzzy_score=fuzzy_score, llm_approved=llm_approved)
-    guven = fuzzy_score if durum != "eslesmedi" else fuzzy_score
+    guven = fuzzy_score if durum != "eslesmedi" else None
 
     usda_fdc_id = None
     usda_adi = None
@@ -213,9 +220,13 @@ def _match_product(row: dict) -> dict:
         if durum == "kontrol_gerekli":
             alts = alternatives_json(ranked, skip_first=True)
 
+    note = None
+    if durum == "kontrol_gerekli" and llm_approved is False and fuzzy_score >= 85:
+        note = "Yüksek skor ama LLM HAYIR — kontrol kuyruğu"
+
     return _finalize_row(
         row,
-        llm_term=llm_term,
+        llm_term=search_q,
         ranked=ranked,
         best=best,
         llm_approved=llm_approved,
@@ -226,6 +237,7 @@ def _match_product(row: dict) -> dict:
         usda_data_type=usda_data_type,
         nut=nut,
         alts=alts,
+        note=note,
     )
 
 
