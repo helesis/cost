@@ -3208,12 +3208,101 @@ function nnFmtNut(v, frac = 2) {
   return fmtN(n, frac);
 }
 
+function nnPickField(obj, ...keys) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v != null && v !== '') return v;
+  }
+  return undefined;
+}
+
+function nnCoerceIngredientsPayload(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') {
+    if (Array.isArray(raw.items)) return raw.items;
+    if (Array.isArray(raw.rows)) return raw.rows;
+    if (Array.isArray(raw.data)) return raw.data;
+  }
+  return [];
+}
+
+/** ingredients API satırını backend alan adlarıyla hizalar (efektif + eski usda_* fallback). */
+function nnNormalizeIngredientRow(raw) {
+  const rr = raw && typeof raw === 'object' ? raw : {};
+  const usdaAdi = nnPickField(rr, 'usda_efektif_adi', 'usda_adi');
+  const usdaFdc = nnPickField(rr, 'usda_efektif_fdc_id', 'usda_fdc_id');
+  return {
+    id: Number(rr.id ?? rr.urun_id) || 0,
+    urun_adi: String(rr.urun_adi ?? ''),
+    temiz_arama_terimi: rr.temiz_arama_terimi ?? null,
+    tuketim_miktari: rr.tuketim_miktari,
+    stok_no: rr.stok_no ?? null,
+    tip: rr.tip ?? null,
+    birim: rr.birim ?? null,
+    eslesme_durumu: rr.eslesme_durumu ?? '',
+    veri_kaynagi: rr.veri_kaynagi ?? null,
+    manuel_override_var: !!rr.manuel_override_var,
+    usda_efektif_adi: usdaAdi != null ? String(usdaAdi) : null,
+    usda_efektif_fdc_id: usdaFdc != null ? usdaFdc : null,
+    usda_data_type: rr.usda_data_type ?? null,
+    guven_skoru: rr.guven_skoru,
+    protein: rr.protein,
+    yag: rr.yag,
+    karbonhidrat: rr.karbonhidrat,
+    enerji: rr.enerji,
+    su: rr.su,
+    sodyum: rr.sodyum,
+    potasyum: rr.potasyum,
+    kalsiyum: rr.kalsiyum,
+    demir: rr.demir,
+    magnezyum: rr.magnezyum,
+    fosfor: rr.fosfor,
+    cinko: rr.cinko,
+  };
+}
+
 function nnMacroLine(rr) {
-  const p = nnFmtNut(rr.protein);
-  const f = nnFmtNut(rr.yag);
-  const c = nnFmtNut(rr.karbonhidrat);
-  const en = rr.enerji != null && rr.enerji !== '' ? `${nnFmtNut(rr.enerji, 0)} kcal` : '—';
-  return `<span>${p} g P · ${f} g F · ${c} g C · ${en}</span>`;
+  try {
+    const r = rr && typeof rr === 'object' ? rr : {};
+    const p = nnFmtNut(r.protein);
+    const f = nnFmtNut(r.yag);
+    const c = nnFmtNut(r.karbonhidrat);
+    const en = r.enerji != null && r.enerji !== '' ? `${nnFmtNut(r.enerji, 0)} kcal` : '—';
+    return `<span>${p} g P · ${f} g F · ${c} g C · ${en}</span>`;
+  } catch (e) {
+    console.error('nnMacroLine', e, rr);
+    return '<span class="nn-muted">—</span>';
+  }
+}
+
+function nnRenderIngredientRowHtml(raw) {
+  try {
+    const rr = nnNormalizeIngredientRow(raw);
+    const meta = [];
+    if (rr.stok_no) meta.push(escapeHtml(String(rr.stok_no)));
+    if (rr.veri_kaynagi) meta.push(escapeHtml(String(rr.veri_kaynagi)));
+    if (rr.manuel_override_var) meta.push('override');
+    const metaHtml = meta.length
+      ? `<div style="font-size:10px;color:var(--text-dim)">${meta.join(' · ')}</div>`
+      : '';
+    const usdaAdi = rr.usda_efektif_adi;
+    const usdaFdc = rr.usda_efektif_fdc_id;
+    const usdaCell = usdaAdi
+      ? `<div>${escapeHtml(usdaAdi)}</div>
+        <small style="color:var(--text-dim)">fdc:${escapeHtml(usdaFdc != null ? String(usdaFdc) : '—')}</small>`
+      : '<span class="nn-muted">—</span>';
+    return `<tr data-id="${rr.id}">
+      <td><strong>${escapeHtml(rr.urun_adi || '—')}</strong>${metaHtml}</td>
+      <td>${nnDurumBadge(rr.eslesme_durumu || 'eslesmedi')}</td>
+      <td style="max-width:180px">${usdaCell}</td>
+      <td>${nnFmtNut(rr.guven_skoru, 0)}</td>
+      <td style="white-space:normal">${nnMacroLine(rr)}</td>
+    </tr>`;
+  } catch (e) {
+    console.error('nnRenderIngredientRowHtml', e, raw);
+    return '<tr><td colspan="5" class="nn-muted" style="padding:8px">Satır gösterilemedi</td></tr>';
+  }
 }
 
 function nnEnsureTableDelegate() {
@@ -3224,7 +3313,7 @@ function nnEnsureTableDelegate() {
     const tr = ev.target.closest('tr[data-id]');
     if (!tr) return;
     const id = +tr.dataset.id;
-    document.querySelectorAll('#nn-ingredient-tablo tbody tr[data-id]').forEach(el => el.classList.remove('nn-row-active'));
+    document.querySelectorAll('#nn-ingredient-tablo tr[data-id]').forEach(el => el.classList.remove('nn-row-active'));
     tr.classList.add('nn-row-active');
     nnOpenDrawer(id);
   });
@@ -3291,13 +3380,14 @@ async function nnReloadListsOnly(opts) {
 
     const rowsRaw = await rowsResp.json().catch(() => []);
     if (!rowsResp.ok) {
-      const msg = typeof rowsRaw.detail === 'string' ? rowsRaw.detail : JSON.stringify(rowsRaw.detail || {});
+      const msg = typeof rowsRaw.detail === 'string' ? rowsRaw.detail : JSON.stringify(rowsRaw.detail || rowsRaw.error || {});
       toast(`Liste: ${msg} (${rowsResp.status})`, 'error');
       nnRenderIngredientRows([]);
       return;
     }
-    nnRenderIngredientRows(Array.isArray(rowsRaw) ? rowsRaw : []);
+    nnRenderIngredientRows(nnCoerceIngredientsPayload(rowsRaw));
   } catch (e) {
+    console.error('nnReloadListsOnly', e);
     toast(`Besin bağlantı: ${e.message}`, 'error');
     if (!skipSummary) nnRenderLiveDashboard({});
     nnRenderIngredientRows([]);
@@ -3326,23 +3416,19 @@ async function nnReload() {
 function nnRenderIngredientRows(rows) {
   const tb = document.getElementById('nn-ingredient-tablo');
   if (!tb) return;
-  if (!rows.length) {
+  const list = nnCoerceIngredientsPayload(rows);
+  if (!list.length) {
     tb.innerHTML =
       `<tr><td colspan="5" style="padding:20px;color:var(--text-dim)">Henüz satır yok — migrasyon yapıldıktan sonra doldurma betiği çalıştırılacak.</td></tr>`;
     return;
   }
-  tb.innerHTML = rows.map(rr => `
-    <tr data-id="${Number(rr.id)||0}">
-      <td><strong>${escapeHtml(rr.urun_adi || '')}</strong>
-        ${rr.veri_kaynagi ? `<div style=\"font-size:10px;color:var(--text-dim)\">${escapeHtml(String(rr.veri_kaynagi))}${rr.manuel_override_var ? ' · override' : ''}</div>` : ''}</td>
-      <td>${nnDurumBadge(rr.eslesme_durumu)}</td>
-      <td style=\"max-width:180px\">
-        ${rr.usda_efektif_adi ? `<div>${escapeHtml(rr.usda_efektif_adi)}</div>
-        <small style=\"color:var(--text-dim)\">fdc:${escapeHtml(rr.usda_efektif_fdc_id != null ? String(rr.usda_efektif_fdc_id) : '—')}</small>` : '<span class=\"nn-muted\">—</span>'}
-      </td>
-      <td>${nnFmtNut(rr.guven_skoru, 0)}</td>
-      <td style=\"white-space:normal\">${nnMacroLine(rr)}</td>
-    </tr>`).join('');
+  try {
+    tb.innerHTML = list.map(nnRenderIngredientRowHtml).join('');
+  } catch (e) {
+    console.error('nnRenderIngredientRows', e, rows);
+    tb.innerHTML =
+      `<tr><td colspan="5" style="padding:20px;color:var(--danger,#c94847)">Liste render hatası — tarayıcı konsolunu kontrol edin</td></tr>`;
+  }
 }
 
 function nnCloseDrawer() {
@@ -3382,49 +3468,68 @@ async function nnOpenDrawer(id) {
   _nnActiveRowId = id;
   const panel = document.getElementById('nn-drawer-mask');
   if (panel) { panel.classList.add('open'); panel.setAttribute('aria-hidden','false'); }
-  const r = await fetch(`/api/nutrition/ingredients/${id}`);
-  const d = await r.json();
-  const err = (!r.ok) && (d.detail || d.error);
-  document.getElementById('nn-drawer-heading').textContent =
-    err ? 'Hata' : (d.resolved?.urun_adi || d.otomatik_eslesme?.urun_adi || `Ürün #${id}`);
-  const subParts = [];
-  if (d.resolved?.temiz_arama_terimi) subParts.push(`temiz: ${d.resolved.temiz_arama_terimi}`);
-  if (d.resolved?.tuketim_miktari != null) subParts.push(`tük.: ${fmtN(Number(d.resolved.tuketim_miktari)||0)}`);
-  document.getElementById('nn-drawer-lines').textContent = subParts.join(' · ');
-
-  const ob = document.getElementById('nn-auto-block');
-  if (ob && d.otomatik_eslesme){
-    const a = d.otomatik_eslesme;
-    ob.innerHTML = `<table class="nn-mini-table">
-      <tr><td>fdc</td><td>${escapeHtml(a.usda_fdc_id)}</td></tr>
-      <tr><td>adı</td><td>${escapeHtml(a.usda_adi||'')}</td></tr>
-      <tr><td>makrolar</td><td>${nnMacroLine(a)}</td></tr></table>${!d.usda_env_ok ? `<p style=\"margin-top:6px;color:#b73a38;font-size:11px\">USDA_API_KEY .env eksik — canlı arama çalışmaz.</p>` : ''}`;
-  }
-
-  const al = document.getElementById('nn-alt-block');
-  if (al) {
-    const raw = d.alternatif_usda_kaynak;
-    if (Array.isArray(raw) && raw.length){
-      al.innerHTML = raw.slice(0, 5).map(x => {
-        const fidRaw = x.fdcId ?? x.fdc_id;
-        const fid = fidRaw != null ? +fidRaw : NaN;
-        const desc = escapeHtml(String(x.description ?? x.usda_adi ?? JSON.stringify(x)).slice(0, 380));
-        return `<article class=\"nn-usda-item\">
-          <div class=\"nn-usda-item-top\">
-            <div style=\"flex:1;min-width:0\">${desc}</div>
-            ${Number.isFinite(fid) ? `<button type=\"button\" class=\"btn btn-primary btn-sm\" onclick=\"nnManualFromUsda(${fid},'')\">USDA seç</button>` : ''}
-          </div>
-        </article>`;
-      }).join('');
-    } else if (typeof raw === 'object' && raw && !Array.isArray(raw)) {
-      al.innerHTML = `<span class=\"nn-muted\">Nesne formatı (${Object.keys(raw).length} anahtar) — gelecek batch bunu sırayla yazacaktır.</span>`;
-    } else {
-      al.innerHTML = '<span class="nn-muted">Henüz betikten aday yazılmadı.</span>';
+  try {
+    const r = await fetch(`/api/nutrition/ingredients/${id}`);
+    const d = await r.json().catch(() => ({}));
+    const err = (!r.ok) && (d.detail || d.error);
+    const resolved = d.resolved && typeof d.resolved === 'object' ? d.resolved : {};
+    const otomatik = d.otomatik_eslesme && typeof d.otomatik_eslesme === 'object' ? d.otomatik_eslesme : null;
+    const headingEl = document.getElementById('nn-drawer-heading');
+    if (headingEl) {
+      headingEl.textContent = err
+        ? 'Hata'
+        : (resolved.urun_adi || otomatik?.urun_adi || `Ürün #${id}`);
     }
-  }
+    const subParts = [];
+    if (resolved.temiz_arama_terimi) subParts.push(`temiz: ${resolved.temiz_arama_terimi}`);
+    if (resolved.tuketim_miktari != null) subParts.push(`tük.: ${fmtN(Number(resolved.tuketim_miktari) || 0)}`);
+    const linesEl = document.getElementById('nn-drawer-lines');
+    if (linesEl) linesEl.textContent = subParts.join(' · ');
 
-  nnHydrateManualForm(d.manual);
-  vcLucide();
+    const ob = document.getElementById('nn-auto-block');
+    if (ob) {
+      if (otomatik) {
+        const a = otomatik;
+        const fdc = nnPickField(a, 'usda_fdc_id', 'usda_efektif_fdc_id');
+        const adi = nnPickField(a, 'usda_adi', 'usda_efektif_adi') || '';
+        ob.innerHTML = `<table class="nn-mini-table">
+          <tr><td>fdc</td><td>${escapeHtml(fdc != null ? String(fdc) : '—')}</td></tr>
+          <tr><td>adı</td><td>${escapeHtml(adi)}</td></tr>
+          <tr><td>makrolar</td><td>${nnMacroLine(a)}</td></tr></table>${!d.usda_env_ok ? `<p style="margin-top:6px;color:#b73a38;font-size:11px">USDA_API_KEY .env eksik — canlı arama çalışmaz.</p>` : ''}`;
+      } else {
+        ob.innerHTML = '<span class="nn-muted">Otomatik eşleşme yok</span>';
+      }
+    }
+
+    const al = document.getElementById('nn-alt-block');
+    if (al) {
+      const raw = d.alternatif_usda_kaynak;
+      if (Array.isArray(raw) && raw.length) {
+        al.innerHTML = raw.slice(0, 5).map(x => {
+          const item = x && typeof x === 'object' ? x : {};
+          const fidRaw = nnPickField(item, 'fdcId', 'fdc_id', 'usda_efektif_fdc_id', 'usda_fdc_id');
+          const fid = fidRaw != null ? +fidRaw : NaN;
+          const desc = escapeHtml(String(nnPickField(item, 'description', 'usda_adi', 'usda_efektif_adi') ?? '—').slice(0, 380));
+          return `<article class="nn-usda-item">
+            <div class="nn-usda-item-top">
+              <div style="flex:1;min-width:0">${desc}</div>
+              ${Number.isFinite(fid) ? `<button type="button" class="btn btn-primary btn-sm" onclick="nnManualFromUsda(${fid},'')">USDA seç</button>` : ''}
+            </div>
+          </article>`;
+        }).join('');
+      } else if (typeof raw === 'object' && raw && !Array.isArray(raw)) {
+        al.innerHTML = `<span class="nn-muted">Nesne formatı (${Object.keys(raw).length} anahtar) — gelecek batch bunu sırayla yazacaktır.</span>`;
+      } else {
+        al.innerHTML = '<span class="nn-muted">Henüz betikten aday yazılmadı.</span>';
+      }
+    }
+
+    nnHydrateManualForm(d.manual);
+    vcLucide();
+  } catch (e) {
+    console.error('nnOpenDrawer', e);
+    toast(`Ürün detayı: ${e.message}`, 'error');
+  }
 }
 
 window.nnRunUsdaSearch = async function nnRunUsdaSearch(force) {
