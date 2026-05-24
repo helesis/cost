@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-tuketim → ingredient_nutrition senkronu + USDA eşleştirme.
+tuketim → ingredient_nutrition senkronu + LLM destekli USDA eşleştirme.
 
 Aşama A: stok_no ile upsert (besin/eşleşme durumunu bozmaz).
-Aşama B: eslesme_durumu='eslesmedi' için USDA araması (akıllı atlama + --force).
+Aşama B: LLM çeviri → USDA arama → rapidfuzz → LLM onay → karar.
 
 Örnek:
   python -m nutrition_service.sync_ingredients --only-sync
   python -m nutrition_service.sync_ingredients --limit 20
-  python -m nutrition_service.sync_ingredients --force all --limit 50
+  python -m nutrition_service.sync_ingredients --force all --limit 20
   python -m nutrition_service.sync_ingredients --force STK00123
 """
 
@@ -28,12 +28,13 @@ if str(_ROOT) not in sys.path:
 load_dotenv(_ROOT / ".env")
 
 from nutrition_service import db
-from nutrition_service.name_clean import clean_search_term
+from nutrition_service.ollama_client import translate_food_search_term, verify_same_food
 from nutrition_service.usda_client import food_detail_sync, foods_search_sync
 from nutrition_service.usda_match import (
     ScoredCandidate,
     alternatives_json,
-    classify_match,
+    decide_match_status,
+    llm_onay_label,
     rank_usda_foods,
 )
 from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
@@ -105,6 +106,21 @@ ON CONFLICT (stok_no) DO UPDATE SET
 RETURNING id, (xmax = 0) AS inserted
 """
 
+_EMPTY_NUT = {
+    "protein": None,
+    "yag": None,
+    "karbonhidrat": None,
+    "enerji": None,
+    "su": None,
+    "sodyum": None,
+    "potasyum": None,
+    "kalsiyum": None,
+    "demir": None,
+    "magnezyum": None,
+    "fosfor": None,
+    "cinko": None,
+}
+
 
 def stage_a_sync() -> dict:
     rows = db.fetch_all(SOURCE_SQL)
@@ -126,50 +142,109 @@ def stage_a_sync() -> dict:
     }
 
 
-def _candidates_for_row(row: dict) -> tuple[str, list[ScoredCandidate]]:
-    term = clean_search_term(row["urun_adi"])
-    if not term:
-        return "", []
-    payload = foods_search_sync(query=term, page_size=15)
+def _match_product(row: dict) -> dict:
+    urun_adi = row["urun_adi"]
+
+    # 1) LLM çeviri
+    llm_term = translate_food_search_term(urun_adi)
+    if not llm_term:
+        return _finalize_row(
+            row,
+            llm_term=None,
+            ranked=[],
+            best=None,
+            llm_approved=None,
+            durum="eslesmedi",
+            guven=None,
+            usda_adi=None,
+            usda_fdc_id=None,
+            usda_data_type=None,
+            nut=_EMPTY_NUT.copy(),
+            alts=None,
+            note="LLM çeviri başarısız — eslesmedi",
+        )
+
+    # 2) USDA arama
+    payload = foods_search_sync(query=llm_term, page_size=15)
     foods = payload.get("foods") or []
-    ranked = rank_usda_foods(term, foods, top_n=5)
-    return term, ranked
-
-
-def _apply_match_update(row_id: int, row: dict, term: str, ranked: list[ScoredCandidate]) -> dict:
+    ranked = rank_usda_foods(llm_term, foods, top_n=5)
     best = ranked[0] if ranked else None
-    durum, guven = classify_match(best)
+
+    if not best:
+        return _finalize_row(
+            row,
+            llm_term=llm_term,
+            ranked=ranked,
+            best=None,
+            llm_approved=None,
+            durum="eslesmedi",
+            guven=None,
+            usda_adi=None,
+            usda_fdc_id=None,
+            usda_data_type=None,
+            nut=_EMPTY_NUT.copy(),
+            alts=None,
+            note="USDA sonuç yok",
+        )
+
+    # 3) rapidfuzz skor (best.score = gerçek token_sort_ratio)
+    fuzzy_score = best.score
+
+    # 4) LLM anlamsal onay
+    llm_approved = verify_same_food(urun_adi, best.description)
+
+    # 5) Karar
+    durum = decide_match_status(fuzzy_score=fuzzy_score, llm_approved=llm_approved)
+    guven = fuzzy_score if durum != "eslesmedi" else fuzzy_score
 
     usda_fdc_id = None
     usda_adi = None
     usda_data_type = None
+    nut = _EMPTY_NUT.copy()
     alts = None
-    nut: dict = {
-        "protein": None,
-        "yag": None,
-        "karbonhidrat": None,
-        "enerji": None,
-        "su": None,
-        "sodyum": None,
-        "potasyum": None,
-        "kalsiyum": None,
-        "demir": None,
-        "magnezyum": None,
-        "fosfor": None,
-        "cinko": None,
-    }
 
-    if durum in ("otomatik", "kontrol_gerekli") and best:
+    if durum in ("otomatik", "kontrol_gerekli"):
         detail = food_detail_sync(best.fdc_id)
         parsed = parse_macros_minerals_from_food_payload(detail)
         nut = {k: parsed.get(k) for k in nut}
         usda_fdc_id = best.fdc_id
         usda_adi = detail.get("description") or best.description
         usda_data_type = detail.get("dataType") or best.data_type
-        alts = alternatives_json(ranked, skip_first=True) if durum == "kontrol_gerekli" else None
-    elif durum == "eslesmedi" and ranked:
-        alts = alternatives_json(ranked, skip_first=False)[:3]
+        if durum == "kontrol_gerekli":
+            alts = alternatives_json(ranked, skip_first=True)
 
+    return _finalize_row(
+        row,
+        llm_term=llm_term,
+        ranked=ranked,
+        best=best,
+        llm_approved=llm_approved,
+        durum=durum,
+        guven=guven,
+        usda_adi=usda_adi,
+        usda_fdc_id=usda_fdc_id,
+        usda_data_type=usda_data_type,
+        nut=nut,
+        alts=alts,
+    )
+
+
+def _finalize_row(
+    row: dict,
+    *,
+    llm_term: str | None,
+    ranked: list[ScoredCandidate],
+    best: ScoredCandidate | None,
+    llm_approved: bool | None,
+    durum: str,
+    guven: int | None,
+    usda_adi: str | None,
+    usda_fdc_id: int | None,
+    usda_data_type: str | None,
+    nut: dict,
+    alts: list | None,
+    note: str | None = None,
+) -> dict:
     db.execute(
         """
         UPDATE fb_cost.ingredient_nutrition SET
@@ -199,8 +274,8 @@ def _apply_match_update(row_id: int, row: dict, term: str, ranked: list[ScoredCa
         WHERE id = %(id)s
         """,
         {
-            "id": row_id,
-            "term": term or None,
+            "id": row["id"],
+            "term": llm_term,
             "usda_fdc_id": usda_fdc_id,
             "usda_adi": usda_adi,
             "usda_data_type": usda_data_type,
@@ -215,16 +290,20 @@ def _apply_match_update(row_id: int, row: dict, term: str, ranked: list[ScoredCa
     return {
         "stok_no": row.get("stok_no"),
         "urun_adi": row["urun_adi"],
-        "temiz_arama_terimi": term,
+        "llm_ceviri": llm_term,
+        "usda_adi": usda_adi or (best.description if best else None),
+        "rapidfuzz_skor": best.score if best else None,
+        "llm_onay": llm_onay_label(llm_approved),
         "eslesme_durumu": durum,
         "guven_skoru": guven,
-        "usda_adi": usda_adi,
         "usda_fdc_id": usda_fdc_id,
+        "not": note,
     }
 
 
 def _fetch_stage_b_rows(*, limit: int | None, force: str | None) -> list[dict]:
     params: dict = {}
+
     if force and force.lower() != "all":
         sql = """
           SELECT id, stok_no, urun_adi, tuketim_miktari, son_arama_tarihi, son_arama_urun_adi
@@ -239,19 +318,28 @@ def _fetch_stage_b_rows(*, limit: int | None, force: str | None) -> list[dict]:
             params["lim"] = limit
         return db.fetch_all(sql, params)
 
+    if force and force.lower() == "all":
+        sql = """
+          SELECT id, stok_no, urun_adi, tuketim_miktari, son_arama_tarihi, son_arama_urun_adi
+          FROM fb_cost.ingredient_nutrition
+          WHERE eslesme_durumu <> 'manuel_onayli'
+          ORDER BY tuketim_miktari DESC NULLS LAST
+        """
+        if limit:
+            sql += " LIMIT %(lim)s"
+            params["lim"] = limit
+        return db.fetch_all(sql, params)
+
     sql = """
       SELECT id, stok_no, urun_adi, tuketim_miktari, son_arama_tarihi, son_arama_urun_adi
       FROM fb_cost.ingredient_nutrition
       WHERE eslesme_durumu = 'eslesmedi'
+        AND (
+          son_arama_tarihi IS NULL
+          OR urun_adi IS DISTINCT FROM son_arama_urun_adi
+        )
+      ORDER BY tuketim_miktari DESC NULLS LAST
     """
-    if not force or force.lower() != "all":
-        sql += """
-          AND (
-            son_arama_tarihi IS NULL
-            OR urun_adi IS DISTINCT FROM son_arama_urun_adi
-          )
-        """
-    sql += " ORDER BY tuketim_miktari DESC NULLS LAST"
     if limit:
         sql += " LIMIT %(lim)s"
         params["lim"] = limit
@@ -265,8 +353,7 @@ def stage_b_usda(*, limit: int | None = None, force: str | None = None) -> dict:
 
     for row in rows:
         try:
-            term, ranked = _candidates_for_row(row)
-            summary = _apply_match_update(row["id"], row, term, ranked)
+            summary = _match_product(row)
             results.append(summary)
             d = summary["eslesme_durumu"]
             if d in counts:
@@ -291,20 +378,29 @@ def _print_report(title: str, data: dict):
             continue
         print(f"  {k}: {v}")
     if data.get("sonuclar"):
-        print("\n  Sonuçlar:")
+        print("\n  Doğrulama çıktısı (orijinal → LLM → USDA → skor → onay → durum):")
         for r in data["sonuclar"]:
             if "hata" in r:
-                print(f"    ✗ {r.get('stok_no')} {r.get('urun_adi')}: {r['hata']}")
-            else:
-                print(
-                    f"    · {r.get('stok_no')} | {r.get('urun_adi')[:50]}"
-                    f" → {r.get('eslesme_durumu')} ({r.get('guven_skoru')})"
-                    f" | {r.get('usda_adi') or '—'}"
-                )
+                print(f"    ✗ [{r.get('stok_no')}] {r.get('urun_adi')}: {r['hata']}")
+                continue
+            orig = (r.get("urun_adi") or "")[:55]
+            llm = r.get("llm_ceviri") or "—"
+            usda = (r.get("usda_adi") or "—")[:55]
+            sc = r.get("rapidfuzz_skor")
+            sc_s = str(sc) if sc is not None else "—"
+            onay = r.get("llm_onay") or "—"
+            durum = r.get("eslesme_durumu") or "—"
+            print(
+                f"    · [{r.get('stok_no')}] {orig}\n"
+                f"      → LLM: {llm}\n"
+                f"      → USDA: {usda} | rapidfuzz={sc_s} | LLM={onay} | {durum}"
+            )
+            if r.get("not"):
+                print(f"      ({r['not']})")
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="tuketim → ingredient_nutrition USDA senkronu")
+    parser = argparse.ArgumentParser(description="tuketim → ingredient_nutrition USDA senkronu (LLM)")
     parser.add_argument(
         "--only-sync",
         action="store_true",
@@ -323,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         const="all",
         default=None,
         metavar="STOK_NO|all",
-        help="USDA aramasını zorla (stok_no veya all)",
+        help="USDA aramasını zorla (stok_no veya all — yanlış otomatikleri yeniden işler)",
     )
     args = parser.parse_args(argv)
 
@@ -336,7 +432,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         rep_b = stage_b_usda(limit=args.limit, force=args.force)
-        _print_report("Aşama B — USDA eşleştirme", rep_b)
+        _print_report("Aşama B — LLM + USDA eşleştirme", rep_b)
         return 0
     except Exception as e:
         print(f"HATA: {e}", file=sys.stderr)

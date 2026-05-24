@@ -1,4 +1,4 @@
-"""USDA arama sonuçlarından rapidfuzz ile eşleştirme."""
+"""USDA arama sonuçlarından rapidfuzz ile eşleştirme (gerçek token_sort_ratio skoru)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,7 @@ from typing import Any
 
 from rapidfuzz import fuzz
 
-RAW_BOOST = 5
-BRANDED_PENALTY = 8
+RAW_BOOST = 3
 
 
 @dataclass
@@ -20,33 +19,25 @@ class ScoredCandidate:
     raw: dict[str, Any] = field(repr=False, default_factory=dict)
 
 
-def score_description(query: str, description: str, data_type: str = "") -> int:
+def fuzzy_token_sort_score(query: str, description: str, data_type: str = "") -> int:
+    """
+    Gerçek matematiksel skor: token_sort_ratio (0–100).
+    Sabit/uydurma skor yok. 'raw' içeren adaylara hafif kaydırma.
+    """
     q = (query or "").lower().strip()
     d = (description or "").lower().strip()
     if not q or not d:
         return 0
 
-    base = max(
-        fuzz.token_set_ratio(q, d),
-        fuzz.partial_ratio(q, d),
-        fuzz.WRatio(q, d),
-    )
-    score = int(base)
+    score = int(fuzz.token_sort_ratio(q, d))
 
-    if "raw" in d and "raw" in q:
+    if "raw" in d:
         score = min(100, score + RAW_BOOST)
-    elif "raw" in d:
-        score = min(100, score + RAW_BOOST // 2)
 
     if data_type and "branded" in data_type.lower():
-        score = max(0, score - BRANDED_PENALTY)
+        score = max(0, score - 5)
 
-    # İşlenmiş / hazır ürün cezası
-    for bad in ("canned", "frozen meal", "prepared", "restaurant"):
-        if bad in d:
-            score = max(0, score - 4)
-
-    return min(100, score)
+    return score
 
 
 def rank_usda_foods(
@@ -69,7 +60,7 @@ def rank_usda_foods(
 
         desc = f.get("description") or ""
         dtype = f.get("dataType") or ""
-        sc = score_description(query, desc, dtype)
+        sc = fuzzy_token_sort_score(query, desc, dtype)
         scored.append(
             ScoredCandidate(
                 fdc_id=fid,
@@ -84,16 +75,29 @@ def rank_usda_foods(
     return scored[:top_n]
 
 
-def classify_match(best: ScoredCandidate | None) -> tuple[str, int | None]:
+def decide_match_status(*, fuzzy_score: int | None, llm_approved: bool | None) -> str:
     """
-    Güven skoru ve eslesme_durumu.
-    ≥85 otomatik, 60–84 kontrol_gerekli, <60 eslesmedi.
+    İki kapılı karar:
+    - rapidfuzz ≥ 85 VE LLM EVET → otomatik
+    - LLM EVET ve 60 ≤ rapidfuzz < 85 → kontrol_gerekli
+    - LLM HAYIR VEYA rapidfuzz < 60 VEYA LLM yanıt yok → eslesmedi
     """
-    if best is None or best.score < 60:
-        return "eslesmedi", best.score if best else None
-    if best.score >= 85:
-        return "otomatik", best.score
-    return "kontrol_gerekli", best.score
+    sc = int(fuzzy_score or 0)
+    if llm_approved is not True:
+        return "eslesmedi"
+    if sc >= 85:
+        return "otomatik"
+    if sc >= 60:
+        return "kontrol_gerekli"
+    return "eslesmedi"
+
+
+def llm_onay_label(approved: bool | None) -> str:
+    if approved is True:
+        return "EVET"
+    if approved is False:
+        return "HAYIR"
+    return "—"
 
 
 def alternatives_json(candidates: list[ScoredCandidate], *, skip_first: bool = False) -> list[dict]:
