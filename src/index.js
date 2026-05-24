@@ -99,7 +99,17 @@ app.use(async (req, res, next) => {
   return next();
 });
 
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(
+  express.static(path.join(__dirname, '../public'), {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(`${path.sep}index.html`)) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    },
+  })
+);
 
 // Eski giriş adresi → ana sayfa
 app.get('/login', (req, res) => {
@@ -1505,6 +1515,9 @@ app.get('/api/menu-engineering/export', async (req, res) => {
 
 // ── Catch-all → index.html ────────────────────────────────────────────────────
 app.get('*', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
