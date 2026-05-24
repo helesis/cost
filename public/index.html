@@ -142,11 +142,58 @@
   .me-threshold-hint { font-size: 11px; color: var(--text-dim); }
   .me-empty { text-align: center; padding: 48px 20px; color: var(--text-dim); font-size: 14px; }
   .me-pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
-  .me-seg-STARS { color: #2d6a4f; font-weight: 600; }
-  .me-seg-VOLUME_RISK { color: #9b2226; font-weight: 600; }
-  .me-seg-OPPORTUNITY { color: #ca6702; font-weight: 600; }
-  .me-seg-DEAD_STOCK { color: #6c757d; font-weight: 600; }
-  .me-seg-REVIEW_REQUIRED { color: #7209b7; font-weight: 600; }
+  .me-q-stars { color: #2e8b57; font-weight: 600; }
+  .me-q-risk_watch { color: #cc8c2f; font-weight: 600; }
+  .me-q-plow_horses { color: #c96d26; font-weight: 600; }
+  .me-q-dogs { color: #c9423d; font-weight: 600; }
+
+  .me-matrix-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .me-matrix-legend {
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--text);
+    flex: 1 1 220px;
+  }
+  .me-matrix-leg-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .me-matrix-leg-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  }
+  .me-matrix-log-sw {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+    font-size: 12px;
+    color: var(--text-dim);
+    align-items: center;
+  }
+  .me-matrix-log-sw label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  #me-matrix-hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
 
   .me-charts-layout {
     display: grid;
@@ -935,10 +982,7 @@
     </div>
     <div class="page-body">
       <div class="me-disclaimer">
-        Bu analiz, satış/kârlılık modeli yerine yükleme dosyasındaki tüketim miktarı ve tutarları (satır <strong>tutar_tl</strong> / <strong>tutar_eur</strong>) kullanır.
-        SKU segmentleri hâlâ <strong>miktar</strong> sıralaması ve seçilen üst yüzde eşiği ile belirlenir; 2×2 matrisin <strong>Y ekseni</strong> seçtiğiniz para birimi (EUR/TL) için <strong>toplam tutara göre pay %</strong> olarak çizilir.
-        <strong>X ekseni</strong>, maliyet proxy kademesi (LOW / MEDIUM / HIGH) için <strong>ln(kademe)/ln(3)</strong> ile 0–1 aralığına yerleştirilir (aynı sütte daha okunabilir aralıklar). Sonuçlar operasyonel yönlendirme amaçlıdır.
-      </div>
+        Üst veri seçimi (miktar, tutar) ile çalışır. <strong>Matris grafiği</strong> için <strong>Yiyecek</strong> veya <strong>İçecek</strong> seçin (aynı anda tek tip birim).</div>
 
       <div class="card mb-20">
         <div class="card-title">Filtreler</div>
@@ -952,9 +996,8 @@
             <select class="form-select" id="me-bitis" style="width:160px"></select>
           </div>
           <div>
-            <label class="form-label" for="me-tip">Tip</label>
+            <label class="form-label" for="me-tip">Tip (matris)</label>
             <select class="form-select" id="me-tip" style="width:130px">
-              <option value="">Hepsi</option>
               <option value="yiyecek" selected>Yiyecek</option>
               <option value="icenek">İçecek</option>
             </select>
@@ -969,14 +1012,13 @@
             <input type="text" class="form-input" id="me-q" placeholder="Stok / kategori…">
           </div>
           <div>
-            <label class="form-label" for="me-segment">Segment</label>
-            <select class="form-select" id="me-segment" style="width:160px">
+            <label class="form-label" for="me-segment">Matris çeyreği</label>
+            <select class="form-select" id="me-segment" style="width:168px">
               <option value="">Hepsi</option>
-              <option value="STARS">STARS</option>
-              <option value="VOLUME_RISK">VOLUME RISK</option>
-              <option value="OPPORTUNITY">OPPORTUNITY</option>
-              <option value="DEAD_STOCK">DEAD STOCK</option>
-              <option value="REVIEW_REQUIRED">REVIEW</option>
+              <option value="stars">Stars</option>
+              <option value="risk_watch">Risk/Watch</option>
+              <option value="plow_horses">Plow Horses</option>
+              <option value="dogs">Dogs</option>
             </select>
           </div>
           <div>
@@ -999,6 +1041,8 @@
           <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
           <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
           <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
+          <div class="me-kpi"><div class="me-kpi-val">—</div><div class="me-kpi-lbl">yükleniyor</div></div>
         </div>
         <p style="text-align:center;color:var(--text-dim);padding:20px"><span class="spinner"></span> Analiz hesaplanıyor…</p>
       </div>
@@ -1008,8 +1052,21 @@
 
         <div class="me-charts-layout">
           <div class="card me-matrix-card">
-            <div class="card-title" id="me-matrix-chart-title">2×2 Matrix — maliyet proxy × tutar payı %</div>
+            <div class="card-title" id="me-matrix-chart-title">Menü Mühendisliği — klasik scatter matris</div>
+            <div class="me-matrix-toolbar">
+              <div class="me-matrix-legend" aria-label="Çeyrek açıklaması">
+                <div class="me-matrix-leg-row"><span class="me-matrix-leg-dot" style="background:#2e8b57"></span>1. Stars</div>
+                <div class="me-matrix-leg-row"><span class="me-matrix-leg-dot" style="background:#f0ad4e"></span>2. Risk/Watch</div>
+                <div class="me-matrix-leg-row"><span class="me-matrix-leg-dot" style="background:#e8833a"></span>3. Plow Horses</div>
+                <div class="me-matrix-leg-row"><span class="me-matrix-leg-dot" style="background:#d9534f"></span>4. Dogs</div>
+              </div>
+              <div class="me-matrix-log-sw">
+                <label><input type="checkbox" id="me-matrix-log-x" /> Log X (maliyet)</label>
+                <label><input type="checkbox" id="me-matrix-log-y" /> Log Y (tüketim)</label>
+              </div>
+            </div>
             <div class="chart-wrap"><canvas id="chart-me-matrix"></canvas></div>
+            <p id="me-matrix-hint" style="display:none"></p>
             <p id="me-matrix-trunc" style="display:none;font-size:12px;color:var(--text-dim);margin:8px 0 0"></p>
           </div>
           <div class="card me-pareto-card">
@@ -1027,10 +1084,12 @@
                 <tr>
                   <th>#</th>
                   <th>Ürün</th>
-                  <th style="text-align:right">Tüketim</th>
+                  <th style="text-align:right">Tüketim (ham)</th>
                   <th style="text-align:right">%</th>
-                  <th>Cost</th>
-                  <th>Segment</th>
+                  <th style="text-align:right">Maliyet €/birim</th>
+                  <th style="text-align:right">Kg / L</th>
+                  <th>Proxy</th>
+                  <th>Çeyrek</th>
                   <th>Öneri</th>
                 </tr>
               </thead>
@@ -1435,14 +1494,102 @@ let chartMePareto = null;
 let mePage = 1;
 let _meLastTotal = 0;
 let _mePageSize = 50;
+let _meLastMeData = null;
 
-const ME_SEG_COLORS = {
-  STARS: '#2d6a4f',
-  VOLUME_RISK: '#9b2226',
-  OPPORTUNITY: '#ca6702',
-  DEAD_STOCK: '#6c757d',
-  REVIEW_REQUIRED: '#7209b7'
+/** Matris scatter nokta renkleri (çeyrek) */
+const ME_Q_PT = {
+  stars: '#2e8b57',
+  risk_watch: '#f0ad4e',
+  plow_horses: '#e8833a',
+  dogs: '#d9534f'
 };
+function meMatrixRgba(rgb, alpha) {
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+}
+function meMatrixClamp(v, lo, hi) {
+  return Math.min(Math.max(v, lo), hi);
+}
+/** Log için pozitif; lineer için 0’a izin ver. */
+function meMatrixAxisExtents(valuesWithSplit, useLog, minFloor) {
+  const floor = typeof minFloor === 'number' ? minFloor : 0;
+  const arr = [...valuesWithSplit].filter(Number.isFinite);
+  if (!arr.length) return useLog ? { min: 1e-6, max: 1 } : { min: floor, max: 1 };
+  let lo = Math.min(...arr);
+  let hi = Math.max(...arr);
+  if (useLog) {
+    lo = Math.max(lo, 1e-14);
+    hi = Math.max(hi, lo * 1.000001);
+    return { min: lo / 1.15, max: hi * 1.15 };
+  }
+  const span = hi - lo;
+  const pad = span > 0 ? span * 0.1 : hi > 0 ? hi * 0.06 : Math.max(lo * 0.06, 0.01);
+  return { min: Math.max(floor, lo - pad), max: hi + pad };
+}
+function meMatrixQuadrantPlugin(splitX, splitY) {
+  const fillRgb = [[46, 139, 87], [240, 173, 78], [232, 131, 58], [217, 83, 79]];
+  return {
+    id: 'meMeMatrixQuadrants',
+    beforeDraw(chart) {
+      const ca = chart.chartArea;
+      const ctx = chart.ctx;
+      if (!ca || !ctx) return;
+      const xS = chart.scales.x;
+      const yS = chart.scales.y;
+      if (!xS || !yS || !Number.isFinite(splitX) || !Number.isFinite(splitY)) return;
+      const xm = meMatrixClamp(xS.getPixelForValue(splitX), ca.left, ca.right);
+      const ym = meMatrixClamp(yS.getPixelForValue(splitY), ca.top, ca.bottom);
+      const { left, top, right, bottom } = ca;
+      ctx.save();
+      ctx.fillStyle = meMatrixRgba(fillRgb[0], 0.09);
+      ctx.fillRect(left, top, xm - left, ym - top);
+      ctx.fillStyle = meMatrixRgba(fillRgb[1], 0.09);
+      ctx.fillRect(xm, top, right - xm, ym - top);
+      ctx.fillStyle = meMatrixRgba(fillRgb[2], 0.09);
+      ctx.fillRect(left, ym, xm - left, bottom - ym);
+      ctx.fillStyle = meMatrixRgba(fillRgb[3], 0.09);
+      ctx.fillRect(xm, ym, right - xm, bottom - ym);
+      ctx.restore();
+    },
+    afterDraw(chart) {
+      const ca = chart.chartArea;
+      const ctx = chart.ctx;
+      if (!ca || !ctx) return;
+      const xS = chart.scales.x;
+      const yS = chart.scales.y;
+      if (!xS || !yS || !Number.isFinite(splitX) || !Number.isFinite(splitY)) return;
+      const xm = meMatrixClamp(xS.getPixelForValue(splitX), ca.left, ca.right);
+      const ym = meMatrixClamp(yS.getPixelForValue(splitY), ca.top, ca.bottom);
+      const { left, top, right, bottom } = ca;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(138, 108, 46, 0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.moveTo(xm, top);
+      ctx.lineTo(xm, bottom);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(left, ym);
+      ctx.lineTo(right, ym);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(74, 58, 30, 0.92)';
+      const pad = 8;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.fillText('Stars', left + pad, top + pad);
+      ctx.textAlign = 'right';
+      ctx.fillText('Risk/Watch', right - pad, top + pad);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('Plow Horses', left + pad, bottom - pad);
+      ctx.textAlign = 'right';
+      ctx.fillText('Dogs', right - pad, bottom - pad);
+      ctx.restore();
+    }
+  };
+}
 
 function initMenuEngineeringFilters() {
   const root = document.getElementById('me-baslangic');
@@ -1451,6 +1598,21 @@ function initMenuEngineeringFilters() {
   ['me-baslangic', 'me-bitis', 'me-tip', 'me-segment', 'me-cost'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => loadMenuEngineeringData(true));
+  });
+  const rebuildMatrix = () => {
+    if (!_meLastMeData) return;
+    if (chartMeMatrix) {
+      try { chartMeMatrix.destroy(); } catch (e) {}
+      chartMeMatrix = null;
+    }
+    meBuildMeMatrixChart(_meLastMeData);
+    requestAnimationFrame(() => {
+      try { chartMeMatrix && chartMeMatrix.resize(); } catch (e) {}
+    });
+  };
+  ['me-matrix-log-x', 'me-matrix-log-y'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', rebuildMatrix);
   });
   const th = document.getElementById('me-threshold');
   if (th) {
@@ -1535,7 +1697,7 @@ async function loadMenuEngineeringData(resetPage) {
     emptyEl.style.display = 'none';
     contentEl.style.display = 'block';
 
-    meRenderMeKpis(data.kpis);
+    meRenderMeKpis(data.kpis, data.matrix_qty_unit);
     meRenderMeCharts(data);
     meRenderMeTable(data.rows || []);
     meUpdateMePager(data);
@@ -1551,15 +1713,23 @@ async function loadMenuEngineeringData(resetPage) {
   }
 }
 
-function meRenderMeKpis(k) {
+function meRenderMeKpis(k, matrixQtyUnit) {
   const el = document.getElementById('me-kpis');
   if (!el || !k) return;
+  const consLbl =
+    matrixQtyUnit === 'L'
+      ? 'Toplam tüketim (L)'
+      : matrixQtyUnit === 'kg'
+        ? 'Toplam tüketim (g)'
+        : 'Toplam tüketim';
   el.innerHTML = `
     <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.total_sku, 0)}</div><div class="me-kpi-lbl">Toplam SKU</div></div>
-    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.total_consumption, 0)}</div><div class="me-kpi-lbl">Toplam tüketim</div></div>
-    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.top20_share_pct, 1)}%</div><div class="me-kpi-lbl">Top 20 payı</div></div>
-    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.volume_risk_count, 0)}</div><div class="me-kpi-lbl">Volume risk</div></div>
-    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.dead_stock_count, 0)}</div><div class="me-kpi-lbl">Dead stock</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.total_consumption, 0)}</div><div class="me-kpi-lbl">${consLbl}</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.top20_share_pct, 1)}%</div><div class="me-kpi-lbl">Top 20 miktar payı %</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.stars_count ?? 0, 0)}</div><div class="me-kpi-lbl">Stars</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.risk_watch_count ?? 0, 0)}</div><div class="me-kpi-lbl">Risk / Watch</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.plow_horses_count ?? 0, 0)}</div><div class="me-kpi-lbl">Plow Horses</div></div>
+    <div class="me-kpi"><div class="me-kpi-val">${fmtN(k.dogs_count ?? 0, 0)}</div><div class="me-kpi-lbl">Dogs</div></div>
   `;
 }
 
@@ -1568,111 +1738,99 @@ function meDestroyMeCharts() {
   if (chartMePareto) { try { chartMePareto.destroy(); } catch (e) {} chartMePareto = null; }
 }
 
-/** matrix_x ile uyumlu: ln(kademe)/ln(3) ve MED–HIGH quadrant sınırı (backend ile aynı) */
-const ME_MATRIX_LOG_X_MED = Math.log(2) / Math.log(3);
-const ME_MATRIX_X_BOUND_LOW_MED = ME_MATRIX_LOG_X_MED / 2;
-const ME_MATRIX_X_BOUND_MED_HIGH = (ME_MATRIX_LOG_X_MED + 1) / 2;
-const ME_QUADRANT_SPLIT_X = ME_MATRIX_X_BOUND_MED_HIGH;
-
-function meQuadrantPlugin(splitX, splitY) {
-  return {
-    id: 'meMenuQuadrants',
-    afterDraw(chart) {
-      const ca = chart.chartArea;
-      const ctx = chart.ctx;
-      if (!ca || !ctx) return;
-      const xS = chart.scales.x;
-      const yS = chart.scales.y;
-      if (!xS || !yS) return;
-      let sy = splitY;
-      const minY = yS.min;
-      const maxY = yS.max;
-      if (sy <= minY || sy == null || isNaN(sy)) sy = minY + (maxY - minY) * 0.5;
-      if (sy >= maxY) sy = maxY - (maxY - minY) * 0.08;
-      const xMid = xS.getPixelForValue(splitX);
-      const yMid = yS.getPixelForValue(sy);
-      const { left, top, right, bottom } = ca;
-      const xm = Math.min(Math.max(xMid, left), right);
-      const ym = Math.min(Math.max(yMid, top), bottom);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(138, 108, 46, 0.55)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([10, 6]);
-      ctx.beginPath();
-      ctx.moveTo(xm, top);
-      ctx.lineTo(xm, bottom);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(left, ym);
-      ctx.lineTo(right, ym);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-
-      const labels = [
-        { text: 'STARS', cx: (left + xm) / 2, cy: (top + ym) / 2 },
-        { text: 'VOLUME RISK', cx: (xm + right) / 2, cy: (top + ym) / 2 },
-        { text: 'DEAD STOCK', cx: (left + xm) / 2, cy: (ym + bottom) / 2 },
-        { text: 'OPPORTUNITY', cx: (xm + right) / 2, cy: (ym + bottom) / 2 }
-      ];
-      ctx.save();
-      ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (const { text, cx, cy } of labels) {
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillStyle = 'rgba(74, 58, 30, 0.96)';
-        ctx.strokeText(text, cx, cy);
-        ctx.fillText(text, cx, cy);
-      }
-      ctx.restore();
-    }
-  };
+function meQuadLabelDisp(q) {
+  const M = { stars: 'Stars', risk_watch: 'Risk/Watch', plow_horses: 'Plow Horses', dogs: 'Dogs' };
+  return q != null ? M[q] || String(q) : '—';
 }
 
-function meRenderMeCharts(data) {
-  meDestroyMeCharts();
+/** Matris + opsiyonel medyan bölgeleri; log eksen sıfır / negatif ise otomatik lineer kullanılır. */
+function meBuildMeMatrixChart(data) {
   const matrix = data.matrix || [];
-  const matCurLbl = data.matrix_currency === 'EUR' ? 'EUR' : 'TL';
+  const qtyHint = data.matrix_qty_unit || '';
+  const hintEl = document.getElementById('me-matrix-hint');
   const mTitle = document.getElementById('me-matrix-chart-title');
-  if (mTitle) mTitle.textContent = `2×2 Matrix — maliyet proxy × tutar payı % (${matCurLbl})`;
-
   const canvasM = document.getElementById('chart-me-matrix');
-  const canvasP = document.getElementById('chart-me-pareto');
-  if (!canvasM || !canvasP) return;
-
   const mTrunc = document.getElementById('me-matrix-trunc');
+  const logXC = document.getElementById('me-matrix-log-x');
+  const logYC = document.getElementById('me-matrix-log-y');
+  let logXUse = !!(logXC && logXC.checked);
+  let logYUse = !!(logYC && logYC.checked);
+  if (logXUse && matrix.length && matrix.some((m) => !(Number(m.x) > 0))) logXUse = false;
+  if (logYUse && matrix.length && matrix.some((m) => !(Number(m.y) > 0))) logYUse = false;
+
   if (mTrunc) {
     if (data.matrix_truncated) {
       mTrunc.style.display = 'block';
-      mTrunc.textContent = `Grafikte en yüksek paylı ${(data.matrix || []).length} / ${data.matrix_total_points || 0} SKU (tam küme tabloda).`;
-    } else {
-      mTrunc.style.display = 'none';
-    }
+      const shown = matrix.length;
+      const tot = data.matrix_total_points || shown;
+      mTrunc.textContent = `Grafikte en çok tüketen ilk ${shown} / ${tot} SKU (tam küme tabloda ve dışa aktarımda).`;
+    } else mTrunc.style.display = 'none';
   }
 
-  let splitY = data.quadrant_split_y;
-  if ((!splitY || splitY <= 0) && matrix.length) {
-    const ys = [...matrix.map(m => m.y)].sort((a, b) => a - b);
-    splitY = ys[Math.floor(ys.length / 2)] || 0;
+  if (hintEl) {
+    if (data.matrix_tip_required) {
+      hintEl.style.display = 'block';
+      hintEl.textContent = data.matrix_tip_required;
+    } else hintEl.style.display = 'none';
   }
-  const splitX = data.quadrant_split_x != null ? data.quadrant_split_x : ME_QUADRANT_SPLIT_X;
-  const yVals = matrix.map(m => m.y);
-  const maxYData = yVals.length ? Math.max(...yVals, splitY || 0) : Math.max(splitY || 0, 1);
-  const ySuggestedMax = maxYData <= 0 ? 1 : maxYData * 1.12;
+
+  const xLblBase =
+    qtyHint === 'L'
+      ? 'Birim başına ham maliyet (EUR/L), sol ucuz · sağ pahalı'
+      : qtyHint === 'kg'
+        ? 'Birim başına ham maliyet (EUR/kg), sol ucuz · sağ pahalı'
+        : 'Ham birim maliyet (EUR), sol ucuz · sağ pahalı';
+  const yLblBase =
+    qtyHint === 'L' ? 'Toplam tüketim (litre)' : qtyHint === 'kg' ? 'Toplam tüketim (kg)' : 'Toplam tüketim';
+
+  if (mTitle) {
+    mTitle.textContent = data.matrix_tip_required
+      ? 'Menü mühendisliği — klasik scatter matris'
+      : `Scatter matris — ${qtyHint === 'L' ? 'içecek' : qtyHint === 'kg' ? 'yiyecek' : ''} (${data.matrix_currency || 'EUR'} / ${qtyHint || 'birim'} × ham tüketim)`;
+  }
+
+  if (chartMeMatrix) {
+    try { chartMeMatrix.destroy(); } catch (e) {}
+    chartMeMatrix = null;
+  }
+  if (!canvasM || data.matrix_tip_required) return;
+
+  const splitRawX = Number(data.quadrant_split_x);
+  const splitRawY = Number(data.quadrant_split_y);
+  const splitsOk = Number.isFinite(splitRawX) && Number.isFinite(splitRawY);
+
+  let xExtents;
+  let yExtents;
+  if (matrix.length) {
+    xExtents = meMatrixAxisExtents(matrix.map((m) => m.x).concat(splitsOk ? splitRawX : []), logXUse, 0);
+    yExtents = meMatrixAxisExtents(matrix.map((m) => m.y).concat(splitsOk ? splitRawY : []), logYUse, 0);
+    if (!(xExtents.max > xExtents.min))
+      xExtents = { min: 0, max: 1 };
+    if (!(yExtents.max > yExtents.min))
+      yExtents = { min: 0, max: 1 };
+  } else {
+    xExtents = { min: 0, max: 1 };
+    yExtents = { min: 0, max: 1 };
+  }
+
+  const overlayPlugins =
+    splitsOk && matrix.length ? [meMatrixQuadrantPlugin(splitRawX, splitRawY)] : [];
 
   chartMeMatrix = new Chart(canvasM, {
     type: 'scatter',
     data: {
-      datasets: [{
-        label: 'Ürünler',
-        data: matrix.map(m => ({ x: m.x, y: m.y })),
-        backgroundColor: matrix.map(m => (ME_SEG_COLORS[m.segment] || '#888') + 'cc'),
-        borderColor: matrix.map(m => ME_SEG_COLORS[m.segment] || '#888'),
-        pointRadius: 5,
-        pointHoverRadius: 8
-      }]
+      datasets: [
+        {
+          label: 'Ürünler',
+          data: matrix.map((m) => ({ x: m.x, y: m.y })),
+          backgroundColor: matrix.map((m) => (ME_Q_PT[m.me_quadrant] || '#888888') + 'dd'),
+          borderColor: matrix.map((m) => ME_Q_PT[m.me_quadrant] || '#888888'),
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          hoverBorderWidth: 2,
+          hoverBorderColor: '#333333'
+        }
+      ]
     },
     options: {
       responsive: true,
@@ -1681,46 +1839,64 @@ function meRenderMeCharts(data) {
         legend: { display: false },
         tooltip: {
           callbacks: {
+            title(items) {
+              const i = items[0]?.dataIndex;
+              return i != null && matrix[i] ? matrix[i].item_name || '' : '';
+            },
             label(ctx) {
               const m = matrix[ctx.dataIndex];
               if (!m) return '';
-              const amt = Number(m.amount_share_pct);
-              const pctAmt = Number.isFinite(amt) ? amt : Number(m.consumption_pct);
-              return [
-                m.item_name,
-                `Tutar payı (${matCurLbl}): ${fmtN(pctAmt, 2)}%`,
-                `Miktar payı: ${fmtN(Number(m.consumption_pct), 2)}%`,
-                `Segment: ${m.segment}`,
-                `Cost: ${m.cost_proxy}`
-              ];
+              const u = qtyHint || m.qty_unit || '';
+              const quad =
+                ((m.quadrant_label || '').trim() ? m.quadrant_label : '') ||
+                meQuadLabelDisp(m.me_quadrant);
+              const cost = Number.isFinite(Number(m.unit_cost_eur)) ? Number(m.unit_cost_eur) : Number(m.x);
+              const qty = Number.isFinite(Number(m.qty_display)) ? Number(m.qty_display) : Number(m.y);
+              const lines = [`Çeyrek: ${quad}`, `Ham maliyet: ${fmtN(cost, 4)} EUR${u ? '/' + u : ''}`];
+              lines.push(`Tüketim: ${fmtN(qty, 4)} ${u || ''}`);
+              return lines;
             }
           }
         }
       },
       scales: {
         x: {
-          min: 0,
-          max: 1,
-          title: { display: true, text: 'Maliyet proxy (ln kademe, düşük → yüksek)' },
-          ticks: {
-            callback(v) {
-              const x = typeof v === 'number' ? v : parseFloat(v);
-              if (Number.isNaN(x)) return '';
-              if (x < ME_MATRIX_X_BOUND_LOW_MED) return 'LOW';
-              if (x < ME_MATRIX_X_BOUND_MED_HIGH) return 'MED';
-              return 'HIGH';
-            }
+          type: logXUse ? 'logarithmic' : 'linear',
+          min: logXUse ? Math.max(xExtents.min, 1e-14) : xExtents.min,
+          max: xExtents.max,
+          title: {
+            display: true,
+            text:
+              xLblBase +
+              (logXC && logXC.checked && !logXUse ? ' · log seçili (≤0 → lineer)' : logXUse ? ' · log' : '')
           }
         },
         y: {
-          title: { display: true, text: `Tutar payı % (${matCurLbl})` },
-          beginAtZero: true,
-          suggestedMax: ySuggestedMax
+          type: logYUse ? 'logarithmic' : 'linear',
+          min: logYUse ? Math.max(yExtents.min, 1e-14) : yExtents.min,
+          max: yExtents.max,
+          title: {
+            display: true,
+            text:
+              yLblBase +
+              (logYC && logYC.checked && !logYUse ? ' · log seçili (≤0 → lineer)' : logYUse ? ' · log' : '')
+          }
         }
       }
     },
-    plugins: [meQuadrantPlugin(splitX, splitY)]
+    plugins: overlayPlugins
   });
+}
+
+function meRenderMeCharts(data) {
+  meDestroyMeCharts();
+  _meLastMeData = data;
+
+  const canvasM = document.getElementById('chart-me-matrix');
+  const canvasP = document.getElementById('chart-me-pareto');
+  if (!canvasM || !canvasP) return;
+
+  meBuildMeMatrixChart(data);
 
   const p = data.pareto || [];
   const ptr = document.getElementById('me-pareto-trunc');
@@ -1806,17 +1982,22 @@ function meRenderMeCharts(data) {
 function meRenderMeTable(rows) {
   const tb = document.getElementById('me-tbody');
   if (!tb) return;
-  tb.innerHTML = rows.map(r => `
+  tb.innerHTML = rows.map(r => {
+    const qkey = escapeHtml(String(r.me_quadrant || ''));
+    const qlab = escapeHtml(meQuadLabelDisp(r.me_quadrant));
+    return `
     <tr>
       <td>${escapeHtml(String(r.rank ?? ''))}</td>
       <td>${escapeHtml(r.item_name || '')}</td>
       <td style="text-align:right">${fmtN(r.consumption_quantity, 2)}</td>
       <td style="text-align:right">${fmtN(r.consumption_pct, 2)}</td>
+      <td style="text-align:right">${Number.isFinite(Number(r.unit_cost_eur)) ? fmtN(r.unit_cost_eur, 4) + ' EUR' : '—'}</td>
+      <td style="text-align:right">${Number.isFinite(Number(r.qty_display)) ? `${fmtN(r.qty_display, 4)} ${escapeHtml(String(r.qty_display_unit || ''))}` : '—'}</td>
       <td>${escapeHtml(r.cost_proxy || '')}</td>
-      <td><span class="me-seg-${escapeHtml(r.segment || '')}">${escapeHtml((r.segment || '').replace(/_/g, ' '))}</span></td>
+      <td><span class="me-q-${qkey}">${qlab}</span></td>
       <td>${escapeHtml(r.suggestion || '')}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 function meUpdateMePager(data) {
