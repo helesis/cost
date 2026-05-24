@@ -386,6 +386,20 @@
   .nn-mini-table th, .nn-mini-table td { padding: 3px 6px 3px 0; text-align:left; border-bottom:1px solid var(--border); vertical-align: top; }
 
   .nn-live-dashboard { padding-bottom: 16px; }
+  .nn-sync-banner-wrap {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-bottom: 16px;
+  }
+  .nn-sync-banner-wrap .nn-sync-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .nn-live-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     flex-wrap: wrap; margin-bottom: 14px;
@@ -1489,6 +1503,21 @@
         <code>python -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012</code>;
         USDA anahtarı: <code>USDA_API_KEY</code> (.env).
       </p>
+      <section class="card nn-wrap mb-16" aria-label="Toplu USDA eşleştirme denetimi">
+        <div class="nn-sync-banner-wrap">
+          <div style="flex:1;min-width:200px;font-size:13px;line-height:1.45;color:var(--text-dim)">
+            <strong style="color:var(--text)">Toplu USDA eşleştirme:</strong>
+            <code style="font-size:11px">python3 -m nutrition_service.sync_ingredients</code> sürecini sunucuda arka planda çalıştırır (.env ile aynı ortam ve çalışma dizini).
+          </div>
+          <div class="nn-sync-actions">
+            <button type="button" class="btn btn-primary" id="nn-sync-start-btn" onclick="nnSyncStartClick()">Eşleştirmeyi Başlat</button>
+            <span id="nn-sync-spinner-wrap" class="loading" style="visibility:hidden;display:inline-flex;align-items:center" aria-hidden="true"><div class="spinner nn-sync-spin"></div></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="nn-sync-stop-btn" style="display:none" onclick="nnSyncStopClick()">Durdur</button>
+          </div>
+        </div>
+        <div id="nn-sync-status-line" style="font-size:12px;color:var(--text-dim);margin:0;padding-top:2px;"></div>
+        <div id="nn-sync-lastlog" style="font-size:11px;color:var(--text-dim);margin-top:6px;line-height:1.4;font-family:ui-monospace,monospace;word-break:break-all;max-height:2.8em;overflow:hidden" title="Son log"></div>
+      </section>
       <section class="card nn-wrap nn-live-dashboard mb-20">
         <div class="nn-live-head">
           <div class="card-title" style="margin:0">Canlı ilerleme</div>
@@ -2963,6 +2992,7 @@ let _nnPollTimer = null;
 let _nnLiveEnabled = true;
 let _nnLastSummary = null;
 let _nnAnimState = {};
+let _nnSyncStartBusy = false;
 
 function nnIsBesinTabActive() {
   return document.querySelector('.tab-content.active')?.id === 'page-besin-eslesmesi';
@@ -2985,10 +3015,10 @@ function nnStartPolling() {
   nnStopPolling();
   if (!_nnLiveEnabled || !nnIsBesinTabActive()) return;
   nnSetLiveDot(true);
-  nnFetchSummary(true);
+  nnRefreshBesinLive(true);
   _nnPollTimer = setInterval(() => {
     if (document.hidden || !_nnLiveEnabled || !nnIsBesinTabActive()) return;
-    nnFetchSummary(true);
+    nnRefreshBesinLive(true);
   }, 2000);
 }
 
@@ -3006,7 +3036,7 @@ function nnInitLiveControls() {
     document.nnVisBound = true;
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && _nnLiveEnabled && nnIsBesinTabActive()) {
-        nnFetchSummary(true);
+        nnRefreshBesinLive(true);
         nnStartPolling();
       } else if (document.hidden) {
         nnSetLiveDot(false);
@@ -3233,6 +3263,154 @@ async function nnFetchSummary(silent) {
     return null;
   }
 }
+
+async function nnRefreshBesinLive(silent) {
+  await Promise.all([
+    nnFetchSummary(silent),
+    nnSyncFetchSilent(silent),
+  ]);
+}
+
+async function nnSyncFetchSilent(silent) {
+  try {
+    const r = await fetch('/api/nutrition/sync/status');
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (!silent) {
+        toast(`Sync durumu: HTTP ${r.status}`, 'error');
+      }
+      nnApplySyncBanner({});
+      return null;
+    }
+    nnApplySyncBanner(d);
+    return d;
+  } catch (e) {
+    console.error('nnSyncFetchSilent', e);
+    if (!silent) toast(`Sync durumu: ${e.message}`, 'error');
+    nnApplySyncBanner({});
+    return null;
+  }
+}
+
+function nnApplySyncBanner(raw) {
+  const d = raw && typeof raw === 'object' ? raw : {};
+  window._nnLastSyncStatus = d;
+  const cal = !!d.calisiyor;
+  const islen = Number(d.islenen_sayisi ?? 0) || 0;
+  const kalan = Number(d.kalan_sayisi ?? 0) || 0;
+  let baseline = d.baslangictaki_kuyruk;
+  if (baseline == null || baseline === '') baseline = null;
+  else baseline = Number(baseline);
+  if (!Number.isFinite(baseline)) baseline = null;
+  const denom = baseline != null ? baseline : islen + kalan;
+
+  const startBtn = document.getElementById('nn-sync-start-btn');
+  const stopBtn = document.getElementById('nn-sync-stop-btn');
+  const spinWrap = document.getElementById('nn-sync-spinner-wrap');
+  const lineEl = document.getElementById('nn-sync-status-line');
+  const logEl = document.getElementById('nn-sync-lastlog');
+
+  if (!startBtn) return;
+
+  if (cal) {
+    startBtn.disabled = true;
+    startBtn.classList.remove('btn-primary');
+    startBtn.classList.add('btn-secondary');
+    startBtn.textContent =
+      denom > 0
+        ? `Çalışıyor… (${fmtN(Math.min(islen, denom), 0)} / ${fmtN(denom, 0)})`
+        : `Çalışıyor… (${fmtN(islen, 0)})`;
+    if (stopBtn) {
+      stopBtn.style.display = 'inline-flex';
+      stopBtn.disabled = false;
+    }
+    if (spinWrap) spinWrap.style.visibility = 'visible';
+  } else {
+    if (!_nnSyncStartBusy && startBtn.dataset.pending !== '1') {
+      startBtn.disabled = false;
+      startBtn.classList.add('btn-primary');
+      startBtn.classList.remove('btn-secondary');
+      startBtn.textContent = 'Eşleştirmeyi Başlat';
+    }
+    if (stopBtn) {
+      stopBtn.style.display = 'none';
+      stopBtn.disabled = true;
+    }
+    if (spinWrap) spinWrap.style.visibility = 'hidden';
+  }
+
+  let bzLbl = '';
+  if (cal && d.baslangic_zamani) {
+    try {
+      bzLbl = new Date(String(d.baslangic_zamani)).toLocaleString('tr-TR');
+    } catch (_) {
+      bzLbl = String(d.baslangic_zamani);
+    }
+  }
+  if (lineEl) {
+    if (cal) {
+      lineEl.textContent =
+        `Durum: çalışıyor${bzLbl ? `. Başladı (yerel): ${bzLbl}` : ''}. Tahmini işlenen: ${fmtN(islen, 0)} · Kuyruk: ${fmtN(kalan, 0)}${baseline != null ? ` (~başlangıç kayıt ${fmtN(baseline, 0)})` : ''}`;
+    } else {
+      lineEl.textContent =
+        `Durum: beklemede. Şu an kuyrukta yaklaşık ${fmtN(kalan, 0)} satır bekliyor (eşlenmemiş öncelikliler).`;
+    }
+  }
+
+  if (logEl) {
+    const sl = d.son_log;
+    logEl.textContent = sl ? String(sl) : '';
+    logEl.style.display = sl ? 'block' : 'none';
+  }
+}
+
+window.nnSyncStartClick = async function nnSyncStartClick() {
+  const btn = document.getElementById('nn-sync-start-btn');
+  if (_nnSyncStartBusy || !btn) return;
+  _nnSyncStartBusy = true;
+  btn.dataset.pending = '1';
+  btn.disabled = true;
+  btn.textContent = 'Başlatılıyor…';
+  btn.classList.remove('btn-primary');
+  btn.classList.add('btn-secondary');
+  const spin = document.getElementById('nn-sync-spinner-wrap');
+  if (spin) spin.style.visibility = 'visible';
+  try {
+    const res = await fetch('/api/nutrition/sync/start', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.started !== true) {
+      const rs = data.reason || data.detail || (res.ok ? '' : `HTTP ${res.status}`);
+      if (rs) toast(String(rs), 'warning');
+      return;
+    }
+    toast('Eşleştirme süreci arka planda başladı.', 'success');
+  } catch (e) {
+    toast('Başlatma isteği başarısız: ' + (e.message || ''), 'error');
+  } finally {
+    btn.removeAttribute('data-pending');
+    _nnSyncStartBusy = false;
+    await nnSyncFetchSilent(true);
+  }
+};
+
+window.nnSyncStopClick = async function nnSyncStopClick() {
+  const stopBtn = document.getElementById('nn-sync-stop-btn');
+  try {
+    if (stopBtn) stopBtn.disabled = true;
+    const res = await fetch('/api/nutrition/sync/stop', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (data.stopped) {
+      toast('Durdurma sinyali gönderildi.', 'info');
+    } else if (data.reason) {
+      toast(String(data.reason), 'warning');
+    }
+  } catch (e) {
+    toast('Durdurma isteği: ' + (e.message || ''), 'error');
+  } finally {
+    if (stopBtn) stopBtn.disabled = false;
+    await nnSyncFetchSilent(true);
+  }
+};
 
 function nnFmtNut(v, frac = 2) {
   if (v == null || v === '') return '—';

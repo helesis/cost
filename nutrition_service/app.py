@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from nutrition_service import db
+from nutrition_service.sync_supervisor import sync_start, sync_status, sync_stop
 from nutrition_service.usda_client import api_key_required, food_detail_async, foods_search_async, foods_search_with_macros
 from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
 
@@ -487,3 +488,19 @@ async def usda_food_detail(fdc_id: int):
         "data_type": raw.get("dataType"),
         "nutrition_per_100g": nut,
     }
+
+
+@app.post("/api/nutrition/sync/start")
+def nutrition_sync_start():
+    """`sync_ingredients` sürecini arka planda başlatır (istek bloklanmaz)."""
+    return sync_start()
+
+
+@app.get("/api/nutrition/sync/status")
+def nutrition_sync_status():
+    return sync_status()
+
+
+@app.post("/api/nutrition/sync/stop")
+def nutrition_sync_stop():
+    return sync_stop()
