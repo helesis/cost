@@ -39,8 +39,10 @@ cost/
 ├── migrate.sql                    # Sıfır kurulum: fb_cost + tuketim (türetilmiş tutar/pp)
 ├── migrate_v2_tuketim_computed.sql # Mevcut DB'yi yeni şemaya taşır (yedek alın)
 ├── migrate_add_grup_column.sql     # Sadece `grup` sütunu ekler (eski kurulumlar)
-├── migrate_ingredient_nutrition_up.sql   # USDA besin tabloları + VIEW + fonksiyon
-├── migrate_ingredient_nutrition_down.sql # Geri alma
+├── migrate_ingredient_nutrition_up.sql
+├── migrate_ingredient_nutrition_down.sql
+├── migrate_ingredient_nutrition_stok_sync_up.sql   # stok_no + senkron meta kolonları
+├── migrate_ingredient_nutrition_stok_sync_down.sql
 ├── fb_cost_functions.sql          # İsteğe bağlı: SQL tutar fonksiyonları (migrate.sql içinde de var)
 ├── package.json
 ├── src/
@@ -57,7 +59,7 @@ cost/
 │   ├── app.py
 │   ├── db.py
 │   ├── usda_client.py
-│   ├── usda_parse.py
+│   ├── sync_ingredients.py       # tuketim upsert + USDA eşleştirme CLI
 │   └── requirements.txt           # uvicorn / httpx / psycopg
 └── uploads/                       # CSV geçici yükleme klasörü (otomatik)
 ```
@@ -101,9 +103,26 @@ cost/
    ```bash
    psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
      -f migrate_ingredient_nutrition_up.sql
+   psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+     -f migrate_ingredient_nutrition_stok_sync_up.sql
    ```
 
-   Geri alma: `-f migrate_ingredient_nutrition_down.sql` (sıra kritik).
+   Geri alma sırası: `migrate_ingredient_nutrition_stok_sync_down.sql`, ardından `migrate_ingredient_nutrition_down.sql`.
+
+   **tuketim → ingredient_nutrition senkronu** (USDA doldurma betiği):
+
+   ```bash
+   pip install -r nutrition_service/requirements.txt
+   # Önce yalnız tuketim'den ürünleri çek (USDA yok):
+   python3 -m nutrition_service.sync_ingredients --only-sync
+   # Sonra örnek 20 ürün USDA eşleştir:
+   python3 -m nutrition_service.sync_ingredients --limit 20
+   # Zorla yeniden ara:
+   python3 -m nutrition_service.sync_ingredients --force all --limit 50
+   python3 -m nutrition_service.sync_ingredients --force STK12345
+   ```
+
+   Ortam: `USDA_API_KEY`, `DB_*` (.env). İstekler arası gecikme: `USDA_REQUEST_DELAY_SEC` (varsayılan 0.35s).
 
 3. Besin/USDA mikro API (Python):
 

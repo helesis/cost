@@ -109,9 +109,12 @@ async def ingredients_list(
     sql = f"""
       SELECT
         v.urun_id AS id,
+        v.stok_no,
         v.urun_adi,
         v.temiz_arama_terimi,
         v.tuketim_miktari,
+        v.tip,
+        v.birim,
         v.usda_alternatifleri,
         v.usda_fdc_id AS usda_efektif_fdc_id,
         v.usda_adi AS usda_efektif_adi,

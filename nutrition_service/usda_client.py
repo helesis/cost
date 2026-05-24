@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 
 import httpx
 
 from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
 
 _USDA_BASE = "https://api.nal.usda.gov/fdc/v1"
+DEFAULT_REQUEST_DELAY_SEC = float(os.environ.get("USDA_REQUEST_DELAY_SEC", "0.35"))
 
 
 def api_key_required() -> str:
@@ -93,3 +95,70 @@ async def foods_search_with_macros(
 async def food_detail_async(fdc_id: int) -> dict:
     async with httpx.AsyncClient(timeout=45.0) as client:
         return await _food_detail_with_client(client, int(fdc_id))
+
+
+# ── Senkron istemci (sync_ingredients.py) ─────────────────────────────────────
+
+_last_sync_request_at = 0.0
+
+
+def _throttle_sync():
+    global _last_sync_request_at
+    delay = DEFAULT_REQUEST_DELAY_SEC
+    if delay <= 0:
+        return
+    now = time.monotonic()
+    wait = delay - (now - _last_sync_request_at)
+    if wait > 0:
+        time.sleep(wait)
+    _last_sync_request_at = time.monotonic()
+
+
+def _request_with_backoff_sync(method: str, url: str, *, params=None, json_body=None, max_retries: int = 5):
+    params = dict(params or {})
+    params.setdefault("api_key", api_key_required())
+    last_err = None
+    for attempt in range(max_retries):
+        _throttle_sync()
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                if method.upper() == "GET":
+                    r = client.get(url, params=params)
+                else:
+                    r = client.post(url, params=params, json=json_body)
+                if r.status_code == 429:
+                    time.sleep(min(60.0, 2.0 ** attempt))
+                    continue
+                r.raise_for_status()
+                return r.json()
+        except httpx.HTTPStatusError as e:
+            last_err = e
+            if e.response.status_code in (429, 502, 503, 504):
+                time.sleep(min(60.0, 2.0 ** attempt))
+                continue
+            raise
+        except httpx.HTTPError as e:
+            last_err = e
+            time.sleep(min(30.0, 1.5 ** attempt))
+    raise RuntimeError(f"USDA isteği başarısız ({url}): {last_err}") from last_err
+
+
+def foods_search_sync(*, query: str, page_size: int = 15) -> dict:
+    url = f"{_USDA_BASE}/foods/search"
+    body = {
+        "query": query,
+        "pageSize": page_size,
+        "dataType": ["Foundation", "SR Legacy"],
+    }
+    return _request_with_backoff_sync("POST", url, json_body=body)
+
+
+def food_detail_sync(fdc_id: int) -> dict:
+    url = f"{_USDA_BASE}/food/{int(fdc_id)}"
+    return _request_with_backoff_sync("GET", url)
+
+
+def food_nutrition_sync(fdc_id: int) -> dict:
+    detail = food_detail_sync(fdc_id)
+    return parse_macros_minerals_from_food_payload(detail)
+

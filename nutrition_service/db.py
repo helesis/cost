@@ -1,6 +1,10 @@
 """PostgreSQL bağlantısı (.env ile Node ile aynı değişkenler)."""
 
+from __future__ import annotations
+
 import os
+from datetime import date, datetime
+from decimal import Decimal
 
 import psycopg
 from psycopg.rows import dict_row
@@ -21,10 +25,6 @@ def _conninfo():
 def conn():
     """Her istek için kısa ömürlü bağlantı (dashboard düşük hacim)."""
     return psycopg.connect(_conninfo())
-
-
-from datetime import date, datetime
-from decimal import Decimal
 
 
 def jsonable_scalar(v):
@@ -63,3 +63,32 @@ def execute(sql: str, params: tuple | list | dict | None = None):
             cur.execute(sql, params or ())
             c.commit()
             return cur.rowcount
+
+
+def execute_returning(sql: str, params: tuple | list | dict | None = None):
+    with conn() as c:
+        with c.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, params or ())
+            rows = [dict_jsonable(r) for r in cur.fetchall()]
+            c.commit()
+            return rows
+
+
+def transaction():
+    """with transaction() as cur: ..."""
+    return _Transaction()
+
+
+class _Transaction:
+    def __enter__(self):
+        self._conn = conn()
+        self._cur = self._conn.cursor(row_factory=dict_row)
+        return self._cur
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type:
+            self._conn.rollback()
+        else:
+            self._conn.commit()
+        self._cur.close()
+        self._conn.close()
