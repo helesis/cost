@@ -146,6 +146,25 @@
   .me-q-risk_watch { color: #cc8c2f; font-weight: 600; }
   .me-q-plow_horses { color: #c96d26; font-weight: 600; }
   .me-q-dogs { color: #c9423d; font-weight: 600; }
+  .me-quadrant-missing {
+    color: #6f6f6f;
+    font-weight: 500;
+    font-style: italic;
+  }
+  .me-maliyet-eksik-banner {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+    background: rgba(201, 157, 74, 0.12);
+    border: 1px solid rgba(201, 157, 74, 0.45);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    max-height: 220px;
+    overflow: auto;
+  }
+  .me-maliyet-eksik-banner summary { cursor: pointer; font-weight: 600; }
+  .me-maliyet-eksik-banner ul { margin: 10px 0 0 18px; padding: 0; }
 
   .me-matrix-toolbar {
     display: flex;
@@ -972,7 +991,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">Menu Engineering</div>
-        <div class="page-sub">Consumption-Based — tüketim ve maliyet proxy sınıflaması</div>
+        <div class="page-sub">Consumption-based — ham EUR/birim × tüketim (kg/L), çeyrek matrisi ile hizalıdır</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn btn-secondary btn-sm" onclick="meExport('csv')">CSV</button>
@@ -982,7 +1001,7 @@
     </div>
     <div class="page-body">
       <div class="me-disclaimer">
-        Üst veri seçimi (miktar, tutar) ile çalışır. <strong>Matris grafiği</strong> için <strong>Yiyecek</strong> veya <strong>İçecek</strong> seçin (aynı anda tek tip birim).</div>
+        Üst veri seçimi (tüketim + tutar EUR) ile çalışır; çeyrek matrisi birim maliyet için yalnızca <strong>EUR</strong> kullanır. <strong>Grafik</strong> için <strong>Yiyecek</strong> veya <strong>İçecek</strong> seçin.
 
       <div class="card mb-20">
         <div class="card-title">Filtreler</div>
@@ -1021,16 +1040,6 @@
               <option value="dogs">Dogs</option>
             </select>
           </div>
-          <div>
-            <label class="form-label" for="me-cost">Cost proxy</label>
-            <select class="form-select" id="me-cost" style="width:120px">
-              <option value="">Hepsi</option>
-              <option value="HIGH">HIGH</option>
-              <option value="MEDIUM">MEDIUM</option>
-              <option value="LOW">LOW</option>
-              <option value="UNKNOWN">UNKNOWN</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -1049,6 +1058,7 @@
 
       <div id="me-content" style="display:none">
         <div class="me-kpis" id="me-kpis"></div>
+        <div id="me-maliyet-eksik" style="display:none"></div>
 
         <div class="me-charts-layout">
           <div class="card me-matrix-card">
@@ -1061,8 +1071,13 @@
                 <div class="me-matrix-leg-row"><span class="me-matrix-leg-dot" style="background:#d9534f"></span>4. Dogs</div>
               </div>
               <div class="me-matrix-log-sw">
-                <label><input type="checkbox" id="me-matrix-log-x" /> Log X (maliyet)</label>
-                <label><input type="checkbox" id="me-matrix-log-y" /> Log Y (tüketim)</label>
+                <label title="İşaretli: log eksen zorlanır; işaretsiz: sağ çarpıklıkta otomatik log açılır (tüm nokta değeri &gt; 0 gerektirir)."
+                  ><input type="checkbox" id="me-matrix-log-x" /> Log X</label>
+                <label title="İşaretli: log eksen zorlanır; işaretsiz: sağ çarpıklıkta otomatik log açılır (tüm nokta değeri &gt; 0 gerektirir)."
+                  ><input type="checkbox" id="me-matrix-log-y" /> Log Y</label>
+                <label
+                  title="Eksen aralığı 1.%99. persentil; taşan gerçek değerler kenarda üçgen olarak gösterilir (medyan/çeyrek ham veriden)."
+                  ><input type="checkbox" id="me-matrix-clip-p1099" /> Eksenleri 1.–99. persente kırp</label>
               </div>
             </div>
             <div class="chart-wrap"><canvas id="chart-me-matrix"></canvas></div>
@@ -1084,11 +1099,9 @@
                 <tr>
                   <th>#</th>
                   <th>Ürün</th>
-                  <th style="text-align:right">Tüketim (ham)</th>
+                  <th style="text-align:right">Tüketim (kg / L)</th>
                   <th style="text-align:right">%</th>
                   <th style="text-align:right">Maliyet €/birim</th>
-                  <th style="text-align:right">Kg / L</th>
-                  <th>Proxy</th>
                   <th>Çeyrek</th>
                   <th>Öneri</th>
                 </tr>
@@ -1525,6 +1538,138 @@ function meMatrixAxisExtents(valuesWithSplit, useLog, minFloor) {
   const pad = span > 0 ? span * 0.1 : hi > 0 ? hi * 0.06 : Math.max(lo * 0.06, 0.01);
   return { min: Math.max(floor, lo - pad), max: hi + pad };
 }
+
+function sortedFinite(vals) {
+  return vals.filter(Number.isFinite).slice().sort((a, b) => a - b);
+}
+
+/** Sıralı dizide doğrusal enterpolasyon ile persentil, p ∈ [0, 1]. */
+function meMatrixPercentileSorted(sorted, p) {
+  const n = sorted.length;
+  if (!n || !Number.isFinite(p)) return NaN;
+  const pc = Math.max(0, Math.min(1, p));
+  if (n === 1) return sorted[0];
+  const ix = pc * (n - 1);
+  const lo = Math.floor(ix);
+  const hi = Math.ceil(ix);
+  const w = ix - lo;
+  return sorted[lo] * (1 - w) + sorted[hi] * w;
+}
+
+/** Sağ çarpık dağılım → otomatik log önerisi (yalnızca pozitif değerlere bakar). */
+function meMatrixRecommendLogFromPositive(positiveVals) {
+  const s = sortedFinite(positiveVals).filter(v => v > 0);
+  const n = s.length;
+  if (n < 8) return false;
+  const p50 = meMatrixPercentileSorted(s, 0.5);
+  const p99 = meMatrixPercentileSorted(s, 0.99);
+  const max = s[n - 1];
+  if (!(p50 > 0)) return false;
+  const ratioMax = max / Math.max(p50, 1e-30);
+  const ratio99 = p99 / Math.max(p50, 1e-30);
+  if (ratioMax > 100 || ratio99 > 42) return true;
+  let mean = 0;
+  for (const v of s) mean += v;
+  mean /= n;
+  let m2 = 0;
+  let m3 = 0;
+  for (const v of s) {
+    const d = v - mean;
+    m2 += d * d;
+    m3 += d * d * d;
+  }
+  m2 /= n;
+  m3 /= n;
+  const skew = m3 / (Math.pow(m2 + 1e-30, 1.5));
+  return skew > 1.12;
+}
+
+function meMatrixTickLabelHam(vRaw, linearScale /* true */, axisIsEUR /* compat */ ) {
+  void linearScale;
+  void axisIsEUR;
+  const v = typeof vRaw === 'number' ? vRaw : parseFloat(vRaw);
+  if (!Number.isFinite(v)) return '';
+  const a = Math.abs(v);
+  if (a >= 1000 || (a <= 1000 && a >= 100)) return fmtN(v, 0);
+  if (a >= 10 && a < 100) return fmtN(v, 1);
+  if (a >= 1 && a < 10) return fmtN(v, 2);
+  return fmtN(v, 4);
+}
+
+function meMatrixLogTickHuman(vRaw) {
+  const v = typeof vRaw === 'number' ? vRaw : parseFloat(vRaw);
+  if (!Number.isFinite(v) || !(v > 0)) return '';
+  const le = Math.log10(v);
+  const r = Math.round(le);
+  if (Math.abs(le - r) < 0.036) {
+    let mag = Math.pow(10, r);
+    if (Math.abs(mag - Math.round(mag)) < 1e-9 * Math.max(mag, 1)) mag = Math.round(mag);
+    return String(mag);
+  }
+  return `${+v.toPrecision(2)}`;
+}
+
+/**
+ * Clip açıksa yüzdelik kutusu dışındaki gerçek değeri kenara yaklaştır.
+ */
+function meMatrixClipDisplay(rx, ry, clipOn, xLoS, xHiS, yLoS, yHiS, logX, logY) {
+  const bad = () => ({ dx: rx, dy: ry, outX: false, outY: false, outDisp: false });
+  if (
+    !clipOn ||
+    !Number.isFinite(xLoS) ||
+    !Number.isFinite(xHiS) ||
+    !Number.isFinite(yLoS) ||
+    !Number.isFinite(yHiS) ||
+    xHiS <= xLoS ||
+    yHiS <= yLoS
+  )
+    return bad();
+
+  const outX = Number.isFinite(rx) ? rx < xLoS || rx > xHiS : false;
+  const outY = Number.isFinite(ry) ? ry < yLoS || ry > yHiS : false;
+
+  const spanXlin = Math.max(xHiS - xLoS, 1e-40);
+  const spanYlin = Math.max(yHiS - yLoS, 1e-40);
+  const epsXL = spanXlin * 0.035;
+  const epsYL = spanYlin * 0.035;
+
+  let dx = rx;
+  let dy = ry;
+
+  if (!outX) dx = rx;
+  else if (logX && xLoS > 0 && xHiS > xLoS && Number(rx) > 0 && Number.isFinite(rx)) {
+    const lnLo = Math.log(xLoS);
+    const lnHi = Math.log(xHiS);
+    const lg = lnHi - lnLo;
+    const bump = Math.max(lg * 0.04, Math.log(1.035));
+    if (rx < xLoS) dx = Math.exp(lnLo + bump);
+    else if (rx > xHiS) dx = Math.exp(lnHi - bump);
+    else dx = rx;
+  } else {
+    if (rx < xLoS) dx = xLoS + epsXL;
+    else if (rx > xHiS) dx = xHiS - epsXL;
+    else dx = rx;
+  }
+
+  if (!outY) dy = ry;
+  else if (logY && yLoS > 0 && yHiS > yLoS && Number(ry) > 0 && Number.isFinite(ry)) {
+    const lnLo = Math.log(yLoS);
+    const lnHi = Math.log(yHiS);
+    const lg = lnHi - lnLo;
+    const bump = Math.max(lg * 0.04, Math.log(1.035));
+    if (ry < yLoS) dy = Math.exp(lnLo + bump);
+    else if (ry > yHiS) dy = Math.exp(lnHi - bump);
+    else dy = ry;
+  } else {
+    if (ry < yLoS) dy = yLoS + epsYL;
+    else if (ry > yHiS) dy = yHiS - epsYL;
+    else dy = ry;
+  }
+
+  const outDisp = !!(outX || outY);
+  return { dx, dy, outX: !!outX, outY: !!outY, outDisp };
+}
+
 function meMatrixQuadrantPlugin(splitX, splitY) {
   const fillRgb = [[46, 139, 87], [240, 173, 78], [232, 131, 58], [217, 83, 79]];
   return {
@@ -1595,7 +1740,7 @@ function initMenuEngineeringFilters() {
   const root = document.getElementById('me-baslangic');
   if (!root || root.dataset.bound) return;
   root.dataset.bound = '1';
-  ['me-baslangic', 'me-bitis', 'me-tip', 'me-segment', 'me-cost'].forEach(id => {
+  ['me-baslangic', 'me-bitis', 'me-tip', 'me-segment'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => loadMenuEngineeringData(true));
   });
@@ -1610,7 +1755,7 @@ function initMenuEngineeringFilters() {
       try { chartMeMatrix && chartMeMatrix.resize(); } catch (e) {}
     });
   };
-  ['me-matrix-log-x', 'me-matrix-log-y'].forEach(id => {
+  ['me-matrix-log-x', 'me-matrix-log-y', 'me-matrix-clip-p1099'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', rebuildMatrix);
   });
@@ -1644,8 +1789,6 @@ function meBuildQuery(forExport) {
   if (q) u.set('q', q);
   const seg = document.getElementById('me-segment')?.value || '';
   if (seg) u.set('segment', seg);
-  const cost = document.getElementById('me-cost')?.value || '';
-  if (cost) u.set('cost_proxy', cost);
   if (!forExport) {
     u.set('page', String(mePage));
     u.set('pageSize', '50');
@@ -1692,6 +1835,11 @@ async function loadMenuEngineeringData(resetPage) {
     if (!data.totalRows) {
       emptyEl.style.display = 'block';
       meDestroyMeCharts();
+      const m = document.getElementById('me-maliyet-eksik');
+      if (m) {
+        m.style.display = 'none';
+        m.innerHTML = '';
+      }
       return;
     }
     emptyEl.style.display = 'none';
@@ -1699,7 +1847,8 @@ async function loadMenuEngineeringData(resetPage) {
 
     meRenderMeKpis(data.kpis, data.matrix_qty_unit);
     meRenderMeCharts(data);
-    meRenderMeTable(data.rows || []);
+    meRenderMaliyetEksik(data);
+    meRenderMeTable(data.rows || [], data);
     meUpdateMePager(data);
 
     requestAnimationFrame(() => {
@@ -1743,7 +1892,7 @@ function meQuadLabelDisp(q) {
   return q != null ? M[q] || String(q) : '—';
 }
 
-/** Matris + opsiyonel medyan bölgeleri; log eksen sıfır / negatif ise otomatik lineer kullanılır. */
+/** Matris scatter: otomatik log (skew), isteğe persentil kırpma, ham medyan/çeyrek API'den. */
 function meBuildMeMatrixChart(data) {
   const matrix = data.matrix || [];
   const qtyHint = data.matrix_qty_unit || '';
@@ -1753,10 +1902,7 @@ function meBuildMeMatrixChart(data) {
   const mTrunc = document.getElementById('me-matrix-trunc');
   const logXC = document.getElementById('me-matrix-log-x');
   const logYC = document.getElementById('me-matrix-log-y');
-  let logXUse = !!(logXC && logXC.checked);
-  let logYUse = !!(logYC && logYC.checked);
-  if (logXUse && matrix.length && matrix.some((m) => !(Number(m.x) > 0))) logXUse = false;
-  if (logYUse && matrix.length && matrix.some((m) => !(Number(m.y) > 0))) logYUse = false;
+  const clipChk = document.getElementById('me-matrix-clip-p1099');
 
   if (mTrunc) {
     if (data.matrix_truncated) {
@@ -1799,62 +1945,139 @@ function meBuildMeMatrixChart(data) {
   const splitRawY = Number(data.quadrant_split_y);
   const splitsOk = Number.isFinite(splitRawX) && Number.isFinite(splitRawY);
 
+  const xs = matrix.map(m => Number(m.x)).filter(Number.isFinite);
+  const ys = matrix.map(m => Number(m.y)).filter(Number.isFinite);
+  const xsPos = xs.filter(v => v > 0);
+  const ysPos = ys.filter(v => v > 0);
+  const allXP = matrix.length > 0 && matrix.every(m => Number(m.x) > 0);
+  const allYP = matrix.length > 0 && matrix.every(m => Number(m.y) > 0);
+
+  const forceLX = !!(logXC && logXC.checked);
+  const forceLY = !!(logYC && logYC.checked);
+  const skewLX = xsPos.length >= 8 && meMatrixRecommendLogFromPositive(xsPos);
+  const skewLY = ysPos.length >= 8 && meMatrixRecommendLogFromPositive(ysPos);
+  const wantLogX = forceLX || (!forceLX && skewLX);
+  const wantLogY = forceLY || (!forceLY && skewLY);
+
+  let logXUse = wantLogX && allXP;
+  let logYUse = wantLogY && allYP;
+
+  let p1x = NaN,
+    p99x = NaN,
+    p1y = NaN,
+    p99y = NaN;
+  let clipEff = !!(clipChk && clipChk.checked);
+  clipEff = clipEff && matrix.length >= 10 && xs.length >= 10 && ys.length >= 10;
+  if (clipEff) {
+    const sx = sortedFinite(xs);
+    const sy = sortedFinite(ys);
+    p1x = meMatrixPercentileSorted(sx, 0.01);
+    p99x = meMatrixPercentileSorted(sx, 0.99);
+    p1y = meMatrixPercentileSorted(sy, 0.01);
+    p99y = meMatrixPercentileSorted(sy, 0.99);
+    if (!(p99x > p1x && p99y > p1y)) clipEff = false;
+  }
+
+  const pts = [];
+  for (let mi = 0; mi < matrix.length; mi++) {
+    const m = matrix[mi];
+    const rx = Number(m.x);
+    const ry = Number(m.y);
+    const dsp = meMatrixClipDisplay(rx, ry, clipEff, p1x, p99x, p1y, p99y, logXUse, logYUse);
+    pts.push({
+      x: dsp.dx,
+      y: dsp.dy,
+      _m: mi,
+      _rx: rx,
+      _ry: ry,
+      ox: dsp.outX,
+      oy: dsp.outY,
+      clipped: dsp.outDisp && clipEff
+    });
+  }
+
   let xExtents;
   let yExtents;
   if (matrix.length) {
-    xExtents = meMatrixAxisExtents(matrix.map((m) => m.x).concat(splitsOk ? splitRawX : []), logXUse, 0);
-    yExtents = meMatrixAxisExtents(matrix.map((m) => m.y).concat(splitsOk ? splitRawY : []), logYUse, 0);
-    if (!(xExtents.max > xExtents.min))
-      xExtents = { min: 0, max: 1 };
-    if (!(yExtents.max > yExtents.min))
-      yExtents = { min: 0, max: 1 };
+    if (clipEff) {
+      xExtents = meMatrixAxisExtents([p1x, p99x], logXUse, 0);
+      yExtents = meMatrixAxisExtents([p1y, p99y], logYUse, 0);
+    } else {
+      xExtents = meMatrixAxisExtents(matrix.map(m => m.x).concat(splitsOk ? splitRawX : []), logXUse, 0);
+      yExtents = meMatrixAxisExtents(matrix.map(m => m.y).concat(splitsOk ? splitRawY : []), logYUse, 0);
+    }
+    if (!(xExtents.max > xExtents.min)) xExtents = { min: 0, max: 1 };
+    if (!(yExtents.max > yExtents.min)) yExtents = { min: 0, max: 1 };
   } else {
     xExtents = { min: 0, max: 1 };
     yExtents = { min: 0, max: 1 };
   }
 
-  const overlayPlugins =
-    splitsOk && matrix.length ? [meMatrixQuadrantPlugin(splitRawX, splitRawY)] : [];
+  const xTit =
+    xLblBase +
+    (logXUse
+      ? forceLX
+        ? ' · log (zorlu)'
+        : ' · otomatik log'
+      : (forceLX || skewLX) && !allXP
+        ? ' · log kapalı (X≤0)'
+        : '') +
+    (clipEff ? ' · görünüm 1–99% kırp' : '');
+  const yTit =
+    yLblBase +
+    (logYUse ? (forceLY ? ' · log (zorlu)' : ' · otomatik log') : (forceLY || skewLY) && !allYP ? ' · log kapalı (Y≤0)' : '') +
+    (clipEff ? ' · görünüm 1–99% kırp' : '');
+
+  const overlayPlugins = splitsOk && matrix.length ? [meMatrixQuadrantPlugin(splitRawX, splitRawY)] : [];
+
+  function tooltipLabelLines(raw) {
+    const m = matrix[raw._m];
+    if (!m) return [];
+    const u = qtyHint || m.qty_unit || '';
+    const quad =
+      ((m.quadrant_label || '').trim() ? m.quadrant_label : '') || meQuadLabelDisp(m.me_quadrant);
+    const cost = Number.isFinite(Number(m.unit_cost_eur)) ? Number(m.unit_cost_eur) : Number(raw._rx);
+    const qty = Number.isFinite(Number(m.qty_display)) ? Number(m.qty_display) : Number(raw._ry);
+    const lines = [`Çeyrek: ${quad}`, `Ham maliyet: ${fmtN(cost, 4)} EUR${u ? '/' + u : ''}`, `Tüketim: ${fmtN(qty, 4)} ${u}`];
+    if (clipEff && raw.clipped && (raw.ox || raw.oy)) {
+      const bits = [];
+      if (raw.ox) bits.push(`birim maliyet ${fmtN(raw._rx, 4)} EUR${u ? '/' + u : ''}`);
+      if (raw.oy) bits.push(`tüketim ${fmtN(raw._ry, 4)} ${u}`);
+      lines.push(`Eksen dışı — gerçek değer: ${bits.join(' · ')}`);
+    }
+    return lines;
+  }
+
+  const dsScatter = {
+    label: 'Ürünler',
+    data: pts,
+    pointStyle: pts.map(p => (p.clipped ? 'triangle' : 'circle')),
+    pointRadius: pts.map(p => (p.clipped ? 8 : 5)),
+    pointHoverRadius: pts.map(p => (p.clipped ? 11 : 8)),
+    pointBackgroundColor: pts.map(p =>
+      p.clipped ? 'rgba(0,0,0,0)' : (ME_Q_PT[matrix[p._m].me_quadrant] || '#888888') + 'dd'
+    ),
+    pointBorderColor: pts.map(p => ME_Q_PT[matrix[p._m].me_quadrant] || '#888888'),
+    pointBorderWidth: pts.map(p => (p.clipped ? 2 : 1))
+  };
 
   chartMeMatrix = new Chart(canvasM, {
     type: 'scatter',
-    data: {
-      datasets: [
-        {
-          label: 'Ürünler',
-          data: matrix.map((m) => ({ x: m.x, y: m.y })),
-          backgroundColor: matrix.map((m) => (ME_Q_PT[m.me_quadrant] || '#888888') + 'dd'),
-          borderColor: matrix.map((m) => ME_Q_PT[m.me_quadrant] || '#888888'),
-          pointRadius: 5,
-          pointHoverRadius: 8,
-          hoverBorderWidth: 2,
-          hoverBorderColor: '#333333'
-        }
-      ]
-    },
+    data: { datasets: [dsScatter] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
             title(items) {
-              const i = items[0]?.dataIndex;
-              return i != null && matrix[i] ? matrix[i].item_name || '' : '';
+              const raw = items[0]?.raw;
+              return raw && matrix[raw._m] ? matrix[raw._m].item_name || '' : '';
             },
             label(ctx) {
-              const m = matrix[ctx.dataIndex];
-              if (!m) return '';
-              const u = qtyHint || m.qty_unit || '';
-              const quad =
-                ((m.quadrant_label || '').trim() ? m.quadrant_label : '') ||
-                meQuadLabelDisp(m.me_quadrant);
-              const cost = Number.isFinite(Number(m.unit_cost_eur)) ? Number(m.unit_cost_eur) : Number(m.x);
-              const qty = Number.isFinite(Number(m.qty_display)) ? Number(m.qty_display) : Number(m.y);
-              const lines = [`Çeyrek: ${quad}`, `Ham maliyet: ${fmtN(cost, 4)} EUR${u ? '/' + u : ''}`];
-              lines.push(`Tüketim: ${fmtN(qty, 4)} ${u || ''}`);
-              return lines;
+              return tooltipLabelLines(ctx.raw);
             }
           }
         }
@@ -1862,25 +2085,27 @@ function meBuildMeMatrixChart(data) {
       scales: {
         x: {
           type: logXUse ? 'logarithmic' : 'linear',
-          min: logXUse ? Math.max(xExtents.min, 1e-14) : xExtents.min,
+          min: logXUse ? Math.max(xExtents.min, 1e-15) : xExtents.min,
           max: xExtents.max,
-          title: {
-            display: true,
-            text:
-              xLblBase +
-              (logXC && logXC.checked && !logXUse ? ' · log seçili (≤0 → lineer)' : logXUse ? ' · log' : '')
-          }
+          ticks: {
+            maxTicksLimit: logXUse ? 12 : 14,
+            callback(v) {
+              return logXUse ? meMatrixLogTickHuman(v) : meMatrixTickLabelHam(v);
+            }
+          },
+          title: { display: true, text: xTit }
         },
         y: {
           type: logYUse ? 'logarithmic' : 'linear',
-          min: logYUse ? Math.max(yExtents.min, 1e-14) : yExtents.min,
+          min: logYUse ? Math.max(yExtents.min, 1e-15) : yExtents.min,
           max: yExtents.max,
-          title: {
-            display: true,
-            text:
-              yLblBase +
-              (logYC && logYC.checked && !logYUse ? ' · log seçili (≤0 → lineer)' : logYUse ? ' · log' : '')
-          }
+          ticks: {
+            maxTicksLimit: logYUse ? 12 : 14,
+            callback(v) {
+              return logYUse ? meMatrixLogTickHuman(v) : meMatrixTickLabelHam(v);
+            }
+          },
+          title: { display: true, text: yTit }
         }
       }
     },
@@ -1979,25 +2204,66 @@ function meRenderMeCharts(data) {
   });
 }
 
-function meRenderMeTable(rows) {
+function meRenderMaliyetEksik(data) {
+  const el = document.getElementById('me-maliyet-eksik');
+  if (!el) return;
+  const bx = data.maliyet_eksik || { count: 0, urunler: [] };
+  const tipSecili = !!(data.tip || data.matrix_qty_unit);
+  if (!tipSecili || !bx.count) {
+    el.style.display = 'none';
+    el.innerHTML = '';
+    return;
+  }
+  const listItems = bx.urunler
+    .map((u) => {
+      const n = escapeHtml(u.item_name || '');
+      const c = u.category ? ` <span style="opacity:.72">(${escapeHtml(u.category)})</span>` : '';
+      return `<li>${n}${c}</li>`;
+    })
+    .join('');
+  el.className = 'me-maliyet-eksik-banner';
+  el.style.display = 'block';
+  el.innerHTML =
+    `<details><summary>Birim maliyet eksik (${bx.count} SKU)</summary>` +
+    `<p style="margin:8px 0 0;color:var(--text-dim);font-size:12px;line-height:1.4">Bu ürünlerde satır tutarından birim EUR hesaplanmıyor (ör. EUR toplamı yok veya sıfır). Matrise ve klasik dört çeyrek atamasına <strong>dahil edilmezler</strong>; medyan eşikleri kalan ürünlerle hesaplanır.</p>` +
+    `<ul>${listItems}</ul></details>`;
+}
+
+function meRenderMeTable(rows, data) {
   const tb = document.getElementById('me-tbody');
   if (!tb) return;
-  tb.innerHTML = rows.map(r => {
-    const qkey = escapeHtml(String(r.me_quadrant || ''));
-    const qlab = escapeHtml(meQuadLabelDisp(r.me_quadrant));
-    return `
+  const tipOn = !!(data && (data.tip || data.matrix_qty_unit));
+  tb.innerHTML = rows
+    .map((r) => {
+      const raw = Number(r.consumption_quantity);
+      const unitLbl = String(r.qty_display_unit || '').trim();
+      const qtyFmt = Number.isFinite(Number(r.qty_display))
+        ? `${fmtN(r.qty_display, 4)} ${unitLbl}`
+        : '—';
+      let hamTip = '';
+      if (unitLbl === 'kg' && Number.isFinite(raw))
+        hamTip = `Ham satır miktarı: ${fmtN(raw, 2)} g (tabloda ${qtyFmt})`;
+      else if (unitLbl === 'L' && Number.isFinite(raw)) hamTip = `Ham satır: ${fmtN(raw, 4)} L`;
+      const titleAttr = hamTip ? ` title="${hamTip.replace(/"/g, '&quot;')}"` : '';
+      const qtext = String(r.quadrant_display ?? meQuadLabelDisp(r.me_quadrant));
+      const qSpan = escapeHtml(qtext);
+      const qClass = r.me_quadrant
+        ? `me-q-${escapeHtml(String(r.me_quadrant))}`
+        : tipOn && qtext.indexOf('Maliyet') >= 0
+          ? 'me-quadrant-missing'
+          : '';
+      return `
     <tr>
       <td>${escapeHtml(String(r.rank ?? ''))}</td>
       <td>${escapeHtml(r.item_name || '')}</td>
-      <td style="text-align:right">${fmtN(r.consumption_quantity, 2)}</td>
+      <td style="text-align:right"${titleAttr}>${escapeHtml(qtyFmt)}</td>
       <td style="text-align:right">${fmtN(r.consumption_pct, 2)}</td>
       <td style="text-align:right">${Number.isFinite(Number(r.unit_cost_eur)) ? fmtN(r.unit_cost_eur, 4) + ' EUR' : '—'}</td>
-      <td style="text-align:right">${Number.isFinite(Number(r.qty_display)) ? `${fmtN(r.qty_display, 4)} ${escapeHtml(String(r.qty_display_unit || ''))}` : '—'}</td>
-      <td>${escapeHtml(r.cost_proxy || '')}</td>
-      <td><span class="me-q-${qkey}">${qlab}</span></td>
+      <td>${qClass ? `<span class="${qClass}">${qSpan}</span>` : `<span>${qSpan}</span>`}</td>
       <td>${escapeHtml(r.suggestion || '')}</td>
     </tr>`;
-  }).join('');
+    })
+    .join('');
 }
 
 function meUpdateMePager(data) {
@@ -2643,9 +2909,10 @@ async function init() {
       meB.innerHTML = donemOpts;
       meE.innerHTML = donemOpts;
       if (don.length) {
-        const sorted = [...don].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
-        meB.value = sorted[0].tarih_str;
-        meE.value = sorted[sorted.length - 1].tarih_str;
+        const sorted = [...don].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no || String(a.tarih_str || '').localeCompare(String(b.tarih_str || '')));
+        const son = sorted[sorted.length - 1].tarih_str;
+        meB.value = son;
+        meE.value = son;
       }
     }
     initMenuEngineeringFilters();
