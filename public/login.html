@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giriş — F&B Maliyet Analizi</title>
+<link rel="stylesheet" href="/voyage-design-system.css">
+<style>
+  .login-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(160deg, #0f1219 0%, #1a1f2e 50%, #0f1219 100%);
+  }
+  .login-card {
+    width: 100%;
+    max-width: 400px;
+    padding: 32px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface, #171a21);
+    box-shadow: 0 16px 48px rgba(0,0,0,.45);
+  }
+  .login-card h1 { font-size: 1.35rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .login-card p { margin: 0 0 24px; color: var(--text-dim); font-size: 14px; line-height: 1.45; }
+  .login-card label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: 8px; }
+  .login-card input[type="password"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,.28);
+    color: var(--text);
+    font-size: 15px;
+    margin-bottom: 20px;
+  }
+  .login-card input:focus { outline: 2px solid var(--gold-muted, rgba(201,169,96,.45)); outline-offset: 0; border-color: var(--gold-muted, rgba(201,169,96,.45)); }
+  .login-msg { margin: 16px 0 0; min-height: 1.35em; font-size: 14px; color: var(--red, #e85d5d); }
+  .login-msg.ok { color: var(--green, #62c962); }
+  .login-card .btn { width: 100%; justify-content: center; padding: 12px 20px; }
+</style>
+</head>
+<body>
+<div class="login-shell">
+  <div class="login-card">
+    <h1>F&amp;B Maliyet Analizi</h1>
+    <p>Devam etmek için şifreyi girin.</p>
+    <form id="cost-login-form" autocomplete="on">
+      <label for="cost-pw">Parola</label>
+      <input id="cost-pw" name="cost-pw" type="password" required autocomplete="current-password">
+      <button type="submit" class="btn btn-primary">Giriş yap</button>
+    </form>
+    <div class="login-msg" id="cost-login-msg"></div>
+  </div>
+</div>
+<script>
+(function () {
+  const form = document.getElementById('cost-login-form');
+  const input = document.getElementById('cost-pw');
+  const msg = document.getElementById('cost-login-msg');
+
+  async function login(password) {
+    msg.textContent = '';
+    msg.classList.remove('ok');
+    try {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ password })
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        msg.textContent = body.error || 'Giriş başarısız';
+        return;
+      }
+      msg.classList.add('ok');
+      msg.textContent = 'Başarılı, yönlendiriliyor…';
+      window.location.href = '/';
+    } catch (_) {
+      msg.textContent = 'Sunucuya ulaşılamadı.';
+    }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    login(String(input.value));
+  });
+})();
+</script>
+</body>
+</html>

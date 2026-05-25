@@ -551,6 +551,24 @@
   .upload-zone:hover, .upload-zone.drag { border-color: var(--gold-light); background: var(--gold-bg); }
   .upload-zone .upload-icon { font-size: 32px; margin-bottom: 12px; }
   .chart-wrap { position: relative; height: 280px; }
+  /* Genel Özet: grafikler tek sütun, tam genişlik (P.P. maliyet 2. satır, P.P. tüketim 3. satır) */
+  .ozet-charts-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    max-width: 100%;
+  }
+  .ozet-charts-stack > .card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .ozet-charts-stack .chart-wrap {
+    width: 100%;
+    height: min(360px, 50vh);
+    min-height: 280px;
+  }
   .alarm-item { display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
   .alarm-item:last-child { border-bottom:none; }
   .alarm-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
@@ -820,20 +838,18 @@
     </div>
     <div class="page-body">
       <div id="ozet-stats" class="ozet-stats-rows"></div>
-      <div class="grid-2" style="gap:20px">
+      <div class="ozet-charts-stack">
         <div class="card">
           <div class="card-title">Yiyecek vs İçecek Dağılımı</div>
           <div class="chart-wrap"><canvas id="chart-dagilim"></canvas></div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:20px">
-          <div class="card">
-            <div class="card-title" id="ozet-pp-maliyet-title">Pax Başına Maliyet (€)</div>
-            <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
-          </div>
-          <div class="card">
-            <div class="card-title">Pax Başına Tüketim</div>
-            <div class="chart-wrap"><canvas id="chart-pp-tuketim"></canvas></div>
-          </div>
+        <div class="card">
+          <div class="card-title" id="ozet-pp-maliyet-title">Pax Başına Maliyet (€)</div>
+          <div class="chart-wrap"><canvas id="chart-pp-eur"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Pax Başına Tüketim</div>
+          <div class="chart-wrap"><canvas id="chart-pp-tuketim"></canvas></div>
         </div>
       </div>
     </div>
@@ -1711,6 +1727,23 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
+(function gate401Redirect() {
+  const _f = window.fetch.bind(window);
+  window.fetch = function (...args) {
+    return _f(...args).then((r) => {
+      const p = typeof window.location.pathname === 'string' ? window.location.pathname : '';
+      if (
+        r &&
+        r.status === 401 &&
+        !/\/login\.html$/i.test(p)
+      ) {
+        window.location.href = '/login.html';
+      }
+      return r;
+    });
+  };
+})();
+
 // ── State ──────────────────────────────────────────────────────────────────────
 let ozetData = [], donemler = [];
 const talepParetoDetailCache = new Map();
