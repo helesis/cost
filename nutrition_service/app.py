@@ -130,6 +130,7 @@ async def summary():
         recent = db.fetch_all(
             """
             SELECT
+              id AS urun_id,
               urun_adi,
               eslesme_durumu,
               guven_skoru,
@@ -160,8 +161,14 @@ async def summary():
 
         for r in recent or []:
             gs = r.get("guven_skoru")
+            uid = r.get("urun_id")
+            try:
+                urun_id = int(uid) if uid is not None else 0
+            except (TypeError, ValueError):
+                urun_id = 0
             agg["son_islenen"].append(
                 {
+                    "urun_id": urun_id,
                     "urun_adi": r.get("urun_adi") or "",
                     "eslesme_durumu": r.get("eslesme_durumu") or "",
                     "guven_skoru": int(gs) if gs is not None else None,

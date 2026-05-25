@@ -479,7 +479,7 @@
   .nn-live-stream { margin-top: 12px; }
   .nn-stream-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow: hidden; }
   .nn-stream-item {
-    display: flex; align-items: center; gap: 10px; justify-content: space-between;
+    display: flex; align-items: center; gap: 10px; justify-content: flex-start;
     font-size: 12px; padding: 8px 10px; border-radius: var(--radius);
     background: var(--surface2); border: 1px solid var(--border);
     animation: nn-stream-in .35s ease-out;
@@ -487,6 +487,39 @@
   @keyframes nn-stream-in {
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+  .nn-stream-uygun-btn {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    margin: -2px 0 -2px -4px;
+    padding: 0;
+    border-radius: 10px;
+    border: 1px solid rgba(138,108,46,0.45);
+    background: rgba(138,108,46,0.12);
+    color: var(--gold);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+  }
+  .nn-stream-uygun-btn:hover {
+    background: rgba(138,108,46,0.22);
+    border-color: var(--gold);
+    transform: scale(1.04);
+  }
+  .nn-stream-uygun-btn:active { transform: scale(0.98); }
+  .nn-stream-uygun-btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  .nn-stream-item-main {
+    flex: 1; min-width: 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
   }
   .nn-stream-name {
     flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -3026,6 +3059,9 @@ let _nnLiveEnabled = true;
 let _nnLastSummary = null;
 let _nnAnimState = {};
 let _nnSyncStartBusy = false;
+/** Son işlenenler: manuel uygun (✓) ile gizlenen satır anahtarları — localStorage */
+const NN_STREAM_UYGUN_LS_KEY = 'nn_stream_uygun_kaldirildi_v1';
+let _nnRecentStreamForceRedraw = false;
 
 function nnIsBesinTabActive() {
   return document.querySelector('.tab-content.active')?.id === 'page-besin-eslesmesi';
@@ -3142,8 +3178,131 @@ function nnNormalizeSummary(raw) {
     eslesmedi_aranmis: +(s.eslesmedi_aranmis ?? 0) || 0,
     ortalama_guven: Number.isFinite(og) ? og : null,
     besin_dolu: +(s.besin_dolu ?? 0) || 0,
-    son_islenen: recent.map(r => (r && typeof r === 'object' ? r : {})),
+    son_islenen: recent.map(r => {
+      const row = r && typeof r === 'object' ? r : {};
+      const uid = Number(row.urun_id);
+      return {
+        ...row,
+        urun_id: Number.isFinite(uid) ? uid : 0,
+      };
+    }),
   };
+}
+
+function nnRecentSonIslenenFingerprint(arr) {
+  if (!Array.isArray(arr)) return '';
+  return arr
+    .map((x) =>
+      `${x.urun_id ?? ''}|${x.urun_adi}|${x.updated_at}|${x.eslesme_durumu}`,
+    )
+    .join(';;');
+}
+
+/** Son işlenenler satırı için gizleme anahtarı (id + eski API için yedek karması). */
+function nnStreamDismissFingerprintRow(r) {
+  const row = r && typeof r === 'object' ? r : {};
+  const uid = Number(row.urun_id);
+  if (Number.isFinite(uid) && uid > 0) return `id:${uid}`;
+  const h = [row.urun_adi || '', row.updated_at || '', row.eslesme_durumu || ''].join('\x1f');
+  return `h:${h}`;
+}
+
+function nnStreamDismissedSet() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NN_STREAM_UYGUN_LS_KEY) || '[]');
+    const set = new Set();
+    if (Array.isArray(raw)) {
+      raw.forEach((k) => {
+        if (k != null && k !== '') set.add(String(k));
+      });
+    }
+    return set;
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function nnStreamPersistDismissed(set) {
+  localStorage.setItem(NN_STREAM_UYGUN_LS_KEY, JSON.stringify([...set]));
+}
+
+function nnEnsureStreamUygunDelegate() {
+  const host = document.getElementById('nn-recent-stream');
+  if (!host || host.dataset.nnUygunDismissBound) return;
+  host.dataset.nnUygunDismissBound = '1';
+  host.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button.nn-stream-uygun-btn');
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const enc = btn.getAttribute('data-dismiss-key');
+    if (enc == null || enc === '') return;
+    let key;
+    try {
+      key = decodeURIComponent(enc);
+    } catch (_) {
+      key = enc;
+    }
+    const dis = nnStreamDismissedSet();
+    dis.add(key);
+    nnStreamPersistDismissed(dis);
+    _nnRecentStreamForceRedraw = true;
+    const src =
+      (_nnLastSummary && Array.isArray(_nnLastSummary.son_islenen) && _nnLastSummary.son_islenen) ||
+      [];
+    nnRenderSonIslenenStream(src);
+    _nnRecentStreamForceRedraw = false;
+  });
+}
+
+/** Canlı özette «Son işlenenler»: sol ✓ ile gizlenenleri süzer, DOM’u günceller. */
+function nnRenderSonIslenenStream(recentRaw) {
+  const streamHost = document.getElementById('nn-recent-stream');
+  if (!streamHost) return;
+  nnEnsureStreamUygunDelegate();
+  const recent = Array.isArray(recentRaw) ? recentRaw : [];
+  const dismissed = nnStreamDismissedSet();
+  const visible = recent.filter((r) => !dismissed.has(nnStreamDismissFingerprintRow(r)));
+
+  const prevRecent =
+    (_nnLastSummary && Array.isArray(_nnLastSummary.son_islenen) && _nnLastSummary.son_islenen) || [];
+  const prevKey = nnRecentSonIslenenFingerprint(prevRecent);
+  const nextKey = nnRecentSonIslenenFingerprint(recent);
+  const streamStale =
+    streamHost.textContent.includes('Henüz veri yok') ||
+    streamHost.textContent.includes('Henüz işlenen') ||
+    streamHost.textContent.includes('gizlenen') ||
+    streamHost.textContent.includes('Yükleniyor');
+
+  const force = _nnRecentStreamForceRedraw;
+  if (!force && prevKey === nextKey && !streamStale) return;
+
+  if (!recent.length) {
+    streamHost.innerHTML = '<span class="nn-muted">Henüz işlenen ürün yok</span>';
+    return;
+  }
+  if (!visible.length) {
+    streamHost.innerHTML =
+      '<span class="nn-muted">Bu listede görünecek satır kalmadı (✓ ile uygunladıklarınız tarayıcıda saklanır; yeni güncellenen ürünler gelince görünür).</span>';
+    return;
+  }
+
+  streamHost.innerHTML = visible
+    .map((r, i) => {
+      const sc = r.guven_skoru != null ? fmtN(r.guven_skoru, 0) : '—';
+      const fpEnc = encodeURIComponent(nnStreamDismissFingerprintRow(r));
+      return `<div class="nn-stream-item" style="animation-delay:${i * 40}ms">
+        <button type="button" class="nn-stream-uygun-btn" data-dismiss-key="${fpEnc}" title="Uygunladım — bu satırı bu listeden kaldır" aria-label="Manuel uygun: satırı gizle">✓</button>
+        <div class="nn-stream-item-main">
+          <span class="nn-stream-name" title="${escapeHtml(r.urun_adi || '')}">${escapeHtml(r.urun_adi || '—')}</span>
+          <span class="nn-stream-meta">
+            ${nnDurumBadge(r.eslesme_durumu)}
+            <span class="nn-stream-score">${sc}</span>
+          </span>
+        </div>
+      </div>`;
+    })
+    .join('');
 }
 
 function nnDurumBadge(es) {
@@ -3235,32 +3394,8 @@ function nnRenderLiveDashboard(s) {
         <span>Aranmış eşleşmedi: <strong>${fmtN(eslesmediAr, 0)}</strong></span>`;
     }
 
-    const streamHost = document.getElementById('nn-recent-stream');
-    const recent = agg.son_islenen;
-    if (streamHost) {
-      const prevRecent = (_nnLastSummary && Array.isArray(_nnLastSummary.son_islenen))
-        ? _nnLastSummary.son_islenen
-        : [];
-      const prevKey = prevRecent.map(x => `${x.urun_adi}|${x.updated_at}|${x.eslesme_durumu}`).join(';;');
-      const nextKey = recent.map(x => `${x.urun_adi}|${x.updated_at}|${x.eslesme_durumu}`).join(';;');
-      const streamStale = streamHost.textContent.includes('Henüz veri yok') || streamHost.textContent.includes('Yükleniyor');
-      if (prevKey !== nextKey || streamStale) {
-        if (!recent.length) {
-          streamHost.innerHTML = '<span class="nn-muted">Henüz işlenen ürün yok</span>';
-        } else {
-          streamHost.innerHTML = recent.map((r, i) => {
-            const sc = r.guven_skoru != null ? fmtN(r.guven_skoru, 0) : '—';
-            return `<div class="nn-stream-item" style="animation-delay:${i * 40}ms">
-              <span class="nn-stream-name" title="${escapeHtml(r.urun_adi || '')}">${escapeHtml(r.urun_adi || '—')}</span>
-              <span class="nn-stream-meta">
-                ${nnDurumBadge(r.eslesme_durumu)}
-                <span class="nn-stream-score">${sc}</span>
-              </span>
-            </div>`;
-          }).join('');
-        }
-      }
-    }
+    nnRenderSonIslenenStream(agg.son_islenen);
+
     _nnLastSummary = agg;
   } catch (e) {
     console.error('nnRenderLiveDashboard', e, s);
