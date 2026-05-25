@@ -1,0 +1,20 @@
+# systemd — örnek birim dosyası (yol ve kullanıcıyı düzenleyin)
+# yükleme: sudo cp nutrition_cost_uvicorn.example.service /etc/systemd/system/nutrition-cost.service
+#          sudo systemctl daemon-reload && sudo systemctl enable --now nutrition-cost
+#
+[Unit]
+Description=Cost Analysis nutrition_service (FastAPI / USDA bridge)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=voyage
+Group=voyage
+WorkingDirectory=/srv/cost
+EnvironmentFile=-/srv/cost/.env
+ExecStart=/srv/cost/venv/bin/python -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

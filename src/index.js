@@ -160,6 +160,49 @@ const NUTRITION_SERVICE_URL = (process.env.NUTRITION_SERVICE_URL || 'http://127.
   /\/+$/,
   ''
 );
+
+async function pingNutritionServiceHealth() {
+  const base = NUTRITION_SERVICE_URL;
+  const url = `${base}/api/nutrition/health`;
+  try {
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 5500);
+    let r;
+    try {
+      r = await fetch(url, { signal: ac.signal });
+    } finally {
+      clearTimeout(to);
+    }
+    const body = await r.json().catch(() => null);
+    return {
+      nutrition_service_base: base,
+      backend_reachable: r.ok === true,
+      backend_http_status: r.status,
+      health: body && typeof body === 'object' ? body : null,
+      detail: r.ok ? null : (typeof body === 'object' ? body : `HTTP ${r.status}`),
+    };
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    return {
+      nutrition_service_base: base,
+      backend_reachable: false,
+      backend_http_status: null,
+      health: null,
+      detail: msg,
+      hint_tr:
+        'Node bu URL\'ye bağlanamıyor. Sunucuda: curl -sS \'' +
+        base +
+        "/api/nutrition/health' — uvicorn (3012) çalışmalı. Docker ise `NUTRITION_SERVICE_URL` iç servis adresi olmalı (127.0.0.1 yalnız aynı process network'ünde).",
+    };
+  }
+}
+
+/** Giriş yapılmış istemci için: Python nutrition_service erişimi (502 teşhis). */
+app.get('/api/nutrition/backend-status', async (req, res) => {
+  const out = await pingNutritionServiceHealth();
+  return res.json(out);
+});
+
 app.use(async (req, res, next) => {
   if (
     req.originalUrl &&
@@ -1647,4 +1690,20 @@ app.get('*', (req, res) => {
 // ── Başlat ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Cost Analysis → http://localhost:${PORT}`);
+  setImmediate(() => {
+    pingNutritionServiceHealth().then((o) => {
+      if (o.backend_reachable) {
+        console.log('[nutrition] Backend OK:', o.nutrition_service_base);
+      } else {
+        console.warn(
+          '[nutrition] Backend ulaşılamıyor (USDA/KPI proxy 502):',
+          o.nutrition_service_base,
+          '—',
+          o.detail || '',
+          '|',
+          'NUTRITION_SERVICE_URL + uvicorn kontrol.'
+        );
+      }
+    });
+  });
 });
