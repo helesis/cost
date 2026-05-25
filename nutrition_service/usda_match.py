@@ -324,12 +324,32 @@ def _ham_derivative_penalty(query: str, description: str) -> int:
     return min(penalty, 72)
 
 
+def _meat_cut_preference_adjust(q: str, desc_lower: str, score: int) -> int:
+    """Et/balık: yağlı ham kesim / separable lean+fat tercihi; kıyma ve lean-only geri plana."""
+    qlow = (q or "").lower()
+    adj = 0
+    if "separable lean and fat" in desc_lower:
+        adj += 15
+    if re.search(r"\braw\b", desc_lower):
+        adj += 6
+    if "lean only" in desc_lower or "separable lean only" in desc_lower:
+        adj -= 18
+    if "trimmed" in desc_lower:
+        adj -= 10
+    if re.search(r"\bground\b", desc_lower) or re.search(r"\bpatty\b", desc_lower):
+        if not re.search(r"\b(?:ground|mince|k[iı]yma|kiyma)\b", qlow):
+            adj -= 16
+
+    return max(0, min(100, score + adj))
+
+
 def fuzzy_match_score(
     query: str,
     description: str,
     data_type: str = "",
     *,
     ham_food_mode: bool = False,
+    meat_cut_preference: bool = False,
 ) -> int:
     """
     token_set_ratio (0–100): kelime sırası / fazla-eksik kelimeye toleranslı.
@@ -365,6 +385,11 @@ def fuzzy_match_score(
     if data_type and "branded" in data_type.lower():
         score = max(0, score - 5)
 
+    if meat_cut_preference and data_type and "sr legacy" in data_type.lower():
+        score = min(100, score + 8)
+    if meat_cut_preference:
+        score = _meat_cut_preference_adjust(q, desc_lower, score)
+
     return max(0, min(100, score))
 
 
@@ -378,6 +403,7 @@ def rank_usda_foods(
     *,
     top_n: int = 25,
     ham_food_mode: bool = False,
+    meat_cut_preference: bool = False,
 ) -> list[ScoredCandidate]:
     scored: list[ScoredCandidate] = []
     seen: set[int] = set()
@@ -393,7 +419,13 @@ def rank_usda_foods(
 
         desc = f.get("description") or ""
         dtype = f.get("dataType") or ""
-        sc = fuzzy_match_score(query, desc, dtype, ham_food_mode=ham_food_mode)
+        sc = fuzzy_match_score(
+            query,
+            desc,
+            dtype,
+            ham_food_mode=ham_food_mode,
+            meat_cut_preference=meat_cut_preference,
+        )
         scored.append(
             ScoredCandidate(
                 fdc_id=fid,
@@ -404,7 +436,16 @@ def rank_usda_foods(
             )
         )
 
-    scored.sort(key=lambda c: (-c.score, c.description))
+    if meat_cut_preference:
+        scored.sort(
+            key=lambda c: (
+                -c.score,
+                0 if "sr legacy" in (c.data_type or "").lower() else 1,
+                c.description,
+            )
+        )
+    else:
+        scored.sort(key=lambda c: (-c.score, c.description))
     return scored[:top_n]
 
 

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from nutrition_service.name_clean import extract_english_core
+from nutrition_service.name_clean import extract_english_core, preprocess_turkish_stok_name
 
 _DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
 _OLLAMA_URL = (os.environ.get("OLLAMA_URL") or _DEFAULT_URL).strip()
@@ -19,17 +19,27 @@ _TRANSLATE_SYSTEM = """Sen bir otel F&B (yiyecek-içecek) stok ve USDA FoodData 
 Görevin: Türkçe/İngilizce karışık stok kalemini USDA araması için kısa İngilizce terime çevirmek ve kategorisini belirlemek.
 
 Kategori:
-- ham = çiğ tüketilen / satın alınan temel gıda (sebze, meyve, et, yumurta, süt, balık, taze ürün)
-- islenmis = zaten işlenmiş hammadde (un, şeker, yağ, salça, konserve, toz, sirke, baharat karışımı)
+- ham = çiğ kullanılan sebze/meyve, çiğ et parçası, çiğ kümes / balık (mutfak cesedi); yumurta.
+- ÖNEMLİ — İŞLEMİŞ süt ürünleri asla ham değildir:
+  süt, yoğurt, peynir, ayran, kaymak, krema, tereyağı, labne vb. → her zaman **KATEGORI: islenmis**
+  USDA'da: Milk/yogurt/cheese/butter ifadeleri kullanılır; arama için "raw milk" yazma.
+- islenmis = un, sıvı/bitki yağı, şeker, salça, konserve, kurutulmuş/pratik ürün, hazır bileşik, baharat vb.
 
-Bağlam:
-- FLETO / FILETO = fillet · SOKLU = on the bone · KAFES = whole/carcass
-- "BEEF" domates = beefsteak tomato (et değil) · AYÇİÇEK YAĞ = sunflower oil · UN = flour
+Bağlam (kısaltmalar):
+- Kesim / et: ANTİRKOT=Rib/Ribeye/rib primal · BONFILE / FLETO = tenderloin ya da poultry'de breast meat · BUT = lamb/pork için leg primal (but=leg)· ÇATAL BUT = lamb leg şekilli · İNCİK/KEMİK kemikli bacak için shank
+- Kuşbaşı = stew cubes / diced meat · KAFES/carcass = whole bird carcass
+- Balık: ÇİPURA=sea bream · MEZGİT=whiting veya atlantik bağlamda Haddock yakınları · LEVREK=European sea bass · SOMON=salmon
+- FLETO / FILETO deniz ürünü veya kümes ise fillet; ette loin için de kullanılır.
+- Türk mutfağı: LAVAŞ=lavash (flatbread) — "bread lava" ASLA yaz, her zaman lavash bread / lavash wrap.
+- Börek (=fillo/phyllo börek), su böreği, sigara böreği için generic / US'da yakın kayıt yoksa doğru yaklaşım yine de mantıklı İngilizce (phyllo cheese pastry vb.); USDA'da yoksa bile abartılı uydurma yapma.
+
+Diğer:
+- "BEEF" domates kaleminde beefsteak tomato (et değil); AYÇİÇEK YAĞ = sunflower oil; UN = wheat flour
 
 Kurallar:
-- TERIM: 1–4 kelime İngilizce arama terimi (raw EKLEME — sonraki adımda eklenir)
-- KATEGORI: yalnızca ham veya islenmis
-- Gıda değilse yalnızca: NON_FOOD
+- TERIM: 1–6 kelime sade İngilizce (raw/search ipucu EKLEME — ham gıdalarda bile sen eklemezsin; tereyağı/süt/yoğurt için özellikle raw kullanma)
+- KATEGORI: ham (yalnızca sebze/meyve/çiğ et parçası/çiğ kümes cesedi/ çiğ balık için) VEYA islenmis (işlenmiş süt, yağlar, işlenmiş gıda)
+- Gıda değilse: NON_FOOD
 
 Yanıt formatı (tam iki satır, başka metin yok):
 TERIM: <english term>
@@ -72,6 +82,16 @@ def _first_line(text: str) -> str:
     return line.strip()
 
 
+_DAIRY_FORCE_ISLENMIS = re.compile(
+    r"(?iu)\b(?:"
+    r"s[uü]t\b|sut\b|yo[gğ]urt\b|yoğurt\b|peyn[iıİI]r\w*|peyn[Iİ]|"
+    r"tereya[gğ]\w*|ayran\b|kaymak\b|krema\b|labne\w*|"
+    r"çökelek\b|milks?\b|yogh?urts?\b|\bbuttermilk\b|cottage\b|"
+    r"butters?\b|creams?\b|cheeses?\b|(?:ka[sş]ar)\w*|tulum\b|\blor\b|"
+    r"sade\s+s[uü]t\b"
+    r")\b",
+)
+
 _ISLENMIS_HINT_RE = re.compile(
     r"\b("
     r"flour|un|oil|yağ|yag|sugar|şeker|seker|powder|toz|paste|salça|salca|sauce|"
@@ -92,12 +112,17 @@ class FoodSearchTranslation:
 
 
 def _normalize_kategori(raw: str | None, term: str, urun_adi: str) -> str:
+    blob = f"{term} {urun_adi}"
+    blob_l = blob.lower()
+    # İşlenmiş süt — LLM yanlış "ham+raw süt" vermesini engelle
+    if _DAIRY_FORCE_ISLENMIS.search(blob):
+        return "islenmis"
+
     k = (raw or "").lower().strip()
     k = k.replace("işlenmiş", "islenmis").replace("islenmiş", "islenmis")
     if k in ("ham", "islenmis"):
         return k
-    blob = f"{term} {urun_adi}".lower()
-    if _ISLENMIS_HINT_RE.search(blob):
+    if _ISLENMIS_HINT_RE.search(blob_l):
         return "islenmis"
     return "ham"
 
@@ -137,10 +162,15 @@ def _parse_translate_response(text: str, urun_adi: str) -> FoodSearchTranslation
     return FoodSearchTranslation(term=term, kategori=kategori)
 
 
-def build_usda_search_query(term: str, kategori: str) -> str:
-    """Ham gıdada USDA aramasına 'raw' ekler; işlenmişte terimi olduğu gibi bırakır."""
+def build_usda_search_query(term: str, kategori: str, *, meat_fish_no_raw: bool = False) -> str:
+    """
+    Ham gıdada USDA aramasına çoğu üründe 'raw' eklenir (USDA SR Legacy uyumu).
+    Et/balık için 'raw' sorguya eklenmez (yanlış sıralama); işlenmiş süt/yağ hep ham değildir kategori tarafından.
+    """
     t = (term or "").strip()
     if not t:
+        return t
+    if meat_fish_no_raw:
         return t
     if kategori == "ham" and "raw" not in t.lower().split():
         return f"{t} raw"
@@ -152,11 +182,15 @@ def translate_food_search(urun_adi: str) -> FoodSearchTranslation | None:
     Türkçe stok adı → USDA arama terimi + kategori (ham/islenmis).
     Başarısızlıkta None.
     """
-    raw = (urun_adi or "").strip()
-    if not raw:
+    raw_in = (urun_adi or "").strip()
+    if not raw_in:
         return None
 
-    hint = extract_english_core(raw)
+    raw = preprocess_turkish_stok_name(raw_in) or raw_in
+    hint = extract_english_core(raw_in)
+    if hint == raw_in and raw != raw_in:
+        hint = extract_english_core(raw)
+
     hint_part = f'\nİpucu (varsa İngilizce parça): "{hint}"' if hint and hint != raw else ""
 
     prompt = f"""Stok kalemi: "{raw}"{hint_part}
@@ -170,7 +204,7 @@ TERIM ve KATEGORI (ham/islenmis):"""
     if out.strip().upper().startswith("NON_FOOD") or _first_line(out).upper() in ("NON_FOOD", "NON-FOOD"):
         return None
 
-    return _parse_translate_response(out, raw)
+    return _parse_translate_response(out, raw_in)
 
 
 def translate_food_search_term(urun_adi: str) -> str | None:

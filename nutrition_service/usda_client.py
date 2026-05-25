@@ -143,12 +143,19 @@ def _request_with_backoff_sync(method: str, url: str, *, params=None, json_body=
     raise RuntimeError(f"USDA isteği başarısız ({url}): {last_err}") from last_err
 
 
-def foods_search_sync(*, query: str, page_size: int = 15) -> dict:
+def foods_search_sync(
+    *,
+    query: str,
+    page_size: int = 15,
+    data_types: list[str] | None = None,
+) -> dict:
     url = f"{_USDA_BASE}/foods/search"
+    if data_types is None:
+        data_types = ["Foundation", "SR Legacy"]
     body = {
         "query": query,
         "pageSize": page_size,
-        "dataType": ["Foundation", "SR Legacy"],
+        "dataType": list(data_types),
     }
     return _request_with_backoff_sync("POST", url, json_body=body)
 

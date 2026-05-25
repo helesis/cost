@@ -43,6 +43,8 @@ from nutrition_service.usda_match import (
 )
 from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
 
+from nutrition_service.name_clean import blob_is_meat_or_fish
+
 EXCLUDED_STOK = ("__DUZELTME__", "__KDV_ILAVE__")
 
 SOURCE_SQL = """
@@ -168,13 +170,21 @@ def _match_product(row: dict) -> dict:
             note="LLM çeviri başarısız — eslesmedi",
         )
 
-    search_q = build_usda_search_query(tr.term, tr.kategori)
+    meat_fish = blob_is_meat_or_fish(row["urun_adi"], tr.term)
+    search_q = build_usda_search_query(tr.term, tr.kategori, meat_fish_no_raw=meat_fish)
     ham_mode = tr.kategori == "ham"
 
-    # 2) USDA arama (ham gıdada terim + raw)
-    payload = foods_search_sync(query=search_q, page_size=25)
+    dt = ["SR Legacy", "Foundation"] if meat_fish else None
+    # 2) USDA arama (işlenmiş süt için raw eklenmez; et/balıkta sorguda raw yok → SR Legacy önce)
+    payload = foods_search_sync(query=search_q, page_size=25, data_types=dt)
     foods = payload.get("foods") or []
-    ranked = rank_usda_foods(search_q, foods, top_n=25, ham_food_mode=ham_mode)
+    ranked = rank_usda_foods(
+        search_q,
+        foods,
+        top_n=25,
+        ham_food_mode=ham_mode,
+        meat_cut_preference=meat_fish,
+    )
     best = ranked[0] if ranked else None
 
     if not best:
