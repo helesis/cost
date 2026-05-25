@@ -135,6 +135,8 @@ cost/
 
    Node `src/index.js` istekleri `NUTRITION_SERVICE_URL` (varsayılan `http://127.0.0.1:3012`) adresine iletir. Tablo verisi için `npm start` + `nutrition_service` birlikte çalışır.
 
+   **502 / USDA araması düşüyorsa**: (1) `curl -s http://127.0.0.1:3012/api/nutrition/health` (veya `NUTRITION_SERVICE_URL`) yanıt vermeli — vermiyorsa systemd/supervisor ile uvicorn başlatın. (2) Node ile Python farklı konteyner/VM ise `NUTRITION_SERVICE_URL` erişilebilir internal URL olmalı (`127.0.0.1` yalnız aynı makinede işe yarar). (3) Kök dizinde `.env` içinde `USDA_API_KEY` tanımlı olmalı; uvicorn’u yeniden başlatın. USDA tarafında geçici 502 için istemci otomatik birkaç kez yeniden dener (`USDA_SEARCH_MAX_ATTEMPTS` ile sınır).
+
    **Tek nokta okuma**: Uygulamalar doğrudan `fb_cost.ingredient_nutrition` yerine görünüm
    `fb_cost.v_ingredient_nutrition_resolved` veya SQL fonksiyonu `fb_cost.get_ingredient_nutrition(urun_id)` kullanılmalıdır (`urun_id` = `ingredient_nutrition.id`).
 

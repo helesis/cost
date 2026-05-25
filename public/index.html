@@ -4017,8 +4017,30 @@ window.nnRunUsdaSearch = async function nnRunUsdaSearch(force) {
       method: 'POST', headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ query: q, page_size: 14, fetch_nutrients: true }),
     });
-    const d = await r.json().catch(()=>({}));
-    if (!r.ok) throw new Error(typeof d.detail==='string' ? d.detail : (d.detail ? JSON.stringify(d.detail) : (d.error||'hata')));
+    const rawText = await r.text();
+    let d = {};
+    try {
+      d = rawText && rawText.trim().startsWith('{') ? JSON.parse(rawText) : {};
+    } catch (_) {
+      d = {};
+    }
+    if (!r.ok) {
+      let detailStr = '';
+      if (typeof d.detail === 'string') detailStr = d.detail;
+      else if (Array.isArray(d.detail))
+        detailStr = d.detail
+          .map((x) => (x && typeof x.msg === 'string' ? x.msg : ''))
+          .filter(Boolean)
+          .join('; ') || JSON.stringify(d.detail);
+      else if (d.detail != null && typeof d.detail === 'object')
+        detailStr = JSON.stringify(d.detail);
+      let plain = '';
+      if (typeof rawText === 'string' && rawText.trim() && !rawText.trim().startsWith('{')) {
+        plain = rawText.trim().replace(/\s+/g, ' ').slice(0, 280);
+      }
+      const hint = `${detailStr}${detailStr && d.error ? ' — ' : ''}${d.error || ''}`.trim();
+      throw new Error(hint || plain || `Besin/USDA zinciri başarısız (HTTP ${r.status})`);
+    }
     const foods = d.foods||[];
     if (st) st.textContent=`${foods.length} sonuç (toplam yaklaşım: ${''+ (d.totalHits||'—')})`;
     list.innerHTML = foods.map(f=>{

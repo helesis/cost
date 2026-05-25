@@ -28,29 +28,93 @@ def api_key_required() -> str:
     return key
 
 
+_RETRYABLE_SEARCH_STATUS = frozenset((429, 502, 503, 504))
+_SEARCH_ATTEMPTS = int(os.environ.get("USDA_SEARCH_MAX_ATTEMPTS", "6"))
+
+
 async def foods_search_async(
     *,
     query: str,
     page_size: int = 15,
     data_types: tuple[str, ...] | None = None,
 ) -> dict:
+    """USDA POST /foods/search — geçici ağ/USDA kapısı hatalarında birkaç kez yeniden dener."""
     if data_types is None:
         data_types = ("Foundation", "SR Legacy")
     url = f"{_USDA_BASE}/foods/search"
     params = {"api_key": api_key_required()}
     body = {"query": query, "pageSize": page_size, "dataType": list(data_types)}
-    async with httpx.AsyncClient(timeout=45.0) as client:
-        r = await client.post(url, params=params, json=body)
-        r.raise_for_status()
-        return r.json()
+    last_detail = ""
+    for attempt in range(max(1, _SEARCH_ATTEMPTS)):
+        try:
+            timeout = httpx.Timeout(connect=15.0, read=55.0, write=30.0, pool=30.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(url, params=params, json=body)
+                sc = int(r.status_code)
+                if sc in _RETRYABLE_SEARCH_STATUS:
+                    snippet = (r.text or "").strip().replace("\n", " ")
+                    last_detail = (
+                        snippet[:260] + "…" if len(snippet) > 260 else snippet or f"(gövde yok)"
+                    )
+                    await asyncio.sleep(min(45.0, 1.7**attempt))
+                    continue
+                r.raise_for_status()
+                return r.json()
+        except httpx.TimeoutException as e:
+            last_detail = repr(e)
+            await asyncio.sleep(min(30.0, 1.5**attempt))
+        except httpx.RequestError as e:
+            last_detail = repr(e)
+            await asyncio.sleep(min(30.0, 1.5**attempt))
+        except httpx.HTTPStatusError as e:
+            isc = int(e.response.status_code)
+            snippet = ""
+            try:
+                snippet = (e.response.text or "").strip().replace("\n", " ")
+            except Exception:
+                pass
+            last_detail = f"HTTP {isc}" + (
+                f" — {(snippet[:200] + '…') if len(snippet) > 200 else (snippet or '')}"
+            )
+            if isc in _RETRYABLE_SEARCH_STATUS:
+                await asyncio.sleep(min(45.0, 1.7**attempt))
+                continue
+            raise
+    raise RuntimeError(
+        "USDA foods/search yanıt veremedi (birkaç deneme sonra). Son bilgi: "
+        + (last_detail or "bilinmeyen")
+    ) from None
 
 
 async def _food_detail_with_client(client: httpx.AsyncClient, fdc_id: int) -> dict:
     url = f"{_USDA_BASE}/food/{int(fdc_id)}"
     params = {"api_key": api_key_required()}
-    r = await client.get(url, params=params)
-    r.raise_for_status()
-    return r.json()
+    last_exc: BaseException | None = None
+    for attempt in range(4):
+        try:
+            r = await client.get(url, params=params)
+            sc = int(r.status_code)
+            if sc in _RETRYABLE_SEARCH_STATUS:
+                await asyncio.sleep(min(40.0, 1.6**attempt))
+                continue
+            r.raise_for_status()
+            return r.json()
+        except httpx.TimeoutException as e:
+            last_exc = e
+            await asyncio.sleep(min(25.0, 1.4**attempt))
+        except httpx.RequestError as e:
+            last_exc = e
+            await asyncio.sleep(min(25.0, 1.4**attempt))
+        except httpx.HTTPStatusError as e:
+            last_exc = e
+            isc = int(e.response.status_code)
+            if isc in _RETRYABLE_SEARCH_STATUS:
+                await asyncio.sleep(min(40.0, 1.6**attempt))
+                continue
+            raise
+    raise RuntimeError(
+        f"USDA food/{fdc_id} yanıt veremedi: {repr(last_exc) if last_exc else 'bilinmeyen'}"
+    ) from last_exc
 
 
 async def foods_search_with_macros(
@@ -70,7 +134,7 @@ async def foods_search_with_macros(
 
     summaries: list[dict] = []
 
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, read=65.0, write=35.0, pool=35.0)) as client:
         sem = asyncio.Semaphore(5)
 
         async def enriched(fdc: int):
@@ -93,7 +157,8 @@ async def foods_search_with_macros(
 
 
 async def food_detail_async(fdc_id: int) -> dict:
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    timeout = httpx.Timeout(connect=15.0, read=65.0, write=35.0, pool=35.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
         return await _food_detail_with_client(client, int(fdc_id))
 
 
