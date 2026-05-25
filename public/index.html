@@ -365,6 +365,30 @@
   }
   .nn-form-grid label { font-size:10px; display:block;margin-bottom:2px;color:var(--text-dim);}
   .nn-form-grid div { padding: 4px; }
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn {
+    min-width: 40px;
+    padding: 6px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    border-radius: 8px;
+    border: 1px solid rgba(138,108,46,0.45);
+    background: rgba(138,108,46,0.1);
+    color: var(--gold);
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+  }
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:hover {
+    background: rgba(138,108,46,0.2);
+    border-color: var(--gold);
+    transform: scale(1.05);
+  }
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:active { transform: scale(0.98); }
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
   #nn-ingredient-tablo tbody tr[data-id] {
     cursor: pointer;
   }
@@ -1607,9 +1631,10 @@
             <thead>
               <tr>
                 <th>Ürün</th><th>Durum</th><th>USDA</th><th>Güven</th><th>Makro (100&nbsp;g)</th>
+                <th style="text-align:right;white-space:nowrap">Manuel onay</th>
               </tr>
             </thead>
-            <tbody id="nn-ingredient-tablo"><tr><td colspan="5" class="nn-muted" style="padding:20px;text-align:center">Yükleniyor…</td></tr></tbody>
+            <tbody id="nn-ingredient-tablo"><tr><td colspan="6" class="nn-muted" style="padding:20px;text-align:center">Yükleniyor…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -3061,6 +3086,8 @@ let _nnAnimState = {};
 let _nnSyncStartBusy = false;
 /** Son işlenenler: manuel uygun (✓) ile gizlenen satır anahtarları — localStorage */
 const NN_STREAM_UYGUN_LS_KEY = 'nn_stream_uygun_kaldirildi_v1';
+/** Eşleşme tablosundan gizlenen urun_id (manuel onay — yalnız bu liste; DB dokunulmaz) */
+const NN_ESLESME_TABLO_MANUEL_ONAY_LS_KEY = 'nn_eslesme_tablosu_manuel_onay_gizli_v1';
 let _nnRecentStreamForceRedraw = false;
 
 function nnIsBesinTabActive() {
@@ -3655,6 +3682,28 @@ function nnMacroLine(rr) {
   }
 }
 
+function nnEslesmeTabloManuelOnayHiddenIds() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NN_ESLESME_TABLO_MANUEL_ONAY_LS_KEY) || '[]');
+    const set = new Set();
+    if (Array.isArray(raw)) {
+      raw.forEach((k) => {
+        const n = Number(k);
+        if (Number.isFinite(n) && n > 0) set.add(String(n));
+      });
+    }
+    return set;
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function nnEslesmeTabloManuelOnayPersist(idsSet) {
+  const arr = [...idsSet].map((s) => Number(s)).filter((n) => n > 0);
+  arr.sort((a, b) => a - b);
+  localStorage.setItem(NN_ESLESME_TABLO_MANUEL_ONAY_LS_KEY, JSON.stringify(arr));
+}
+
 function nnRenderIngredientRowHtml(raw) {
   try {
     const rr = nnNormalizeIngredientRow(raw);
@@ -3677,10 +3726,16 @@ function nnRenderIngredientRowHtml(raw) {
       <td style="max-width:180px">${usdaCell}</td>
       <td>${nnFmtNut(rr.guven_skoru, 0)}</td>
       <td style="white-space:normal">${nnMacroLine(rr)}</td>
+      <td style="text-align:right;vertical-align:middle;width:1%">
+        <button type="button" class="nn-tablo-manuel-onay-btn"
+          data-ingredient-id="${rr.id}"
+          title="Eşlemeyi onaylıyorum — satırı yalnız bu listede gösterme (silinmez; sonra ayrı tabloda kullanılabilir)"
+          aria-label="Manuel onay: listeden çıkar">✓</button>
+      </td>
     </tr>`;
   } catch (e) {
     console.error('nnRenderIngredientRowHtml', e, raw);
-    return '<tr><td colspan="5" class="nn-muted" style="padding:8px">Satır gösterilemedi</td></tr>';
+    return '<tr><td colspan="6" class="nn-muted" style="padding:8px">Satır gösterilemedi</td></tr>';
   }
 }
 
@@ -3689,12 +3744,29 @@ function nnEnsureTableDelegate() {
   if (!tb || tb.dataset.nnDel) return;
   tb.dataset.nnDel = '1';
   tb.addEventListener('click', ev => {
+    const onayBtn = ev.target.closest('.nn-tablo-manuel-onay-btn');
+    if (onayBtn) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const id = Number(onayBtn.dataset.ingredientId);
+      if (!Number.isFinite(id) || id <= 0) return;
+      const hid = nnEslesmeTabloManuelOnayHiddenIds();
+      hid.add(String(id));
+      nnEslesmeTabloManuelOnayPersist(hid);
+      if (_nnActiveRowId === id) {
+        nnCloseDrawer();
+        _nnActiveRowId = null;
+      }
+      nnReloadListsOnly({ skipSummary: true }).catch(() => {});
+      toast('Manuel onay kaydedildi; satır bu eşleşme listesinden çıkarıldı.', 'info');
+      return;
+    }
     const tr = ev.target.closest('tr[data-id]');
     if (!tr) return;
-    const id = +tr.dataset.id;
+    const sid = +tr.dataset.id;
     document.querySelectorAll('#nn-ingredient-tablo tr[data-id]').forEach(el => el.classList.remove('nn-row-active'));
     tr.classList.add('nn-row-active');
-    nnOpenDrawer(id);
+    nnOpenDrawer(sid);
   });
 }
 
@@ -3787,7 +3859,7 @@ async function nnReload() {
     const tb = document.getElementById('nn-ingredient-tablo');
     if (tb) {
       tb.innerHTML =
-        '<tr><td colspan="5" style="padding:20px;color:var(--text-dim)">' +
+        '<tr><td colspan="6" style="padding:20px;color:var(--text-dim)">' +
         'Servis bağlantısı kurulamadı. Varsayılan <code>http://127.0.0.1:3012</code> üzerinde ' +
         '<code>uvicorn nutrition_service.app:app</code> sürecinin çalıştığını ve Node proxy\'nin yanıtladığını doğrulayın.</td></tr>';
     }
@@ -3798,17 +3870,31 @@ function nnRenderIngredientRows(rows) {
   const tb = document.getElementById('nn-ingredient-tablo');
   if (!tb) return;
   const list = nnCoerceIngredientsPayload(rows);
+  const hiddenOnay = nnEslesmeTabloManuelOnayHiddenIds();
+  const visible = list.filter((raw) => {
+    try {
+      const rr = nnNormalizeIngredientRow(raw);
+      return rr.id > 0 && !hiddenOnay.has(String(rr.id));
+    } catch (_) {
+      return false;
+    }
+  });
   if (!list.length) {
     tb.innerHTML =
-      `<tr><td colspan="5" style="padding:20px;color:var(--text-dim)">Henüz satır yok — migrasyon yapıldıktan sonra doldurma betiği çalıştırılacak.</td></tr>`;
+      `<tr><td colspan="6" style="padding:20px;color:var(--text-dim)">Henüz satır yok — migrasyon yapıldıktan sonra doldurma betiği çalıştırılacak.</td></tr>`;
+    return;
+  }
+  if (!visible.length && list.length) {
+    tb.innerHTML =
+      `<tr><td colspan="6" class="nn-muted" style="padding:20px;line-height:1.5;text-align:center">Bu görünümde gösterilecek satır kalmadı (manuel onay ✓ kullandığınız ürünler yalnız bu tablodan saklanır; veritabanında silinmez. İleri de ayrı bir tablo ile listeleyebilirsiniz).</td></tr>`;
     return;
   }
   try {
-    tb.innerHTML = list.map(nnRenderIngredientRowHtml).join('');
+    tb.innerHTML = visible.map(nnRenderIngredientRowHtml).join('');
   } catch (e) {
     console.error('nnRenderIngredientRows', e, rows);
     tb.innerHTML =
-      `<tr><td colspan="5" style="padding:20px;color:var(--danger,#c94847)">Liste render hatası — tarayıcı konsolunu kontrol edin</td></tr>`;
+      `<tr><td colspan="6" style="padding:20px;color:var(--danger,#c94847)">Liste render hatası — tarayıcı konsolunu kontrol edin</td></tr>`;
   }
 }
 
