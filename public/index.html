@@ -365,27 +365,19 @@
   }
   .nn-form-grid label { font-size:10px; display:block;margin-bottom:2px;color:var(--text-dim);}
   .nn-form-grid div { padding: 4px; }
-  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn {
-    min-width: 40px;
-    padding: 6px 10px;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1;
-    flex-shrink: 0;
-    border-radius: 8px;
-    border: 1px solid rgba(138,108,46,0.45);
-    background: rgba(138,108,46,0.1);
-    color: var(--gold);
+  #nn-ingredient-tablo td.nn-manuel-onay-cell {
+    vertical-align: middle;
+    width: 1%;
+    text-align: center;
+  }
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-cb {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin: 0;
     cursor: pointer;
-    transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+    accent-color: var(--gold, #c9a227);
   }
-  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:hover {
-    background: rgba(138,108,46,0.2);
-    border-color: var(--gold);
-    transform: scale(1.05);
-  }
-  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:active { transform: scale(0.98); }
-  #nn-ingredient-tablo .nn-tablo-manuel-onay-btn:focus-visible {
+  #nn-ingredient-tablo .nn-tablo-manuel-onay-cb:focus-visible {
     outline: 2px solid var(--gold);
     outline-offset: 2px;
   }
@@ -1640,7 +1632,7 @@
             <thead>
               <tr>
                 <th>Ürün</th><th>Durum</th><th>USDA</th><th>Güven</th><th>Makro (100&nbsp;g)</th>
-                <th style="text-align:right;white-space:nowrap">Manuel onay</th>
+                <th style="text-align:center;white-space:nowrap" title="Veritabanı durumundan bağımsız; işaretleyince satır yalnız bu tabloda gizlenir (tarayıcıda saklanır)">Listeden kaldır<br><span style="font-weight:400;font-size:10px;color:var(--text-dim)">(yerel)</span></th>
               </tr>
             </thead>
             <tbody id="nn-ingredient-tablo"><tr><td colspan="6" class="nn-muted" style="padding:20px;text-align:center">Yükleniyor…</td></tr></tbody>
@@ -3095,7 +3087,7 @@ let _nnAnimState = {};
 let _nnSyncStartBusy = false;
 /** Son işlenenler: manuel uygun (✓) ile gizlenen satır anahtarları — localStorage */
 const NN_STREAM_UYGUN_LS_KEY = 'nn_stream_uygun_kaldirildi_v1';
-/** Eşleşme tablosundan gizlenen urun_id (manuel onay — yalnız bu liste; DB dokunulmaz) */
+/** Eşleşme tablosundan gizlenen ingredient id (checkbox — yerel; DB ile senkron değil) */
 const NN_ESLESME_TABLO_MANUEL_ONAY_LS_KEY = 'nn_eslesme_tablosu_manuel_onay_gizli_v1';
 let _nnRecentStreamForceRedraw = false;
 
@@ -3735,11 +3727,11 @@ function nnRenderIngredientRowHtml(raw) {
       <td style="max-width:180px">${usdaCell}</td>
       <td>${nnFmtNut(rr.guven_skoru, 0)}</td>
       <td style="white-space:normal">${nnMacroLine(rr)}</td>
-      <td style="text-align:right;vertical-align:middle;width:1%">
-        <button type="button" class="nn-tablo-manuel-onay-btn"
+      <td class="nn-manuel-onay-cell">
+        <input type="checkbox" class="nn-tablo-manuel-onay-cb"
           data-ingredient-id="${rr.id}"
-          title="Eşlemeyi onaylıyorum — satırı yalnız bu listede gösterme (silinmez; sonra ayrı tabloda kullanılabilir)"
-          aria-label="Manuel onay: listeden çıkar">✓</button>
+          title="Bu ürünü bu tabloda gösterme (tarayıcıda saklanır; veritabanını değiştirmez)"
+          aria-label="Listeden kaldır (yerel)" />
       </td>
     </tr>`;
   } catch (e) {
@@ -3752,28 +3744,28 @@ function nnEnsureTableDelegate() {
   const tb = document.getElementById('nn-ingredient-tablo');
   if (!tb || tb.dataset.nnDel) return;
   tb.dataset.nnDel = '1';
-  tb.addEventListener('click', ev => {
-    const onayBtn = ev.target.closest('.nn-tablo-manuel-onay-btn');
-    if (onayBtn) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const id = Number(onayBtn.dataset.ingredientId);
-      if (!Number.isFinite(id) || id <= 0) return;
-      const hid = nnEslesmeTabloManuelOnayHiddenIds();
-      hid.add(String(id));
-      nnEslesmeTabloManuelOnayPersist(hid);
-      if (_nnActiveRowId === id) {
-        nnCloseDrawer();
-        _nnActiveRowId = null;
-      }
-      nnReloadListsOnly({ skipSummary: true }).catch(() => {});
-      toast('Manuel onay kaydedildi; satır bu eşleşme listesinden çıkarıldı.', 'info');
-      return;
+  tb.addEventListener('change', (ev) => {
+    const cb = ev.target;
+    if (!cb || !cb.classList || !cb.classList.contains('nn-tablo-manuel-onay-cb')) return;
+    if (!cb.checked) return;
+    const id = Number(cb.dataset.ingredientId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const hid = nnEslesmeTabloManuelOnayHiddenIds();
+    hid.add(String(id));
+    nnEslesmeTabloManuelOnayPersist(hid);
+    if (_nnActiveRowId === id) {
+      nnCloseDrawer();
+      _nnActiveRowId = null;
     }
+    nnReloadListsOnly({ skipSummary: true }).catch(() => {});
+    toast('Liste onayı (yerel): satır tabloda gösterilmeyecek.', 'info');
+  });
+  tb.addEventListener('click', (ev) => {
+    if (ev.target.closest('.nn-manuel-onay-cell')) return;
     const tr = ev.target.closest('tr[data-id]');
     if (!tr) return;
     const sid = +tr.dataset.id;
-    document.querySelectorAll('#nn-ingredient-tablo tr[data-id]').forEach(el => el.classList.remove('nn-row-active'));
+    document.querySelectorAll('#nn-ingredient-tablo tr[data-id]').forEach((el) => el.classList.remove('nn-row-active'));
     tr.classList.add('nn-row-active');
     nnOpenDrawer(sid);
   });
@@ -3895,7 +3887,7 @@ function nnRenderIngredientRows(rows) {
   }
   if (!visible.length && list.length) {
     tb.innerHTML =
-      `<tr><td colspan="6" class="nn-muted" style="padding:20px;line-height:1.5;text-align:center">Bu görünümde gösterilecek satır kalmadı (manuel onay ✓ kullandığınız ürünler yalnız bu tablodan saklanır; veritabanında silinmez. İleri de ayrı bir tablo ile listeleyebilirsiniz).</td></tr>`;
+      `<tr><td colspan="6" class="nn-muted" style="padding:20px;line-height:1.5;text-align:center">Bu görünümde gösterilecek satır kalmadı (işaretlediğiniz ürünler yalnız bu tabloda gizlenir; tarayıcıda saklanır, veritabanını değiştirmez).</td></tr>`;
     return;
   }
   try {
