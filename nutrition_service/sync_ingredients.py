@@ -4,6 +4,8 @@ tuketim → ingredient_nutrition senkronu + LLM destekli USDA eşleştirme.
 
 Aşama A: stok_no ile upsert (besin/eşleşme durumunu bozmaz).
 Aşama B: LLM çeviri → USDA arama → rapidfuzz → LLM onay → karar.
+         Birincil yol `eslesmedi` dönerse: fb_cost.ingredient_compound_legacy (eski tb_inglist bes_name)
+         ile USDA yeniden aranır (import: import_compound_legacy).
 
 Örnek:
   python -m nutrition_service.sync_ingredients --only-sync
@@ -44,6 +46,7 @@ from nutrition_service.usda_match import (
 from nutrition_service.usda_parse import parse_macros_minerals_from_food_payload
 
 from nutrition_service.name_clean import blob_is_meat_or_fish
+from nutrition_service import compound_legacy
 
 EXCLUDED_STOK = ("__DUZELTME__", "__KDV_ILAVE__")
 
@@ -150,69 +153,55 @@ def stage_a_sync() -> dict:
 
 def _match_product(row: dict) -> dict:
     urun_adi = row["urun_adi"]
+    ranked: list[ScoredCandidate] = []
+    best: ScoredCandidate | None = None
+    llm_term: str | None = None
+    llm_approved: bool | None = None
+    durum = "eslesmedi"
+    guven: int | None = None
+    note: str | None = None
+    fuzzy_score = None
 
-    # 1) LLM çeviri + kategori (ham / islenmis)
     tr = translate_food_search(urun_adi)
     if not tr:
-        return _finalize_row(
-            row,
-            llm_term=None,
-            ranked=[],
-            best=None,
-            llm_approved=None,
-            durum="eslesmedi",
-            guven=None,
-            usda_adi=None,
-            usda_fdc_id=None,
-            usda_data_type=None,
-            nut=_EMPTY_NUT.copy(),
-            alts=None,
-            note="LLM çeviri başarısız — eslesmedi",
+        note = "LLM çeviri başarısız — eslesmedi"
+    else:
+        meat_fish = blob_is_meat_or_fish(row["urun_adi"], tr.term)
+        search_q = build_usda_search_query(tr.term, tr.kategori, meat_fish_no_raw=meat_fish)
+        ham_mode = tr.kategori == "ham"
+        dt = ["SR Legacy", "Foundation"] if meat_fish else None
+        payload = foods_search_sync(query=search_q, page_size=25, data_types=dt)
+        foods = payload.get("foods") or []
+        ranked = rank_usda_foods(
+            search_q,
+            foods,
+            top_n=25,
+            ham_food_mode=ham_mode,
+            meat_cut_preference=meat_fish,
         )
+        best = ranked[0] if ranked else None
+        llm_term = search_q
 
-    meat_fish = blob_is_meat_or_fish(row["urun_adi"], tr.term)
-    search_q = build_usda_search_query(tr.term, tr.kategori, meat_fish_no_raw=meat_fish)
-    ham_mode = tr.kategori == "ham"
+        if not best:
+            note = "USDA sonuç yok"
+        else:
+            fuzzy_score = best.score
+            llm_approved = verify_same_food(urun_adi, best.description)
+            durum = decide_match_status(fuzzy_score=fuzzy_score, llm_approved=llm_approved)
+            guven = fuzzy_score if durum != "eslesmedi" else None
+            if durum == "kontrol_gerekli" and llm_approved is False and fuzzy_score is not None and fuzzy_score >= 85:
+                note = "Yüksek skor ama LLM HAYIR — kontrol kuyruğu"
 
-    dt = ["SR Legacy", "Foundation"] if meat_fish else None
-    # 2) USDA arama (işlenmiş süt için raw eklenmez; et/balıkta sorguda raw yok → SR Legacy önce)
-    payload = foods_search_sync(query=search_q, page_size=25, data_types=dt)
-    foods = payload.get("foods") or []
-    ranked = rank_usda_foods(
-        search_q,
-        foods,
-        top_n=25,
-        ham_food_mode=ham_mode,
-        meat_cut_preference=meat_fish,
-    )
-    best = ranked[0] if ranked else None
-
-    if not best:
-        return _finalize_row(
-            row,
-            llm_term=search_q,
-            ranked=ranked,
-            best=None,
-            llm_approved=None,
-            durum="eslesmedi",
-            guven=None,
-            usda_adi=None,
-            usda_fdc_id=None,
-            usda_data_type=None,
-            nut=_EMPTY_NUT.copy(),
-            alts=None,
-            note="USDA sonuç yok",
-        )
-
-    # 3) rapidfuzz skor (tüm adaylar arasından en yüksek)
-    fuzzy_score = best.score
-
-    # 4) LLM anlamsal onay
-    llm_approved = verify_same_food(urun_adi, best.description)
-
-    # 5) Karar
-    durum = decide_match_status(fuzzy_score=fuzzy_score, llm_approved=llm_approved)
-    guven = fuzzy_score if durum != "eslesmedi" else None
+    if durum == "eslesmedi":
+        fb = compound_legacy.try_compound_fallback_bundle(row, note)
+        if fb:
+            llm_term = fb["llm_term"]
+            ranked = fb["ranked"]
+            best = fb["best"]
+            llm_approved = fb["llm_approved"]
+            durum = fb["durum"]
+            guven = fb["guven"]
+            note = fb.get("note")
 
     usda_fdc_id = None
     usda_adi = None
@@ -220,7 +209,7 @@ def _match_product(row: dict) -> dict:
     nut = _EMPTY_NUT.copy()
     alts = None
 
-    if durum in ("otomatik", "kontrol_gerekli"):
+    if durum in ("otomatik", "kontrol_gerekli") and best:
         detail = food_detail_sync(best.fdc_id)
         parsed = parse_macros_minerals_from_food_payload(detail)
         nut = {k: parsed.get(k) for k in nut}
@@ -230,13 +219,9 @@ def _match_product(row: dict) -> dict:
         if durum == "kontrol_gerekli":
             alts = alternatives_json(ranked, skip_first=True)
 
-    note = None
-    if durum == "kontrol_gerekli" and llm_approved is False and fuzzy_score >= 85:
-        note = "Yüksek skor ama LLM HAYIR — kontrol kuyruğu"
-
     return _finalize_row(
         row,
-        llm_term=search_q,
+        llm_term=llm_term,
         ranked=ranked,
         best=best,
         llm_approved=llm_approved,

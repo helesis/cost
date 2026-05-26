@@ -74,6 +74,16 @@ def execute_returning(sql: str, params: tuple | list | dict | None = None):
             return rows
 
 
+def execute_many(sql: str, params_list: list):
+    if not params_list:
+        return 0
+    with conn() as c:
+        with c.cursor() as cur:
+            cur.executemany(sql, params_list)
+            c.commit()
+    return len(params_list)
+
+
 def transaction():
     """with transaction() as cur: ..."""
     return _Transaction()

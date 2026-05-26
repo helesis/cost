@@ -43,6 +43,8 @@ cost/
 ├── migrate_ingredient_nutrition_down.sql
 ├── migrate_ingredient_nutrition_stok_sync_up.sql   # stok_no + senkron meta kolonları
 ├── migrate_ingredient_nutrition_stok_sync_down.sql
+├── migrate_ingredient_compound_legacy_up.sql   # Eski Compound tb_inglist/tb_nutvalue yedeği — USDA fallback
+├── migrate_ingredient_compound_legacy_down.sql
 ├── fb_cost_functions.sql          # İsteğe bağlı: SQL tutar fonksiyonları (migrate.sql içinde de var)
 ├── package.json
 ├── src/
@@ -59,7 +61,8 @@ cost/
 │   ├── app.py
 │   ├── db.py
 │   ├── usda_client.py
-│   ├── sync_ingredients.py       # tuketim upsert + USDA eşleştirme CLI
+│   ├── compound_legacy.py
+│   ├── import_compound_legacy.py  # PostgreSQL compounds dump → ingredient_compound_legacy
 │   └── requirements.txt           # uvicorn / httpx / psycopg
 └── uploads/                       # CSV geçici yükleme klasörü (otomatik)
 ```
@@ -108,6 +111,16 @@ cost/
    ```
 
    Geri alma sırası: `migrate_ingredient_nutrition_stok_sync_down.sql`, ardından `migrate_ingredient_nutrition_down.sql`.
+
+   **İsteğe bağlı — Compound USDA fallback**: Eski bileşik veritabanı dump’ı (`tb_inglist` Türkçe adlar + `bes_name` SR/USDA ifadesi). Birincil LLM/USDA `eslesmedi` dönerse `sync_ingredients` bunu kullanarak `bes_name` ile USDA’da yeniden arar (`ingredient_compound_legacy` dolu ise).
+
+   ```bash
+   psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+     -f migrate_ingredient_compound_legacy_up.sql
+   python3 -m nutrition_service.import_compound_legacy --sql-file=./1779714761656_compounds.sql
+   ```
+
+   Türkçe stok ↔ `ing_name` yakınlık eşiği: ortamda `COMPOUND_LEGACY_NAME_SCORE_MIN` (varsayılan `74`, rapidfuzz `token_set_ratio`).
 
    **tuketim → ingredient_nutrition senkronu** (USDA doldurma betiği):
 
@@ -171,6 +184,7 @@ Ortam değişkenleri `src/index.js` içinde `dotenv` ile okunur (proje kökünde
 | App Port | `PORT` | `3010` |
 | Besin / USDA mikro API temel URL | `NUTRITION_SERVICE_URL` | `http://127.0.0.1:3012` |
 | USDA FoodData Central anahtarı | `USDA_API_KEY` ya da `USDA_FOOD_DATA_CENTRAL_KEY` | — |
+| Compound legacy Türkçe ad eşiği (USDA fallback) | `COMPOUND_LEGACY_NAME_SCORE_MIN` | `74` |
 
 Üretimde sık görülen örnek: `DB_NAME=cost_analysis`, `DB_USER=cost`, `DB_PORT=5434` (PostgreSQL Docker konteynerinin host’a map ettiği port; uygulama ile **aynı** portu kullanın).
 
