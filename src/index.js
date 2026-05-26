@@ -464,29 +464,12 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
     return res.status(400).json({ error: 'tarih, tip ve kategori parametreleri gerekli' });
   }
   const tipN = normalizeTipInput(String(tip).trim());
-  if (!tipN) {
+  if (!tipN || (tipN !== 'yiyecek' && tipN !== 'icenek')) {
     return res.status(400).json({ error: 'tip: yiyecek veya içecek olmalı' });
   }
   try {
-    const params = [tarih];
-    let tipCond = '';
-    if (tipN === 'yiyecek') {
-      tipCond = 'tip = $2';
-      params.push('yiyecek');
-    } else {
-      tipCond = 'tip IN ($2, $3)';
-      params.push('icenek', 'icecek');
-    }
-    const kPar = params.length + 1;
-    params.push(kategori);
-
-    const ppPhysicalCol =
-      tipN === 'yiyecek'
-        ? `(SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))::numeric AS pp_gr,
-        NULL::numeric AS pp_cl`
-        : `(NULL::numeric AS pp_gr,
-        (100.0 * SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))::numeric AS pp_cl)`;
-
+    /** Tek şablon: tip $2 ile filtre ve pp_gr / pp_cl (önceki ayrı string parçası AS hatasına yol açıyordu). */
+    const params = [tarih, tipN, String(kategori).trim()];
     const { rows } = await pool.query(
       `
       SELECT
@@ -500,9 +483,25 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
         (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} AND COALESCE(kur, 0) > 0
               THEN (COALESCE(birim_fiyat, 0) / NULLIF(kur, 0)) * COALESCE(tuk_miktar, 0) ELSE 0 END)
           / NULLIF(SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN COALESCE(tuk_miktar, 0) ELSE 0 END), 0))::numeric AS birim_fiyat_ort_eur,
-        ${ppPhysicalCol}
+        CASE
+          WHEN $2::text = 'yiyecek' THEN
+            (SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END) / NULLIF(MAX(cost_pax), 0))::numeric
+          ELSE NULL::numeric
+        END AS pp_gr,
+        CASE
+          WHEN $2::text = 'icenek' THEN
+            (100.0 * SUM(CASE WHEN ${SQL_EXC_FINANS_PP} THEN tuk_miktar ELSE 0 END)
+              / NULLIF(MAX(cost_pax), 0))::numeric
+          ELSE NULL::numeric
+        END AS pp_cl
       FROM fb_cost.tuketim
-      WHERE tarih_str = $1 AND ${tipCond} AND kategori = $${kPar} AND (${SQL_EXC_FINANS_PP})
+      WHERE tarih_str = $1
+        AND kategori = $3
+        AND (${SQL_EXC_FINANS_PP})
+        AND (
+          ($2::text = 'yiyecek' AND tip = 'yiyecek')
+          OR ($2::text = 'icenek' AND tip IN ('icenek', 'icecek'))
+        )
       GROUP BY stok_mali
       HAVING COALESCE(ABS(SUM(tutar_tl)), 0) + COALESCE(ABS(SUM(tutar_eur)), 0) > 0
       ORDER BY (SUM(tutar_tl) / NULLIF(MAX(cost_pax), 0)) DESC NULLS LAST
@@ -511,6 +510,7 @@ app.get('/api/kategoriler/urunler', async (req, res) => {
     );
     res.json(rows);
   } catch (err) {
+    console.error('kategoriler/urunler:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1615,7 +1615,8 @@ app.post('/api/classify/upload', (req, res, next) => {
 app.get('/api/talep-analiz', async (req, res) => {
   try {
     const tarih_str = (req.query.tarih_str || '').trim() || null;
-    const data = await buildTalepAnaliz(pool, { tarih_str });
+    const tipN = normalizeTipInput(String(req.query.tip || 'yiyecek').trim()) || 'yiyecek';
+    const data = await buildTalepAnaliz(pool, { tarih_str, tip: tipN });
     res.json(data);
   } catch (err) {
     console.error('talep-analiz:', err);

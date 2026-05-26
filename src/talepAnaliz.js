@@ -1,5 +1,7 @@
 'use strict';
 
+const { normalizeTipInput } = require('./tipLabels');
+
 /**
  * Tüketim & Talep analizleri — yiyecek satırları için:
  * - protein_bucket / food_group önceliği: fb_cost.product_classifications (LLM), yoksa kural tabanlı SQL.
@@ -72,6 +74,54 @@ const SQL_MACRO_KATEGORI = `
 const SQL_YIYECEK_BASE = `tip = 'yiyecek' AND ${SQL_EXC_FINANS}`;
 const SQL_YIYECEK_BASE_T = `t.tip = 'yiyecek' AND (t.stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND t.stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
 
+const SQL_ICENEK_BASE = `tip IN ('icenek', 'icecek') AND ${SQL_EXC_FINANS}`;
+const SQL_ICENEK_BASE_T = `t.tip IN ('icenek', 'icecek') AND (t.stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND t.stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
+
+/** İçecek için kaba kural kümesi — karşılık gelen grafiklere uygun */
+const SQL_ICE_ALKOLLU = `(
+  t.kategori ILIKE '%ŞARAP%' OR t.kategori ILIKE '%VİSKİ%' OR t.kategori ILIKE '%VISKI%' OR t.kategori ILIKE '%VODKA%'
+  OR t.kategori ILIKE '%RAKI%' OR t.kategori ILIKE '%RAKI%' OR t.kategori ILIKE '%BİRA%' OR t.kategori ILIKE '%BIRA%'
+  OR t.kategori ILIKE '%ALKOL%' OR t.kategori ILIKE '%COGNAC%' OR t.kategori ILIKE '%KONYAK%'
+  OR t.kategori ILIKE '%TEKİLA%' OR t.kategori ILIKE '%TEKILA%' OR t.kategori ILIKE '%ROM %'
+  OR t.stok_mali ILIKE '%ŞARAP%' OR t.stok_mali ILIKE '%VİSKİ%' OR t.stok_mali ILIKE '%BIRA%'
+)`;
+
+const SQL_ICE_SICAK = `(
+  t.kategori ILIKE '%ÇAY%' OR t.kategori ILIKE '%CAY %' OR t.kategori ILIKE '%KAHVE%'
+  OR t.kategori ILIKE '%ÇİKOLATA%' OR t.kategori ILIKE '%CIKOLATA%' OR t.kategori ILIKE '%SICAK%'
+  OR t.stok_mali ILIKE '%ÇAY%' OR t.stok_mali ILIKE '%KAHVE%'
+)`;
+
+const SQL_ICE_SU = `(
+  t.kategori ILIKE '%SU %' OR t.kategori ILIKE '%SU)' OR t.kategori ILIKE '%İÇME SUYU%' OR t.kategori ILIKE '%ICME SUYU%'
+  OR t.kategori ILIKE '%DAMACANA%' OR t.kategori ILIKE '%ŞİŞE SU%' OR t.stok_mali ILIKE '%SU %'
+  OR BTRIM(COALESCE(t.kategori,'')) ILIKE 'SU'
+)`;
+
+const SQL_ICE_GAZLI_MEYVE = `(
+  t.kategori ILIKE '%MEŞRUBAT%' OR t.kategori ILIKE '%MESRUBAT%' OR t.kategori ILIKE '%GAZLI%'
+  OR t.kategori ILIKE '%KOLA%' OR t.kategori ILIKE '%GAZOZ%' OR t.kategori ILIKE '%MEYVE SUYU%'
+  OR t.kategori ILIKE '%ENERJİ İÇ%' OR t.kategori ILIKE '%ENERJI%'
+)`;
+
+const SQL_ICENEK_ANA_GRUP = `
+  CASE
+    WHEN ${SQL_ICE_ALKOLLU} THEN 'alkollu'
+    WHEN ${SQL_ICE_SICAK} THEN 'sicak'
+    WHEN ${SQL_ICE_SU} THEN 'su'
+    WHEN ${SQL_ICE_GAZLI_MEYVE} THEN 'gazli_meyve'
+    ELSE 'diger'
+  END`;
+
+const SQL_ICENEK_SEGMENT = `
+  CASE
+    WHEN ${SQL_ICE_ALKOLLU} THEN 'premium'
+    WHEN ${SQL_ICE_SU} OR ${SQL_ICE_SICAK} OR ${SQL_ICE_GAZLI_MEYVE} THEN 'standard'
+    ELSE 'diger'
+  END`;
+
+const SQL_ICENEK_DUSUK_GRUP_COST = `(NOT (${SQL_ICE_ALKOLLU})) AND (${SQL_ICE_SU} OR ${SQL_ICE_SICAK} OR ${SQL_ICE_GAZLI_MEYVE})`;
+
 const SQL_PROTEIN_BUCKET_T = SQL_PROTEIN_BUCKET.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
 const SQL_MACRO_KATEGORI_T = SQL_MACRO_KATEGORI.replace(/\bkategori\b/g, 't.kategori');
 const SQL_PREMIUM_STD_T = SQL_PREMIUM_STD.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
@@ -118,18 +168,19 @@ function pct(part, total) {
   return Math.round((10000 * (parseFloat(part) || 0)) / t) / 100;
 }
 
-async function donemZinciri(pool) {
+async function donemZinciri(pool, tipKind = 'yiyecek') {
+  const cond = tipKind === 'icenek' ? SQL_ICENEK_BASE : SQL_YIYECEK_BASE;
   const { rows } = await pool.query(`
     SELECT DISTINCT tarih_str, yil, ay_no
     FROM fb_cost.tuketim
-    WHERE ${SQL_YIYECEK_BASE}
+    WHERE ${cond}
     ORDER BY yil DESC, ay_no DESC, tarih_str DESC
   `);
   return rows;
 }
 
-async function resolveTarih(pool, tarih_str) {
-  const zincir = await donemZinciri(pool);
+async function resolveTarih(pool, tarih_str, tipKind = 'yiyecek') {
+  const zincir = await donemZinciri(pool, tipKind);
   if (!zincir.length) return { tarih_str: null, onceki: null, zincir: [] };
   if (tarih_str && zincir.some(r => r.tarih_str === tarih_str)) {
     const i = zincir.findIndex(r => r.tarih_str === tarih_str);
@@ -300,14 +351,15 @@ async function fetchParetoEsikUrunleri(pool, tarih_str, tipKind, esikYuzde) {
   }));
 }
 
-async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
-  const { tarih_str, onceki, zincir } = await resolveTarih(pool, tarihIn || null);
+async function buildTalepYiyecekAnaliz(pool, tarihIn) {
+  const { tarih_str, onceki, zincir } = await resolveTarih(pool, tarihIn || null, 'yiyecek');
   if (!tarih_str) {
     return {
       ok: false,
       mesaj: 'Yiyecek verisi yok',
       tarih_str: null,
-      onceki_tarih_str: null
+      onceki_tarih_str: null,
+      talep_tip: 'yiyecek'
     };
   }
 
@@ -327,8 +379,7 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
     costDriverPrev,
     toplamCur,
     toplamPrev,
-    paretoYiyecek,
-    paretoIcenek
+    paretoYiyecek
   ] = await Promise.all([
     pool.query(
       `
@@ -460,8 +511,7 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
           paramsPrev
         ).then(r => r.rows[0] || {})
       : Promise.resolve(null),
-    computeParetoForTip(pool, tarih_str, `tip = 'yiyecek'`),
-    computeParetoForTip(pool, tarih_str, `tip IN ('icenek', 'icecek')`)
+    computeParetoForTip(pool, tarih_str, `tip = 'yiyecek'`)
   ]);
 
   const proteinLabels = {
@@ -541,6 +591,7 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
 
   return {
     ok: true,
+    talep_tip: 'yiyecek',
     tarih_str,
     onceki_tarih_str: onceki,
     zincir: zincir.map(z => z.tarih_str),
@@ -563,11 +614,285 @@ async function buildTalepAnaliz(pool, { tarih_str: tarihIn } = {}) {
       seri_aylik: kompSeri,
       seri_ozet: minSeri && maxSeri ? { min: minSeri, max: maxSeri, aralik: maxSeri - minSeri } : null
     },
-    pareto: {
-      yiyecek: paretoYiyecek,
-      icenek: paretoIcenek
-    }
+    pareto: paretoYiyecek
   };
+}
+
+async function buildTalepIcenekAnaliz(pool, tarihIn) {
+  const { tarih_str, onceki, zincir } = await resolveTarih(pool, tarihIn || null, 'icenek');
+  if (!tarih_str) {
+    return {
+      ok: false,
+      mesaj: 'İçecek verisi yok',
+      tarih_str: null,
+      onceki_tarih_str: null,
+      talep_tip: 'icenek'
+    };
+  }
+
+  const icenekAnaEtiket = {
+    alkollu: 'Alkollü',
+    sicak: 'Sıcak içecek',
+    su: 'Su',
+    gazli_meyve: 'Gazlı / meyve suyu',
+    diger: 'Diğer'
+  };
+
+  const paramsCur = [tarih_str];
+  const paramsPrev = onceki ? [onceki] : [];
+
+  const [
+    anaRows,
+    premiumRows,
+    densityRows,
+    dusukRows,
+    pasifRows,
+    skuBuDonem,
+    skuTum,
+    complexitySeries,
+    costDriverCur,
+    costDriverPrev,
+    toplamCur,
+    toplamPrev,
+    paretoIce
+  ] = await Promise.all([
+    pool.query(
+      `
+      SELECT (${SQL_ICENEK_ANA_GRUP}) AS bucket,
+             SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim t
+      WHERE t.tarih_str = $1 AND ${SQL_ICENEK_BASE_T}
+      GROUP BY 1
+      ORDER BY SUM(t.tutar_tl) DESC
+      `,
+      paramsCur
+    ),
+    pool.query(
+      `
+      SELECT (${SQL_ICENEK_SEGMENT}) AS segment,
+             SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
+      FROM fb_cost.tuketim t
+      WHERE t.tarih_str = $1 AND ${SQL_ICENEK_BASE_T}
+      GROUP BY 1
+      `,
+      paramsCur
+    ),
+    pool.query(
+      `
+      WITH sat AS (
+        SELECT
+          LEFT(BTRIM(
+            CASE WHEN strpos(COALESCE(t.kategori, ''), ' - ') > 0 THEN
+              substring(t.kategori from strpos(t.kategori, ' - ') + 3)
+            ELSE COALESCE(t.kategori, 'Diğer') END), 52) AS macro,
+          t.tutar_tl AS tutar_tl,
+          t.tutar_eur AS tutar_eur
+        FROM fb_cost.tuketim t
+        WHERE t.tarih_str = $1 AND ${SQL_ICENEK_BASE_T}
+          AND COALESCE(BTRIM(t.kategori), '') <> ''
+      )
+      SELECT macro, SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur
+      FROM sat
+      GROUP BY macro
+      ORDER BY SUM(tutar_tl) DESC
+      `,
+      paramsCur
+    ),
+    pool.query(
+      `
+      WITH bu_toplam AS (
+        SELECT COALESCE(SUM(tutar_tl), 0) AS ttl
+        FROM fb_cost.tuketim
+        WHERE tarih_str = $1 AND ${SQL_ICENEK_BASE}
+      )
+      SELECT stok_mali,
+             SUM(tutar_tl) AS tutar_tl, SUM(tutar_eur) AS tutar_eur,
+             SUM(tuk_miktar) AS miktar
+      FROM fb_cost.tuketim
+      WHERE tarih_str = $1 AND ${SQL_ICENEK_BASE}
+      GROUP BY stok_mali
+      HAVING SUM(tutar_tl) > 0 AND SUM(tuk_miktar) > 0
+        AND SUM(tutar_tl) <= GREATEST((SELECT ttl * 0.003 FROM bu_toplam), 1)
+      ORDER BY SUM(tutar_tl) ASC
+      LIMIT 50
+      `,
+      paramsCur
+    ),
+    pool.query(
+      `
+      SELECT h.stok_mali
+      FROM fb_cost.tuketim h
+      WHERE ${SQL_ICENEK_BASE} AND h.tarih_str <> $1
+      GROUP BY h.stok_mali
+      HAVING SUM(COALESCE(h.tutar_tl, 0)) > 0
+        AND COALESCE((
+          SELECT SUM(x.tutar_tl) FROM fb_cost.tuketim x
+          WHERE x.tarih_str = $1 AND x.stok_mali = h.stok_mali AND ${SQL_ICENEK_BASE}
+        ), 0) = 0
+      ORDER BY h.stok_mali
+      LIMIT 80
+      `,
+      paramsCur
+    ),
+    pool.query(
+      `SELECT COUNT(DISTINCT stok_mali)::int AS n
+       FROM fb_cost.tuketim WHERE tarih_str = $1 AND ${SQL_ICENEK_BASE}`,
+      paramsCur
+    ),
+    pool.query(`SELECT COUNT(DISTINCT stok_mali)::int AS n FROM fb_cost.tuketim WHERE ${SQL_ICENEK_BASE}`),
+    pool.query(
+      `
+      SELECT d.tarih_str, d.yil, d.ay_no, MAX(t.ay) AS ay_etiket, COUNT(DISTINCT t.stok_mali)::int AS aktif_sku
+      FROM (
+        SELECT DISTINCT ON (yil, ay_no) tarih_str, yil, ay_no
+        FROM fb_cost.tuketim
+        WHERE ${SQL_ICENEK_BASE}
+        ORDER BY yil DESC, ay_no DESC, tarih_str DESC
+        LIMIT 14
+      ) d
+      JOIN fb_cost.tuketim t ON t.tarih_str = d.tarih_str AND ${SQL_ICENEK_BASE_T}
+      GROUP BY d.tarih_str, d.yil, d.ay_no
+      ORDER BY d.yil ASC, d.ay_no ASC, d.tarih_str ASC
+      `
+    ),
+    pool
+      .query(
+        `
+        SELECT
+          SUM(CASE WHEN ${SQL_ICE_ALKOLLU} THEN t.tutar_tl ELSE 0 END) AS yuksek_tl,
+          SUM(CASE WHEN ${SQL_ICENEK_DUSUK_GRUP_COST} THEN t.tutar_tl ELSE 0 END) AS dusuk_tl,
+          SUM(t.tutar_tl) AS toplam_tl
+        FROM fb_cost.tuketim t
+        WHERE t.tarih_str = $1 AND ${SQL_ICENEK_BASE_T}
+        `,
+        paramsCur
+      )
+      .then(r => r.rows[0] || {}),
+    onceki
+      ? pool
+          .query(
+            `
+            SELECT
+              SUM(CASE WHEN ${SQL_ICE_ALKOLLU} THEN t.tutar_tl ELSE 0 END) AS yuksek_tl,
+              SUM(CASE WHEN ${SQL_ICENEK_DUSUK_GRUP_COST} THEN t.tutar_tl ELSE 0 END) AS dusuk_tl,
+              SUM(t.tutar_tl) AS toplam_tl
+            FROM fb_cost.tuketim t
+            WHERE t.tarih_str = $1 AND ${SQL_ICENEK_BASE_T}
+            `,
+            paramsPrev
+          )
+          .then(r => r.rows[0] || {})
+      : Promise.resolve(null),
+    pool
+      .query(
+        `SELECT SUM(tutar_tl) AS tl, SUM(tutar_eur) AS eur FROM fb_cost.tuketim WHERE tarih_str = $1 AND ${SQL_ICENEK_BASE}`,
+        paramsCur
+      )
+      .then(r => r.rows[0] || {}),
+    onceki
+      ? pool
+          .query(
+            `SELECT SUM(tutar_tl) AS tl, SUM(tutar_eur) AS eur FROM fb_cost.tuketim WHERE tarih_str = $1 AND ${SQL_ICENEK_BASE}`,
+            paramsPrev
+          )
+          .then(r => r.rows[0] || {})
+      : Promise.resolve(null),
+    computeParetoForTip(pool, tarih_str, `tip IN ('icenek', 'icecek')`)
+  ]);
+
+  const protein = toShareRows(
+    anaRows.rows.map(r => ({ ...r, etiket: icenekAnaEtiket[r.bucket] || r.bucket }))
+  ).map(r => ({
+    bucket: r.bucket,
+    etiket: r.etiket,
+    tutar_tl: parseFloat(r.tutar_tl) || 0,
+    tutar_eur: parseFloat(r.tutar_eur) || 0,
+    pay_yuzde: r.pay_yuzde
+  }));
+
+  const premium_std = toShareRows(premiumRows.rows).map(r => ({
+    segment: r.segment,
+    tutar_tl: parseFloat(r.tutar_tl) || 0,
+    tutar_eur: parseFloat(r.tutar_eur) || 0,
+    pay_yuzde: r.pay_yuzde
+  }));
+
+  const density = toShareRows(densityRows.rows).map(r => ({
+    macro: r.macro,
+    tutar_tl: parseFloat(r.tutar_tl) || 0,
+    tutar_eur: parseFloat(r.tutar_eur) || 0,
+    pay_yuzde: r.pay_yuzde
+  }));
+
+  const topl_tl = parseFloat(toplamCur.tl) || 0;
+  const dusuk_kullanim = dusukRows.rows.map(r => ({
+    stok_mali: r.stok_mali,
+    tutar_tl: parseFloat(r.tutar_tl) || 0,
+    tutar_eur: parseFloat(r.tutar_eur) || 0,
+    miktar: parseFloat(r.miktar) || 0
+  }));
+
+  const yuksekCur = parseFloat(costDriverCur.yuksek_tl) || 0;
+  const dusukGrupCur = parseFloat(costDriverCur.dusuk_tl) || 0;
+  const totCd = parseFloat(costDriverCur.toplam_tl) || 0;
+  let cost_driver = {
+    yuksek_maliyetli_pay: pct(yuksekCur, totCd),
+    dusuk_maliyetli_pay: pct(dusukGrupCur, totCd),
+    aciklama:
+      'Kural tanımına göre alkollü içecek grubu “yüksek maliyet sürücüsü”; su, sıcak içecek ve gazlı/meyve suyu “relatif düşük grup” olarak özetlenir (stok/kategori etiketiyle yaklaşık).'
+  };
+
+  if (costDriverPrev) {
+    const yPrev = parseFloat(costDriverPrev.yuksek_tl) || 0;
+    const tPrev = parseFloat(costDriverPrev.toplam_tl) || 0;
+    cost_driver.onceki_yuksek_pay = pct(yPrev, tPrev);
+    cost_driver.yuksek_pay_delta_pp =
+      cost_driver.yuksek_maliyetli_pay != null && cost_driver.onceki_yuksek_pay != null
+        ? Math.round((cost_driver.yuksek_maliyetli_pay - cost_driver.onceki_yuksek_pay) * 100) / 100
+        : null;
+  }
+
+  const kompSeri = complexitySeries.rows.map(r => ({
+    tarih_str: r.tarih_str,
+    yil: r.yil,
+    ay_no: r.ay_no,
+    ay_etiket: r.ay_etiket || `${r.ay_no}/${r.yil}`,
+    aktif_sku: r.aktif_sku
+  }));
+
+  const thisSku = skuBuDonem.rows[0]?.n || 0;
+  const allSku = skuTum.rows[0]?.n || 0;
+  const maxSeri = kompSeri.length ? Math.max(...kompSeri.map(x => x.aktif_sku)) : 0;
+  const minSeri = kompSeri.length ? Math.min(...kompSeri.map(x => x.aktif_sku)) : 0;
+
+  return {
+    ok: true,
+    talep_tip: 'icenek',
+    tarih_str,
+    onceki_tarih_str: onceki,
+    zincir: zincir.map(z => z.tarih_str),
+    toplam: { tutar_tl: topl_tl, tutar_eur: parseFloat(toplamCur.eur) || 0 },
+    protein_yapisi: protein,
+    premium_vs_standard: premium_std,
+    kategori_yogunluk: density,
+    dusuk_tuketim_urunler: dusuk_kullanim,
+    bu_donem_pasif_urunler: pasifRows.rows.map(r => r.stok_mali),
+    cost_driver,
+    uretim_karmasikligi: {
+      aktif_sku_bu_donem: thisSku,
+      katalog_sku_tum_zaman: allSku,
+      pasif_katalog_pay: allSku > 0 ? Math.round((10000 * (allSku - thisSku)) / allSku) / 100 : null,
+      seri_aylik: kompSeri,
+      seri_ozet: minSeri && maxSeri ? { min: minSeri, max: maxSeri, aralik: maxSeri - minSeri } : null
+    },
+    pareto: paretoIce
+  };
+}
+
+async function buildTalepAnaliz(pool, { tarih_str: tarihIn, tip } = {}) {
+  const t = normalizeTipInput(tip) === 'icenek' ? 'icenek' : 'yiyecek';
+  if (t === 'icenek') return buildTalepIcenekAnaliz(pool, tarihIn);
+  return buildTalepYiyecekAnaliz(pool, tarihIn);
 }
 
 module.exports = { buildTalepAnaliz, donemZinciri, fetchParetoEsikUrunleri, PARETO_ESIK_ALLOWED };

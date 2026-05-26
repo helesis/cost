@@ -917,39 +917,43 @@
     <div class="page-header">
       <div>
         <div class="page-title">Tüketim ve Talep</div>
-        <div class="page-sub" id="talep-subtitle">Yiyecek verisi; stok adı ve kategori metnine göre kural tabanlı analiz</div>
+        <div class="page-sub" id="talep-subtitle">Dönem ve tip seçin; kural tabanlı talep analizi</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select class="form-select" id="talep-donem" style="width:220px"></select>
+        <select class="form-select" id="talep-tip" style="width:140px">
+          <option value="yiyecek">Yiyecek</option>
+          <option value="icenek">İçecek</option>
+        </select>
         <button type="button" class="btn btn-primary" onclick="loadTalepAnaliz()">Yenile</button>
       </div>
     </div>
     <div class="page-body talep-grid" id="talep-body">
       <div class="card talep-span-2" id="talep-empty" style="display:none">
-        <p style="margin:0;color:var(--text-dim)">Bu görünüm için yiyecek tüketim verisi bulunamadı.</p>
+        <p id="talep-empty-msg" style="margin:0;color:var(--text-dim)">Bu görünüm için seçilen tipte tüketim verisi bulunamadı.</p>
       </div>
 
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">1. Protein talep yapısı</div>
-        <p class="talep-note">Dönem içi yiyecek tutarına göre tahmini pay (ana sürücü: dana / deniz / balık). Eşleşmeyen satırlar “Diğer”.</p>
+        <div class="card-title" id="talep-card1-title">1. Protein talep yapısı</div>
+        <p class="talep-note" id="talep-note-1">Dönem içi yiyecek tutarına göre tahmini pay (ana sürücü: dana / deniz / balık). Eşleşmeyen satırlar “Diğer”.</p>
         <div class="chart-wrap" style="height:260px;max-width:400px;margin:0 auto"><canvas id="chart-talep-protein"></canvas></div>
       </div>
 
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">2. Premium vs standart</div>
-        <p class="talep-note"><strong>Premium:</strong> antrikot, bonfile, somon · <strong>Standart:</strong> tavuk, hindi, kıyma</p>
+        <div class="card-title" id="talep-card2-title">2. Premium vs standart</div>
+        <p class="talep-note" id="talep-note-2"><strong>Premium:</strong> antrikot, bonfile, somon · <strong>Standart:</strong> tavuk, hindi, kıyma</p>
         <div class="chart-wrap" style="height:240px"><canvas id="chart-talep-premium"></canvas></div>
       </div>
 
       <div class="card talep-block" data-talep-section style="display:none">
-        <div class="card-title">3. Kategori talep yoğunluğu</div>
-        <p class="talep-note">Kategori adına göre makro gruplar: et, sebze, şarküteri, süt, karbonhidrat — ortak veride “yer kaplama” (tutar payı).</p>
+        <div class="card-title" id="talep-card3-title">3. Kategori talep yoğunluğu</div>
+        <p class="talep-note" id="talep-note-3">Kategori adına göre makro gruplar: et, sebze, şarküteri, süt, karbonhidrat — ortak veride “yer kaplama” (tutar payı).</p>
         <div class="chart-wrap" style="height:280px;max-width:420px;margin:0 auto"><canvas id="chart-talep-density"></canvas></div>
       </div>
 
       <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
-        <div class="card-title">4. Pareto analizi (80/20)</div>
-        <p class="talep-note">Aynı dönemde tutar bazında sıralı SKU’lar: toplam tüketim cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Tablo satırının üzerine gelince o eşiğe dahil ürünler tutara göre azalan sırada listelenir. Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?</p>
+        <div class="card-title" id="talep-card4-title">4. Pareto analizi (80/20)</div>
+        <p class="talep-note" id="talep-note-4">Aynı dönemde tutar bazında sıralı SKU’lar: toplam tüketim cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Tablo satırının üzerine gelince o eşiğe dahil ürünler tutara göre azalan sırada listelenir. Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?</p>
         <div class="talep-two-col" id="talep-pareto-host"></div>
       </div>
 
@@ -960,8 +964,8 @@
       </div>
 
       <div class="card talep-span-2 talep-block" data-talep-section style="display:none">
-        <div class="card-title">6. Üretim karmaşıklığı (aktif SKU)</div>
-        <p class="talep-note">Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.</p>
+        <div class="card-title" id="talep-card6-title">6. Üretim karmaşıklığı (aktif SKU)</div>
+        <p class="talep-note" id="talep-note-6">Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.</p>
         <div class="talep-kpi" id="talep-komp-kpi"></div>
         <div class="chart-wrap" style="height:300px;margin-top:16px"><canvas id="chart-talep-complexity"></canvas></div>
       </div>
@@ -4166,10 +4170,62 @@ function destroyTalepCharts() {
   });
 }
 
-function talepPremiumLabel(seg) {
+function talepPremiumLabel(seg, talepTip) {
+  if (talepTip === 'icenek') {
+    if (seg === 'premium') return 'Premium (Alkollü)';
+    if (seg === 'standard') return 'Standart (Su, sıcak, gazlı, meyve)';
+    return 'Diğer';
+  }
   if (seg === 'premium') return 'Premium (Antrikot, Bonfile, Somon)';
   if (seg === 'standard') return 'Standart (Tavuk, Hindi, Kıyma)';
   return 'Diğer';
+}
+
+function talepSetCardCopy(tip) {
+  const ice = tip === 'icenek';
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  set('talep-card1-title', ice ? '1. İçecek ana grupları' : '1. Protein talep yapısı');
+  set('talep-note-1', ice
+    ? 'Alkollü, sıcak içecek, su, gazlı ve meyve içecekleri için dönem içi tutar payı (ana sürücü kurala göre). Eşleşmeyen satırlar “Diğer”.'
+    : 'Dönem içi yiyecek tutarına göre tahmini pay (ana sürücü: dana / deniz / balık). Eşleşmeyen satırlar “Diğer”.');
+  set('talep-card2-title', ice ? '2. Premium vs standart (içecek)' : '2. Premium vs standart');
+  set('talep-note-2', ice
+    ? 'Premium: alkollü içecekler · Standart: su, sıcak içecek, gazlı ve meyve içecekleri'
+    : 'Premium: antrikot, bonfile, somon · Standart: tavuk, hindi, kıyma');
+  set('talep-card3-title', ice ? '3. Kategori yoğunluğu (alt satır)' : '3. Kategori talep yoğunluğu');
+  set('talep-note-3', ice
+    ? 'Kategori metninde “ - ” sonrası alt satıra göre makro gruplandırma; ortak veride tutar payı.'
+    : 'Kategori adına göre makro gruplar: et, sebze, şarküteri, süt, karbonhidrat — ortak veride “yer kaplama” (tutar payı).');
+  set('talep-note-4', 'Aynı dönem ve seçilen tipte tutar bazında sıralı SKU’lar: toplam cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Tablo satırının üzerine gelince o eşiğe dahil ürünler tutara göre azalan sırada listelenir. Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?');
+  set('talep-card6-title', ice ? '6. İçecek karmaşıklığı (aktif SKU)' : '6. Üretim karmaşıklığı (aktif SKU)');
+  set('talep-note-6', ice
+    ? 'Her ay kaç farklı içecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.'
+    : 'Her ay kaç farklı yiyecek kalemi hareket görmüş? Katalog (tüm zaman) vs bu dönem aktif ürün sayısı.');
+}
+
+function talepRebuildDonemSelect() {
+  const talepTipEl = document.getElementById('talep-tip');
+  const talepTip = talepTipEl && talepTipEl.value === 'icenek' ? 'icenek' : 'yiyecek';
+  const sel = document.getElementById('talep-donem');
+  if (!sel || !donemler || !donemler.length) {
+    if (sel) sel.innerHTML = '<option value="">—</option>';
+    return;
+  }
+  const prev = sel.value;
+  const filtered = donemler.filter((d) =>
+    talepTip === 'icenek' ? Number(d.icenek_satir || 0) > 0 : Number(d.yiyecek_satir || 0) > 0
+  );
+  const opts = filtered.map((d) => {
+    const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
+    const etiket = `${d.ay} ${d.yil}${kismi ? ' (15 gün)' : ''}`;
+    return `<option value="${d.tarih_str}">${etiket}</option>`;
+  }).join('');
+  sel.innerHTML = opts || '<option value="">—</option>';
+  if (filtered.some((d) => d.tarih_str === prev)) sel.value = prev;
+  else if (filtered.length) sel.value = filtered[0].tarih_str;
 }
 
 function talepMacroLabel(m) {
@@ -4313,21 +4369,27 @@ function talepRenderParetoSide(title, p, tarihStr, tipKey) {
     </div>`;
 }
 
-function talepRenderPareto(pareto, tarihStr) {
+function talepRenderPareto(paretoSingle, tarihStr, talepTip) {
   const host = document.getElementById('talep-pareto-host');
   if (!host) return;
-  const p = pareto || {};
-  host.innerHTML = talepRenderParetoSide('Yiyecek', p.yiyecek, tarihStr, 'yiyecek') + talepRenderParetoSide('İçecek', p.icenek, tarihStr, 'icenek');
+  const tipKey = talepTip === 'icenek' ? 'icenek' : 'yiyecek';
+  const title = tipKey === 'icenek' ? 'İçecek Pareto' : 'Yiyecek Pareto';
+  host.innerHTML = talepRenderParetoSide(title, paretoSingle || {}, tarihStr, tipKey);
   talepEnsureParetoHostHover();
 }
 
 async function loadTalepAnaliz() {
   const sel = document.getElementById('talep-donem');
+  const talepTipEl = document.getElementById('talep-tip');
+  const talepTip = talepTipEl && talepTipEl.value === 'icenek' ? 'icenek' : 'yiyecek';
   const tarih_str = sel && sel.value ? sel.value : '';
   const empty = document.getElementById('talep-empty');
   const blocks = document.querySelectorAll('[data-talep-section]');
   try {
-    const u = '/api/talep-analiz' + (tarih_str ? '?tarih_str=' + encodeURIComponent(tarih_str) : '');
+    const params = new URLSearchParams();
+    if (tarih_str) params.set('tarih_str', tarih_str);
+    params.set('tip', talepTip);
+    const u = '/api/talep-analiz?' + params.toString();
     const r = await fetch(u);
     const data = await r.json();
     if (!r.ok) {
@@ -4336,24 +4398,31 @@ async function loadTalepAnaliz() {
       return;
     }
     destroyTalepCharts();
+    talepSetCardCopy(talepTip);
     if (!data.ok) {
       if (empty) empty.style.display = 'block';
       blocks.forEach(b => { b.style.display = 'none'; });
       const sub = document.getElementById('talep-subtitle');
-      if (sub) sub.textContent = data.mesaj || 'Yiyecek verisi yok';
+      const tipLbl = talepTip === 'icenek' ? 'içecek' : 'yiyecek';
+      if (sub) sub.textContent = data.mesaj || `Seçilen dönemde ${tipLbl} verisi yok`;
+      const emMsg = document.getElementById('talep-empty-msg');
+      if (emMsg) emMsg.textContent = data.mesaj || `Bu görünüm için seçilen dönemde ${tipLbl} tüketim verisi bulunamadı.`;
       return;
     }
     if (empty) empty.style.display = 'none';
     blocks.forEach(b => { b.style.display = 'block'; });
+    const tipRes = data.talep_tip === 'icenek' ? 'icenek' : 'yiyecek';
+    talepSetCardCopy(tipRes);
     const subEl = document.getElementById('talep-subtitle');
     if (subEl) {
       const top = vcIsEUR() ? (data.toplam && data.toplam.tutar_eur) : (data.toplam && data.toplam.tutar_tl);
-      subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam yiyecek ${fmtCur(top || 0)} · Pareto: aynı dönemde yiyecek + içecek`;
+      const tipWord = tipRes === 'icenek' ? 'içecek' : 'yiyecek';
+      subEl.textContent = `Seçili dönem: ${data.tarih_str || ''} · Toplam ${tipWord} ${fmtCur(top || 0)} · Pareto: seçilen tip`;
     }
 
     talepParetoDetailCache.clear();
     talepHideParetoTooltip();
-    talepRenderPareto(data.pareto, data.tarih_str);
+    talepRenderPareto(data.pareto, data.tarih_str, tipRes);
 
     const pRows = data.protein_yapisi || [];
     const pLabels = pRows.map(x => x.etiket || x.bucket);
@@ -4375,7 +4444,7 @@ async function loadTalepAnaliz() {
     new Chart(document.getElementById('chart-talep-premium'), {
       type: 'bar',
       data: {
-        labels: pr.map(x => talepPremiumLabel(x.segment)),
+        labels: pr.map(x => talepPremiumLabel(x.segment, tipRes)),
         datasets: [{
           label: curLabel(),
           data: pr.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl),
@@ -4439,7 +4508,7 @@ async function loadTalepAnaliz() {
       data: {
         labels: seri.map(x => x.ay_etiket || x.tarih_str),
         datasets: [{
-          label: 'Aktif SKU',
+          label: tipRes === 'icenek' ? 'Aktif içecek SKU' : 'Aktif yiyecek SKU',
           data: seri.map(x => x.aktif_sku),
           borderColor: '#8a6c2e',
           backgroundColor: 'rgba(138, 108, 46, 0.12)',
@@ -4481,9 +4550,10 @@ async function init() {
       const etiket = `${d.ay} ${d.yil}${kismi ? ' (15 gün)' : ''}`;
       return `<option value="${d.tarih_str}">${etiket}</option>`;
     }).join('');
-    ['ozet-donem','kat-donem','talep-donem'].forEach(id => {
+    ['ozet-donem','kat-donem'].forEach(id => {
       document.getElementById(id).innerHTML = donemOpts;
     });
+    talepRebuildDonemSelect();
     const meB = document.getElementById('me-baslangic');
     const meE = document.getElementById('me-bitis');
     if (meB && meE) {
@@ -4501,6 +4571,14 @@ async function init() {
     if (talepSel && !talepSel.dataset.bound) {
       talepSel.dataset.bound = '1';
       talepSel.addEventListener('change', () => {
+        if (document.querySelector('.tab-content.active')?.id === 'page-tuketim-talep') loadTalepAnaliz();
+      });
+    }
+    const talepTipSel = document.getElementById('talep-tip');
+    if (talepTipSel && !talepTipSel.dataset.bound) {
+      talepTipSel.dataset.bound = '1';
+      talepTipSel.addEventListener('change', () => {
+        talepRebuildDonemSelect();
         if (document.querySelector('.tab-content.active')?.id === 'page-tuketim-talep') loadTalepAnaliz();
       });
     }
