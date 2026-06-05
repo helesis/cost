@@ -138,18 +138,28 @@
     table-layout: fixed;
     width: 100%;
   }
-  #kat-urun-tablo th.kat-urun-col-stok,
-  #kat-urun-tablo td.kat-urun-col-stok {
+  #kat-urun-wrap col.kat-urun-col-stok-col { width: auto; }
+  #kat-urun-wrap col.kat-urun-col-shrink-col { width: 1px; }
+  #kat-urun-wrap table th.kat-urun-col-stok,
+  #kat-urun-wrap table td.kat-urun-col-stok {
+    width: auto;
     max-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  #kat-urun-tablo th.kat-urun-col-shrink,
-  #kat-urun-tablo td.kat-urun-col-shrink {
-    width: 1%;
+  #kat-urun-wrap table th.kat-urun-col-shrink,
+  #kat-urun-wrap table td.kat-urun-col-shrink {
+    width: 1px;
     white-space: nowrap;
     text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  #kat-urun-wrap table th.kat-urun-col-shrink {
+    font-size: 10px;
+    letter-spacing: 0.04em;
   }
 
   .me-disclaimer {
@@ -1067,14 +1077,18 @@
             <p id="kat-urun-hint">Önce üstteki kategori tablosundan bir satır seçin.</p>
             <div class="table-wrap kat-urun-pax-scroll" id="kat-urun-wrap" style="display:none">
               <table>
+                <colgroup>
+                  <col class="kat-urun-col-stok-col" />
+                  <col class="kat-urun-col-shrink-col" span="5" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th class="kat-urun-col-stok">Ürün (stok)</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-th-bf">Birim fiyat</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-th-pp">Pax başı</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-th-ppg">Pax başı (g)</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-th-degisim">Değişim</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-th-tutar">Tutar</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-bf" title="Birim fiyat">B.fiyat</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-pp" title="Pax başı">P.P.</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-ppg" title="Pax başı (g)">g</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-degisim" title="Değişim">Δ</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-tutar" title="Tutar">Tutar</th>
                   </tr>
                 </thead>
                 <tbody id="kat-urun-tablo"></tbody>
@@ -5042,24 +5056,34 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const thTut = document.getElementById('kat-urun-th-tutar');
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
-  if (thPp) thPp.textContent = `Pax başı (${curLabel()})`;
   const ice = tip === 'icenek' || tip === 'icecek';
   const oncekiTarih = katOncekiTarihStr(tarih, tip);
   const oncekiDon = oncekiTarih ? donemler.find((d) => d.tarih_str === oncekiTarih) : null;
   const oncekiEtiket = oncekiDon
     ? `${oncekiDon.ay} ${oncekiDon.yil}${oncekiTarih.endsWith('-15g') ? ' (15 gün)' : ''}`
     : '';
+  if (thBf) {
+    thBf.textContent = 'B.fiyat';
+    thBf.title = `Birim fiyat (${curLabel()})`;
+  }
+  if (thPp) {
+    thPp.textContent = `P.P. ${curSym()}`;
+    thPp.title = `Pax başı (${curLabel()})`;
+  }
   if (thPpg) {
-    thPpg.textContent = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
-    thPpg.title = '';
+    thPpg.textContent = ice ? 'mL' : 'g';
+    thPpg.title = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
   }
   if (thDegisim) {
+    thDegisim.textContent = 'Δ';
     thDegisim.title = oncekiEtiket
-      ? `Kişi başı tüketim: ${oncekiEtiket} dönemine göre % değişim`
-      : '';
+      ? `Değişim — kişi başı tüketim, ${oncekiEtiket} dönemine göre %`
+      : 'Değişim — önceki döneme göre kişi başı tüketim %';
   }
-  if (thBf) thBf.textContent = `Birim fiyat (${curLabel()})`;
-  if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
+  if (thTut) {
+    thTut.textContent = 'Tutar';
+    thTut.title = `Tutar (${curLabel()})`;
+  }
   if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
   if (wrap) wrap.style.display = 'none';
 
