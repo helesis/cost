@@ -134,19 +134,29 @@
   .kat-pp-mom-up { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45, 106, 79, 0.35); }
   .kat-pp-mom-down { background: rgba(200, 50, 50, 0.12); color: var(--red); border: 1px solid rgba(200, 50, 50, 0.28); }
   .kat-pp-mom-flat { background: rgba(0, 0, 0, 0.04); color: var(--text-dim); border: 1px solid var(--border); }
-  #kat-urun-tablo th.kat-urun-col-phys,
-  #kat-urun-tablo td.kat-urun-col-phys {
-    min-width: 178px;
-    width: 178px;
+  #kat-urun-wrap table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  #kat-urun-tablo th.kat-urun-col-stok,
+  #kat-urun-tablo td.kat-urun-col-stok {
+    max-width: 0;
+    width: 34%;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .kat-urun-phys-inner {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    justify-content: flex-end;
+  #kat-urun-tablo th.kat-urun-col-phys,
+  #kat-urun-tablo td.kat-urun-col-phys {
+    min-width: 72px;
+    width: 72px;
     white-space: nowrap;
-    flex-wrap: nowrap;
+  }
+  #kat-urun-tablo th.kat-urun-col-degisim,
+  #kat-urun-tablo td.kat-urun-col-degisim {
+    min-width: 88px;
+    width: 88px;
+    white-space: nowrap;
   }
 
   .me-disclaimer {
@@ -1066,10 +1076,11 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Ürün (stok)</th>
+                    <th class="kat-urun-col-stok">Ürün (stok)</th>
                     <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
                     <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
                     <th class="kat-urun-col-phys" style="text-align:right" id="kat-urun-th-ppg">Pax başı (g)</th>
+                    <th class="kat-urun-col-degisim" style="text-align:right" id="kat-urun-th-degisim">Değişim</th>
                     <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
                   </tr>
                 </thead>
@@ -5033,6 +5044,7 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const baslik = document.getElementById('kat-urun-baslik');
   const thPp = document.getElementById('kat-urun-th-pp');
   const thPpg = document.getElementById('kat-urun-th-ppg');
+  const thDegisim = document.getElementById('kat-urun-th-degisim');
   const thBf = document.getElementById('kat-urun-th-bf');
   const thTut = document.getElementById('kat-urun-th-tutar');
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
@@ -5046,7 +5058,12 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     : '';
   if (thPpg) {
     thPpg.textContent = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
-    thPpg.title = oncekiEtiket ? `Yanındaki chip: ${oncekiEtiket} dönemine göre değişim` : '';
+    thPpg.title = '';
+  }
+  if (thDegisim) {
+    thDegisim.title = oncekiEtiket
+      ? `Kişi başı tüketim: ${oncekiEtiket} dönemine göre % değişim`
+      : '';
   }
   if (thBf) thBf.textContent = `Birim fiyat (${curLabel()})`;
   if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
@@ -5105,15 +5122,14 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
           momChip = renderMomChip(((curPhys - prevPhys) / prevPhys) * 100, oncekiEtiket);
         }
       }
-      const physHtml = momChip
-        ? `<span class="kat-urun-phys-inner"><span>${physCell}</span>${momChip}</span>`
-        : physCell;
+      const stokTit = escapeHtml(r.stok_mali || '').replace(/"/g, '&quot;');
       return `
       <tr data-stok="${encodeURIComponent(r.stok_mali)}">
-        <td>${escapeHtml(r.stok_mali)}</td>
+        <td class="kat-urun-col-stok" title="${stokTit}">${escapeHtml(r.stok_mali)}</td>
         <td style="text-align:right">${fmtCur(bf)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
-        <td class="kat-urun-col-phys" style="text-align:right">${physHtml}</td>
+        <td class="kat-urun-col-phys" style="text-align:right">${physCell}</td>
+        <td class="kat-urun-col-degisim" style="text-align:right">${momChip || '—'}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>`;
     }).join('');
