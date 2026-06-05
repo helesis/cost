@@ -135,31 +135,30 @@
   .kat-pp-mom-down { background: rgba(200, 50, 50, 0.12); color: var(--red); border: 1px solid rgba(200, 50, 50, 0.28); }
   .kat-pp-mom-flat { background: rgba(0, 0, 0, 0.04); color: var(--text-dim); border: 1px solid var(--border); }
   #kat-urun-wrap table {
-    table-layout: fixed;
     width: 100%;
+    table-layout: auto;
   }
-  #kat-urun-wrap col.kat-urun-col-stok-col { width: auto; }
-  #kat-urun-wrap col.kat-urun-col-shrink-col { width: 1px; }
   #kat-urun-wrap table th.kat-urun-col-stok,
   #kat-urun-wrap table td.kat-urun-col-stok {
-    width: auto;
-    max-width: 0;
+    width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   #kat-urun-wrap table th.kat-urun-col-shrink,
   #kat-urun-wrap table td.kat-urun-col-shrink {
-    width: 1px;
+    width: 0;
     white-space: nowrap;
     text-align: right;
     font-variant-numeric: tabular-nums;
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+    vertical-align: middle;
   }
   #kat-urun-wrap table th.kat-urun-col-shrink {
     font-size: 10px;
     letter-spacing: 0.04em;
+    text-transform: none;
   }
 
   .me-disclaimer {
@@ -1077,10 +1076,6 @@
             <p id="kat-urun-hint">Önce üstteki kategori tablosundan bir satır seçin.</p>
             <div class="table-wrap kat-urun-pax-scroll" id="kat-urun-wrap" style="display:none">
               <table>
-                <colgroup>
-                  <col class="kat-urun-col-stok-col" />
-                  <col class="kat-urun-col-shrink-col" span="5" />
-                </colgroup>
                 <thead>
                   <tr>
                     <th class="kat-urun-col-stok">Ürün (stok)</th>
