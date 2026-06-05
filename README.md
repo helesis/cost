@@ -352,6 +352,87 @@ Detay: `migrate.sql` ve `fb_cost_functions.sql`.
 
 ---
 
+## Sunucuda güncelleme (git pull sonrası)
+
+Örnek dizin: `/var/www/cost-analysis`. PM2 süreç adı: `cost-analysis` (farklıysa `pm2 status` ile kontrol edin).
+
+### Her kod güncellemesinde (zorunlu)
+
+```bash
+cd /var/www/cost-analysis
+git pull
+npm install --omit=dev
+pm2 restart cost-analysis
+```
+
+Kontrol:
+
+```bash
+pm2 status
+pm2 logs cost-analysis --lines 50
+```
+
+Uygulama varsayılan olarak `http://0.0.0.0:3010` adresinde dinler (`PORT` `.env` ile değişir).
+
+### Ön koşullar
+
+- PostgreSQL ayakta olmalı: `docker ps` (ör. `cost-analysis-db` konteyneri).
+- Kök `.env` doğru olmalı: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`; isteğe bağlı `PORT`, `NODE_ENV`, `NUTRITION_SERVICE_URL`.
+
+Çoğu `git pull` yalnızca Node/frontend değişikliği içerir — **ek SQL migrate gerekmez**. Sadece yukarıdaki üç komut yeterlidir.
+
+### USDA / besin sekmesi kullanılıyorsa (ek)
+
+Python mikro API ayrı süreçte çalışıyorsa kod veya `.env` değişiminden sonra onu da yeniden başlatın:
+
+```bash
+# systemd ile (örnek birim adı — ortamınıza göre değişir)
+sudo systemctl restart nutrition-cost
+
+# veya elle
+cd /var/www/cost-analysis
+set -a && source .env && set +a
+python3 -m uvicorn nutrition_service.app:app --host 127.0.0.1 --port 3012
+```
+
+Sağlık kontrolü:
+
+```bash
+curl -sS http://127.0.0.1:3012/api/nutrition/health
+```
+
+Node tarafı: tarayıcıda veya `GET /api/nutrition/backend-status` ile Python’a erişim doğrulanabilir.
+
+### Bir kerelik: Compound USDA fallback (henüz uygulanmadıysa)
+
+Eski Compound dump’ı ile USDA yedek eşlemesi için (tablo boşsa veya hiç kurulmadıysa):
+
+```bash
+cd /var/www/cost-analysis
+set -a && source .env && set +a
+export PGPASSWORD="$DB_PASSWORD"
+
+psql -h 127.0.0.1 -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+  -f migrate_ingredient_compound_legacy_up.sql
+
+pip install -r nutrition_service/requirements.txt
+python3 -m nutrition_service.import_compound_legacy --sql-file=./1779714761656_compounds.sql
+```
+
+Ardından uvicorn / systemd besin servisini yeniden başlatın.
+
+### Özet
+
+| Durum | Adımlar |
+| --- | --- |
+| Normal güncelleme | `git pull` → `npm install --omit=dev` → `pm2 restart cost-analysis` |
+| USDA sekmesi aktif | + uvicorn veya `systemctl restart` |
+| İlk kez compound fallback | + `migrate_ingredient_compound_legacy_up.sql` + `import_compound_legacy` |
+
+İlk kurulum veya PM2 henüz yoksa yukarıdaki **Sunucuda çalıştırma** bölümüne bakın.
+
+---
+
 ## Lisans
 
 Özel (Proprietary) — Voyage Sorgun iç kullanımı.

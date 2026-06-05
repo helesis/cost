@@ -134,6 +134,20 @@
   .kat-pp-mom-up { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45, 106, 79, 0.35); }
   .kat-pp-mom-down { background: rgba(200, 50, 50, 0.12); color: var(--red); border: 1px solid rgba(200, 50, 50, 0.28); }
   .kat-pp-mom-flat { background: rgba(0, 0, 0, 0.04); color: var(--text-dim); border: 1px solid var(--border); }
+  #kat-urun-tablo th.kat-urun-col-phys,
+  #kat-urun-tablo td.kat-urun-col-phys {
+    min-width: 178px;
+    width: 178px;
+    white-space: nowrap;
+  }
+  .kat-urun-phys-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-end;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+  }
 
   .me-disclaimer {
     font-size: 13px;
@@ -1055,7 +1069,7 @@
                     <th>Ürün (stok)</th>
                     <th style="text-align:right" id="kat-urun-th-bf">Birim fiyat</th>
                     <th style="text-align:right" id="kat-urun-th-pp">Pax başı</th>
-                    <th style="text-align:right" id="kat-urun-th-ppg">Pax başı (g)</th>
+                    <th class="kat-urun-col-phys" style="text-align:right" id="kat-urun-th-ppg">Pax başı (g)</th>
                     <th style="text-align:right" id="kat-urun-th-tutar">Tutar</th>
                   </tr>
                 </thead>
@@ -5092,14 +5106,14 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         }
       }
       const physHtml = momChip
-        ? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap"><span>${physCell}</span>${momChip}</span>`
+        ? `<span class="kat-urun-phys-inner"><span>${physCell}</span>${momChip}</span>`
         : physCell;
       return `
       <tr data-stok="${encodeURIComponent(r.stok_mali)}">
         <td>${escapeHtml(r.stok_mali)}</td>
         <td style="text-align:right">${fmtCur(bf)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
-        <td style="text-align:right">${physHtml}</td>
+        <td class="kat-urun-col-phys" style="text-align:right">${physHtml}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>`;
     }).join('');
