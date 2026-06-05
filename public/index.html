@@ -118,6 +118,22 @@
   #kat-urun-tablo tr[data-stok] { cursor: pointer; transition: background .12s; }
   #kat-urun-tablo tr[data-stok]:hover { background: var(--gold-bg); }
   #kat-urun-tablo tr.kat-urun-stok-active { background: rgba(42, 77, 122, 0.14); outline: 1px solid rgba(42, 77, 122, 0.45); }
+  .kat-pp-mom-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .kat-pp-mom-chip .delta-icon { width: 10px; height: 10px; }
+  .kat-pp-mom-up { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45, 106, 79, 0.35); }
+  .kat-pp-mom-down { background: rgba(200, 50, 50, 0.12); color: var(--red); border: 1px solid rgba(200, 50, 50, 0.28); }
+  .kat-pp-mom-flat { background: rgba(0, 0, 0, 0.04); color: var(--text-dim); border: 1px solid var(--border); }
 
   .me-disclaimer {
     font-size: 13px;
@@ -1334,7 +1350,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">Menu Engineering</div>
-        <div class="page-sub">Consumption-based — ham EUR/birim × tüketim (kg/L), çeyrek matrisi ile hizalıdır</div>
+        <div class="page-sub">Consumption-based — ham birim maliyet (TL/EUR) × tüketim (kg/L), çeyrek matrisi ile hizalıdır</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn btn-secondary btn-sm" onclick="meExport('csv')">CSV</button>
@@ -1344,7 +1360,7 @@
     </div>
     <div class="page-body">
       <div class="me-disclaimer">
-        Üst veri seçimi (tüketim + tutar EUR) ile çalışır; çeyrek matrisi birim maliyet için yalnızca <strong>EUR</strong> kullanır. <strong>Grafik</strong> için <strong>Yiyecek</strong> veya <strong>İçecek</strong> seçin.
+        Üst veri seçimi (tüketim + tutar) ile çalışır; çeyrek matrisi birim maliyeti sidebar’daki <strong>TL / EUR</strong> seçimine göre hesaplar. <strong>Grafik</strong> için <strong>Yiyecek</strong> veya <strong>İçecek</strong> seçin.
       </div>
 
       <div class="card mb-20">
@@ -1445,7 +1461,7 @@
                   <th>Ürün</th>
                   <th style="text-align:right">Tüketim (kg / L)</th>
                   <th style="text-align:right">%</th>
-                  <th style="text-align:right">Maliyet €/birim</th>
+                  <th style="text-align:right" id="me-th-unit-cost">Maliyet / birim</th>
                   <th>Çeyrek</th>
                   <th>Öneri</th>
                 </tr>
@@ -2423,19 +2439,20 @@ function meBuildMeMatrixChart(data) {
     } else hintEl.style.display = 'none';
   }
 
+  const matrixCur = data.matrix_currency || data.table_currency || curLabel();
   const xLblBase =
     qtyHint === 'L'
-      ? 'Birim başına ham maliyet (EUR/L), sol ucuz · sağ pahalı'
+      ? `Birim başına ham maliyet (${matrixCur}/L), sol ucuz · sağ pahalı`
       : qtyHint === 'kg'
-        ? 'Birim başına ham maliyet (EUR/kg), sol ucuz · sağ pahalı'
-        : 'Ham birim maliyet (EUR), sol ucuz · sağ pahalı';
+        ? `Birim başına ham maliyet (${matrixCur}/kg), sol ucuz · sağ pahalı`
+        : `Ham birim maliyet (${matrixCur}), sol ucuz · sağ pahalı`;
   const yLblBase =
     qtyHint === 'L' ? 'Toplam tüketim (litre)' : qtyHint === 'kg' ? 'Toplam tüketim (kg)' : 'Toplam tüketim';
 
   if (mTitle) {
     mTitle.textContent = data.matrix_tip_required
       ? 'Menü mühendisliği — klasik scatter matris'
-      : `Scatter matris — ${qtyHint === 'L' ? 'içecek' : qtyHint === 'kg' ? 'yiyecek' : ''} (${data.matrix_currency || 'EUR'} / ${qtyHint || 'birim'} × ham tüketim)`;
+      : `Scatter matris — ${qtyHint === 'L' ? 'içecek' : qtyHint === 'kg' ? 'yiyecek' : ''} (${matrixCur} / ${qtyHint || 'birim'} × ham tüketim)`;
   }
 
   if (chartMeMatrix) {
@@ -2539,12 +2556,20 @@ function meBuildMeMatrixChart(data) {
     const u = qtyHint || m.qty_unit || '';
     const quad =
       ((m.quadrant_label || '').trim() ? m.quadrant_label : '') || meQuadLabelDisp(m.me_quadrant);
-    const cost = Number.isFinite(Number(m.unit_cost_eur)) ? Number(m.unit_cost_eur) : Number(raw._rx);
+    const cost = Number.isFinite(Number(m.unit_cost))
+      ? Number(m.unit_cost)
+      : Number.isFinite(Number(m.unit_cost_eur))
+        ? Number(m.unit_cost_eur)
+        : Number(raw._rx);
     const qty = Number.isFinite(Number(m.qty_display)) ? Number(m.qty_display) : Number(raw._ry);
-    const lines = [`Çeyrek: ${quad}`, `Ham maliyet: ${fmtN(cost, 4)} EUR${u ? '/' + u : ''}`, `Tüketim: ${fmtN(qty, 4)} ${u}`];
+    const lines = [
+      `Çeyrek: ${quad}`,
+      `Ham maliyet: ${fmtN(cost, 4)} ${matrixCur}${u ? '/' + u : ''}`,
+      `Tüketim: ${fmtN(qty, 4)} ${u}`
+    ];
     if (clipEff && raw.clipped && (raw.ox || raw.oy)) {
       const bits = [];
-      if (raw.ox) bits.push(`birim maliyet ${fmtN(raw._rx, 4)} EUR${u ? '/' + u : ''}`);
+      if (raw.ox) bits.push(`birim maliyet ${fmtN(raw._rx, 4)} ${matrixCur}${u ? '/' + u : ''}`);
       if (raw.oy) bits.push(`tüketim ${fmtN(raw._ry, 4)} ${u}`);
       lines.push(`Eksen dışı — gerçek değer: ${bits.join(' · ')}`);
     }
@@ -2728,12 +2753,15 @@ function meRenderMaliyetEksik(data) {
   el.style.display = 'block';
   el.innerHTML =
     `<details><summary>Birim maliyet eksik (${bx.count} SKU)</summary>` +
-    `<p style="margin:8px 0 0;color:var(--text-dim);font-size:12px;line-height:1.4">Bu ürünlerde satır tutarından birim EUR hesaplanmıyor (ör. EUR toplamı yok veya sıfır). Matrise ve klasik dört çeyrek atamasına <strong>dahil edilmezler</strong>; medyan eşikleri kalan ürünlerle hesaplanır.</p>` +
+    `<p style="margin:8px 0 0;color:var(--text-dim);font-size:12px;line-height:1.4">Bu ürünlerde satır tutarından seçilen para biriminde birim maliyet hesaplanmıyor (ör. tutar yok veya sıfır). Matrise ve klasik dört çeyrek atamasına <strong>dahil edilmezler</strong>; medyan eşikleri kalan ürünlerle hesaplanır.</p>` +
     `<ul>${listItems}</ul></details>`;
 }
 
 function meRenderMeTable(rows, data) {
   const tb = document.getElementById('me-tbody');
+  const thUnit = document.getElementById('me-th-unit-cost');
+  const tblCur = data.table_currency || data.matrix_currency || curLabel();
+  if (thUnit) thUnit.textContent = `Maliyet ${tblCur}/birim`;
   if (!tb) return;
   const tipOn = !!(data && (data.tip || data.matrix_qty_unit));
   tb.innerHTML = rows
@@ -2761,7 +2789,7 @@ function meRenderMeTable(rows, data) {
       <td>${escapeHtml(r.item_name || '')}</td>
       <td style="text-align:right"${titleAttr}>${escapeHtml(qtyFmt)}</td>
       <td style="text-align:right">${fmtN(r.consumption_pct, 2)}</td>
-      <td style="text-align:right">${Number.isFinite(Number(r.unit_cost_eur)) ? fmtN(r.unit_cost_eur, 4) + ' EUR' : '—'}</td>
+      <td style="text-align:right">${Number.isFinite(Number(r.unit_cost)) ? fmtN(r.unit_cost, 4) + ' ' + tblCur : '—'}</td>
       <td>${qClass ? `<span class="${qClass}">${qSpan}</span>` : `<span>${qSpan}</span>`}</td>
       <td>${escapeHtml(r.suggestion || '')}</td>
     </tr>`;
@@ -4953,6 +4981,37 @@ function resetKatUrunPanel() {
   if (tb) tb.innerHTML = '';
 }
 
+function katOncekiTarihStr(tarih, tip) {
+  if (!donemler?.length || !tarih) return null;
+  const ice = tip === 'icenek' || tip === 'icecek';
+  const filtered = donemler.filter((d) =>
+    ice ? Number(d.icenek_satir || 0) > 0 : Number(d.yiyecek_satir || 0) > 0
+  );
+  const sorted = [...filtered].sort((a, b) =>
+    b.yil - a.yil || b.ay_no - a.ay_no || String(b.tarih_str || '').localeCompare(String(a.tarih_str || ''))
+  );
+  const i = sorted.findIndex((d) => d.tarih_str === tarih);
+  if (i < 0 || i + 1 >= sorted.length) return null;
+  return sorted[i + 1].tarih_str;
+}
+
+function katUrunPhysNum(r, iceTip) {
+  if (iceTip) {
+    const cl = r.pp_cl != null ? parseFloat(r.pp_cl) : NaN;
+    return Number.isNaN(cl) ? null : cl;
+  }
+  const gr = r.pp_gr != null ? parseFloat(r.pp_gr) : NaN;
+  return Number.isNaN(gr) ? null : gr;
+}
+
+function renderMomChip(v, oncekiEtiket) {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  const ic = v > 0.01 ? 'arrow-up' : v < -0.01 ? 'arrow-down' : 'minus';
+  const cls = v > 0.01 ? 'kat-pp-mom-up' : v < -0.01 ? 'kat-pp-mom-down' : 'kat-pp-mom-flat';
+  const tit = oncekiEtiket ? `Önceki döneme göre (${oncekiEtiket})` : 'Önceki döneme göre';
+  return `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(tit)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(v), 1)}%</span>`;
+}
+
 async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   resetKatUrunStokChart();
   const hint = document.getElementById('kat-urun-hint');
@@ -4966,7 +5025,15 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
   if (thPp) thPp.textContent = `Pax başı (${curLabel()})`;
   const ice = tip === 'icenek' || tip === 'icecek';
-  if (thPpg) thPpg.textContent = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
+  const oncekiTarih = katOncekiTarihStr(tarih, tip);
+  const oncekiDon = oncekiTarih ? donemler.find((d) => d.tarih_str === oncekiTarih) : null;
+  const oncekiEtiket = oncekiDon
+    ? `${oncekiDon.ay} ${oncekiDon.yil}${oncekiTarih.endsWith('-15g') ? ' (15 gün)' : ''}`
+    : '';
+  if (thPpg) {
+    thPpg.textContent = ice ? 'Pax başı (mL)' : 'Pax başı (g)';
+    thPpg.title = oncekiEtiket ? `Yanındaki chip: ${oncekiEtiket} dönemine göre değişim` : '';
+  }
   if (thBf) thBf.textContent = `Birim fiyat (${curLabel()})`;
   if (thTut) thTut.textContent = `Tutar (${curLabel()})`;
   if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
@@ -4974,7 +5041,13 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
 
   try {
     const u = `/api/kategoriler/urunler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}&kategori=${encodeURIComponent(kategoriDb)}`;
-    const res = await fetch(u);
+    const prevU = oncekiTarih
+      ? `/api/kategoriler/urunler?tarih=${encodeURIComponent(oncekiTarih)}&tip=${encodeURIComponent(tip)}&kategori=${encodeURIComponent(kategoriDb)}`
+      : null;
+    const [res, resPrev] = await Promise.all([
+      fetch(u),
+      prevU ? fetch(prevU) : Promise.resolve(null),
+    ]);
     const list = await res.json();
     if (!res.ok) {
       toast(list.error || 'Ürün listesi alınamadı', 'error');
@@ -4988,6 +5061,16 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     }
     const sorted = [...list].sort((a, b) => (pickCur(b, 'pp') || 0) - (pickCur(a, 'pp') || 0));
     const iceTip = tip === 'icenek' || tip === 'icecek';
+    const prevMap = new Map();
+    if (resPrev?.ok) {
+      const prevList = await resPrev.json();
+      if (Array.isArray(prevList)) {
+        prevList.forEach((r) => {
+          const n = katUrunPhysNum(r, iceTip);
+          if (n != null) prevMap.set(r.stok_mali, n);
+        });
+      }
+    }
     if (hint) hint.style.display = 'none';
     if (wrap) wrap.style.display = '';
     document.getElementById('kat-urun-tablo').innerHTML = sorted.map(r => {
@@ -4995,19 +5078,28 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         ? (parseFloat(r.birim_fiyat_ort_eur) || 0)
         : (parseFloat(r.birim_fiyat_ort_tl) || 0);
       let physCell = '—';
+      let momChip = '';
+      const curPhys = katUrunPhysNum(r, iceTip);
       if (iceTip) {
-        const cl = r.pp_cl != null ? parseFloat(r.pp_cl) : NaN;
-        if (!Number.isNaN(cl)) physCell = `${fmtN(cl * 10, 0)}`;
-      } else {
-        const gr = r.pp_gr != null ? parseFloat(r.pp_gr) : NaN;
-        if (!Number.isNaN(gr)) physCell = fmtN(gr, 0);
+        if (curPhys != null) physCell = `${fmtN(curPhys * 10, 0)}`;
+      } else if (curPhys != null) {
+        physCell = fmtN(curPhys, 0);
       }
+      if (curPhys != null && prevMap.has(r.stok_mali)) {
+        const prevPhys = prevMap.get(r.stok_mali);
+        if (prevPhys != null && prevPhys > 0) {
+          momChip = renderMomChip(((curPhys - prevPhys) / prevPhys) * 100, oncekiEtiket);
+        }
+      }
+      const physHtml = momChip
+        ? `<span style="display:inline-flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap"><span>${physCell}</span>${momChip}</span>`
+        : physCell;
       return `
       <tr data-stok="${encodeURIComponent(r.stok_mali)}">
         <td>${escapeHtml(r.stok_mali)}</td>
         <td style="text-align:right">${fmtCur(bf)}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'pp'))}</td>
-        <td style="text-align:right">${physCell}</td>
+        <td style="text-align:right">${physHtml}</td>
         <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>`;
     }).join('');
@@ -5021,6 +5113,7 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         if (stok) loadKatUrunPaxHacimSeri(stok, tip);
       });
     });
+    vcLucide();
   } catch (e) {
     toast('Ürün listesi yüklenemedi', 'error');
     if (hint) { hint.textContent = 'Yüklenemedi.'; hint.style.display = ''; }

@@ -87,8 +87,21 @@ async function fetchAggregates(pool, baslangic, bitis, tip, sqlExcFinans) {
   return rows;
 }
 
+/** Yiyecek: tutar/kg; içecek: tutar/L (ham satır litre). */
+function unitCostPerDisplayUnit(normalizedTip, qtyRaw, qtyDisplay, amount) {
+  const icenekBranch = normalizedTip === 'icenek';
+  if (normalizedTip === 'yiyecek') {
+    const denom = qtyDisplay > 0 ? qtyDisplay : 0;
+    return denom > 0 ? amount / denom : NaN;
+  }
+  if (icenekBranch) {
+    return qtyRaw > 0 ? amount / qtyRaw : NaN;
+  }
+  return NaN;
+}
+
 /**
- * Tek tip için: yiyecek → kg ve EUR/kg; içecek → L ve EUR/L.
+ * Tek tip için: yiyecek → kg; içecek → L. Birim maliyet TL veya EUR (seçilen para birimi).
  */
 function buildAnalyzedItems(rawRows, thresholdPct, currency, normalizedTip) {
   const useEurAmt = currency === 'EUR';
@@ -109,21 +122,17 @@ function buildAnalyzedItems(rawRows, thresholdPct, currency, normalizedTip) {
     const rank = idx + 1;
     const consumptionTier = rank <= cutoff ? 'HIGH' : 'LOW';
 
-    /** Matris Y: kg veya litre */
     let qtyDisplay = 0;
     if (normalizedTip === 'yiyecek') qtyDisplay = qtyRaw / 1000;
     else if (icenekBranch) qtyDisplay = qtyRaw;
 
-    /** Matris X: EUR / birim (yiyecek EUR/kg, içecek EUR/L) */
-    let unitCostEUR = NaN;
-    if (normalizedTip === 'yiyecek') {
-      const denom = qtyDisplay > 0 ? qtyDisplay : 0;
-      const eurTot = +(r.amount_eur || 0) || 0;
-      unitCostEUR = denom > 0 ? eurTot / denom : NaN;
-    } else if (icenekBranch) {
-      const eurTot = +(r.amount_eur || 0) || 0;
-      unitCostEUR = qtyRaw > 0 ? eurTot / qtyRaw : NaN;
-    }
+    const tlTot = +(r.amount_tl || 0) || 0;
+    const eurTot = +(r.amount_eur || 0) || 0;
+    const unitCostTL = unitCostPerDisplayUnit(normalizedTip, qtyRaw, qtyDisplay, tlTot);
+    const unitCostEUR = unitCostPerDisplayUnit(normalizedTip, qtyRaw, qtyDisplay, eurTot);
+    const unitCost = useEurAmt ? unitCostEUR : unitCostTL;
+
+    const fin = (v) => (Number.isFinite(v) ? +v.toPrecision(14) : null);
 
     return {
       item_name: r.item_name,
@@ -137,7 +146,9 @@ function buildAnalyzedItems(rawRows, thresholdPct, currency, normalizedTip) {
       currency_amt_label: useEurAmt ? 'EUR' : 'TL',
       qty_display: +qtyDisplay.toFixed(6),
       qty_display_unit: normalizedTip === 'yiyecek' ? 'kg' : normalizedTip === 'icenek' ? 'L' : '—',
-      unit_cost_eur: Number.isFinite(unitCostEUR) ? +unitCostEUR.toPrecision(14) : null,
+      unit_cost: fin(unitCost),
+      unit_cost_tl: fin(unitCostTL),
+      unit_cost_eur: fin(unitCostEUR),
       rank,
       consumption_tier: consumptionTier,
       me_quadrant: null,
@@ -171,7 +182,7 @@ function annotateQuadrantsAndSuggest(poolRows, normalizedTip, medianX, medianY) 
   }
   const medOk = Number.isFinite(medianX) && Number.isFinite(medianY);
   return poolRows.map((r) => {
-    const x = Number(r.unit_cost_eur);
+    const x = Number(r.unit_cost);
     const y = Number(r.qty_display);
     const hasCost = Number.isFinite(x);
     const hasQtyMatris = Number.isFinite(y) && y > 0;
@@ -267,27 +278,27 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
 
   const poolQC = filterByQC(itemsFull, String(query.q || '').trim());
 
-  let median_unit_cost_eur = NaN;
+  let median_unit_cost = NaN;
   let median_qty_display = NaN;
 
   const validScatter = [];
   if (tip) {
     for (const r of poolQC) {
-      const x = Number(r.unit_cost_eur);
+      const x = Number(r.unit_cost);
       const y = Number(r.qty_display);
       if (Number.isFinite(x) && x >= 0 && Number.isFinite(y) && y > 0) validScatter.push(r);
     }
-    const xs = validScatter.map((r) => r.unit_cost_eur);
+    const xs = validScatter.map((r) => r.unit_cost);
     const ys = validScatter.map((r) => r.qty_display);
-    median_unit_cost_eur = medianOf(xs);
+    median_unit_cost = medianOf(xs);
     median_qty_display = medianOf(ys);
   }
 
-  const withQuad = annotateQuadrantsAndSuggest(poolQC, tip, median_unit_cost_eur, median_qty_display);
+  const withQuad = annotateQuadrantsAndSuggest(poolQC, tip, median_unit_cost, median_qty_display);
 
   const maliyet_eksik_urunler = tip
     ? withQuad
-        .filter((r) => !Number.isFinite(Number(r.unit_cost_eur)))
+        .filter((r) => !Number.isFinite(Number(r.unit_cost)))
         .map((r) => ({
           item_name: r.item_name,
           category: r.category || ''
@@ -305,7 +316,7 @@ async function computeFilteredItems(pool, query, sqlExcFinans) {
     tip,
     currency,
     itemsFullCount: itemsFull.length,
-    median_unit_cost_eur,
+    median_unit_cost,
     median_qty_display,
     matrix_qty_unit: tip === 'yiyecek' ? 'kg' : tip === 'icenek' ? 'L' : null,
     normalized_tip_for_matrix: tip,
@@ -328,7 +339,7 @@ async function analyze(pool, query, sqlExcFinans) {
     tip,
     currency,
     itemsFullCount,
-    median_unit_cost_eur,
+    median_unit_cost,
     median_qty_display,
     matrix_qty_unit,
     normalized_tip_for_matrix,
@@ -356,6 +367,8 @@ async function analyze(pool, query, sqlExcFinans) {
     suggestion: r.suggestion,
     consumption_tier: r.consumption_tier,
     rank: r.rank,
+    unit_cost: r.unit_cost,
+    unit_cost_tl: r.unit_cost_tl,
     unit_cost_eur: r.unit_cost_eur,
     qty_display: r.qty_display,
     qty_display_unit: r.qty_display_unit
@@ -364,8 +377,8 @@ async function analyze(pool, query, sqlExcFinans) {
   const matrixEligible = normalized_tip_for_matrix
     ? filtered.filter(
         (r) =>
-          Number.isFinite(Number(r.unit_cost_eur)) &&
-          Number(r.unit_cost_eur) >= 0 &&
+          Number.isFinite(Number(r.unit_cost)) &&
+          Number(r.unit_cost) >= 0 &&
           Number.isFinite(Number(r.qty_display)) &&
           Number(r.qty_display) > 0
       )
@@ -373,10 +386,12 @@ async function analyze(pool, query, sqlExcFinans) {
 
   const matrix = matrixEligible.map((r) => ({
     item_name: r.item_name,
-    x: Number(r.unit_cost_eur),
+    x: Number(r.unit_cost),
     y: Number(r.qty_display),
     me_quadrant: r.me_quadrant,
     quadrant_label: r.me_quadrant ? QUADRANT_LABELS[r.me_quadrant] || '' : '',
+    unit_cost: r.unit_cost,
+    unit_cost_tl: r.unit_cost_tl,
     unit_cost_eur: r.unit_cost_eur,
     qty_display: r.qty_display,
     qty_unit: matrix_qty_unit
@@ -397,12 +412,14 @@ async function analyze(pool, query, sqlExcFinans) {
     matrix: matrixOut,
     matrix_truncated,
     matrix_total_points: matrix.length,
-    matrix_currency: 'EUR',
+    matrix_currency: currency,
     matrix_qty_unit: matrix_qty_unit || null,
     matrix_tip_required: normalized_tip_for_matrix ? null : 'Matris için yiyecek veya içecek seçin (Hepsi değil).',
-    median_unit_cost_eur: Number.isFinite(median_unit_cost_eur) ? median_unit_cost_eur : null,
+    median_unit_cost: Number.isFinite(median_unit_cost) ? median_unit_cost : null,
+    median_unit_cost_eur:
+      currency === 'EUR' && Number.isFinite(median_unit_cost) ? median_unit_cost : null,
     median_qty_display: Number.isFinite(median_qty_display) ? median_qty_display : null,
-    quadrant_split_x: Number.isFinite(median_unit_cost_eur) ? median_unit_cost_eur : null,
+    quadrant_split_x: Number.isFinite(median_unit_cost) ? median_unit_cost : null,
     quadrant_split_y: Number.isFinite(median_qty_display) ? median_qty_display : null,
     rows,
     totalRows: filtered.length,
@@ -421,13 +438,15 @@ async function analyze(pool, query, sqlExcFinans) {
   };
 }
 
-function exportRowsToCsv(items, tipSelected) {
+function exportRowsToCsv(items, tipSelected, currency) {
+  const cur = currency === 'EUR' ? 'EUR' : 'TL';
+  const unitHdr = `unit_cost_${cur.toLowerCase()}`;
   const headers = [
     'item_name',
     'category',
     'raw_tuketim_miktar_satir',
     'consumption_pct',
-    'unit_cost_eur',
+    unitHdr,
     'qty_display_kg_or_L',
     'me_quadrant',
     'quadrant_label',
@@ -438,12 +457,13 @@ function exportRowsToCsv(items, tipSelected) {
   const tipOn = !!tipSelected;
   for (const r of items) {
     const qLab = quadrantCellLabel(r.me_quadrant, tipOn);
+    const uc = r.unit_cost != null ? r.unit_cost : cur === 'EUR' ? r.unit_cost_eur : r.unit_cost_tl;
     const row = [
       `"${String(r.item_name).replace(/"/g, '""')}"`,
       `"${String(r.category || '').replace(/"/g, '""')}"`,
       r.consumption_quantity_raw,
       r.consumption_pct,
-      r.unit_cost_eur != null ? r.unit_cost_eur : '',
+      uc != null ? uc : '',
       r.qty_display != null ? r.qty_display : '',
       `"${String(r.me_quadrant || '').replace(/"/g, '""')}"`,
       `"${String(qLab).replace(/"/g, '""')}"`,
@@ -455,21 +475,26 @@ function exportRowsToCsv(items, tipSelected) {
   return '\uFEFF' + lines.join('\n');
 }
 
-function exportRowsToXlsx(items, tipSelected) {
+function exportRowsToXlsx(items, tipSelected, currency) {
   const tipOn = !!tipSelected;
+  const cur = currency === 'EUR' ? 'EUR' : 'TL';
+  const unitKey = cur === 'EUR' ? 'birim_maliyet_eur' : 'birim_maliyet_tl';
   const ws = XLSX.utils.json_to_sheet(
-    items.map((r) => ({
-      urun: r.item_name,
-      kategori: r.category || '',
-      miktar_payi_pct: r.consumption_pct,
-      satir_ham_miktar: r.consumption_quantity_raw,
-      birim_maliyet_eur: Number.isFinite(Number(r.unit_cost_eur)) ? +Number(r.unit_cost_eur).toFixed(6) : '',
-      tuketim_kg_veya_L: r.qty_display != null ? +Number(r.qty_display).toFixed(6) : '',
-      ceyrek_kodu: r.me_quadrant || '',
-      ceyrek: quadrantCellLabel(r.me_quadrant, tipOn),
-      tuketim_kademesi: r.consumption_tier,
-      oneri: r.suggestion
-    }))
+    items.map((r) => {
+      const uc = r.unit_cost != null ? r.unit_cost : cur === 'EUR' ? r.unit_cost_eur : r.unit_cost_tl;
+      return {
+        urun: r.item_name,
+        kategori: r.category || '',
+        miktar_payi_pct: r.consumption_pct,
+        satir_ham_miktar: r.consumption_quantity_raw,
+        [unitKey]: Number.isFinite(Number(uc)) ? +Number(uc).toFixed(6) : '',
+        tuketim_kg_veya_L: r.qty_display != null ? +Number(r.qty_display).toFixed(6) : '',
+        ceyrek_kodu: r.me_quadrant || '',
+        ceyrek: quadrantCellLabel(r.me_quadrant, tipOn),
+        tuketim_kademesi: r.consumption_tier,
+        oneri: r.suggestion
+      };
+    })
   );
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Menu Engineering');
@@ -477,15 +502,15 @@ function exportRowsToXlsx(items, tipSelected) {
 }
 
 async function exportFiltered(pool, query, sqlExcFinans, format) {
-  const { filtered, tip } = await computeFilteredItems(pool, query, sqlExcFinans);
+  const { filtered, tip, currency } = await computeFilteredItems(pool, query, sqlExcFinans);
   const fmt = String(format || 'csv').toLowerCase();
   if (fmt === 'xlsx') {
     return {
-      body: exportRowsToXlsx(filtered, tip),
+      body: exportRowsToXlsx(filtered, tip, currency),
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     };
   }
-  return { body: exportRowsToCsv(filtered, tip), contentType: 'text/csv; charset=utf-8' };
+  return { body: exportRowsToCsv(filtered, tip, currency), contentType: 'text/csv; charset=utf-8' };
 }
 
 module.exports = {
