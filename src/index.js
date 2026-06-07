@@ -1234,28 +1234,31 @@ app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
           ${tipHistAliased}
         GROUP BY t.kategori, t.stok_mali, t.tarih_str, t.yil, t.ay_no
       ),
-      sku_son AS (
+      sku_at_son AS (
         SELECT h.kategori, h.stok_mali, h.miktar AS son_miktar
         FROM hist h
         JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
       ),
-      sku_ilk_try AS (
+      sku_at_ilk AS (
         SELECT h.kategori, h.stok_mali, h.miktar AS ilk_miktar
         FROM hist h
         JOIN ilk i ON i.kategori = h.kategori AND h.tarih_str = i.ilk_donem
       ),
+      sku_keys AS (
+        SELECT kategori, stok_mali FROM sku_at_ilk
+        UNION
+        SELECT kategori, stok_mali FROM sku_at_son
+      ),
       sku_resolved AS (
         SELECT
-          ss.kategori,
-          ss.stok_mali,
-          ss.son_miktar,
-          it.ilk_miktar AS ref_miktar
-        FROM sku_son ss
-        INNER JOIN sku_ilk_try it ON it.kategori = ss.kategori AND it.stok_mali = ss.stok_mali
-        WHERE it.ilk_miktar IS NOT NULL
-          AND it.ilk_miktar > 0
-          AND ss.son_miktar IS NOT NULL
-          AND ss.son_miktar > 0
+          k.kategori,
+          k.stok_mali,
+          COALESCE(si.ilk_miktar, 0) AS ref_miktar,
+          COALESCE(ss.son_miktar, 0) AS son_miktar
+        FROM sku_keys k
+        LEFT JOIN sku_at_ilk si ON si.kategori = k.kategori AND si.stok_mali = k.stok_mali
+        LEFT JOIN sku_at_son ss ON ss.kategori = k.kategori AND ss.stok_mali = k.stok_mali
+        WHERE COALESCE(si.ilk_miktar, 0) > 0 OR COALESCE(ss.son_miktar, 0) > 0
       ),
       sku_fin AS (
         SELECT
@@ -1327,18 +1330,21 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
       ilk_row AS (
         SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $2
       ),
+      sku_keys AS (
+        SELECT stok_mali FROM son_row
+        UNION
+        SELECT stok_mali FROM ilk_row
+      ),
       ref_merged AS (
         SELECT
-          sr.stok_mali,
-          sr.miktar AS son_miktar,
-          ir.miktar AS ref_miktar,
+          k.stok_mali,
+          COALESCE(sr.miktar, 0) AS son_miktar,
+          COALESCE(ir.miktar, 0) AS ref_miktar,
           $2::text AS ref_donem
-        FROM son_row sr
-        INNER JOIN ilk_row ir ON ir.stok_mali = sr.stok_mali
-        WHERE ir.miktar IS NOT NULL
-          AND ir.miktar > 0
-          AND sr.miktar IS NOT NULL
-          AND sr.miktar > 0
+        FROM sku_keys k
+        LEFT JOIN son_row sr ON sr.stok_mali = k.stok_mali
+        LEFT JOIN ilk_row ir ON ir.stok_mali = k.stok_mali
+        WHERE COALESCE(ir.miktar, 0) > 0 OR COALESCE(sr.miktar, 0) > 0
       )
       SELECT
         stok_mali,
@@ -1352,7 +1358,7 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
         END AS degisim_yuzde
       FROM ref_merged
       ORDER BY
-        ABS(COALESCE((son_miktar - ref_miktar) / NULLIF(ref_miktar, 0) * 100, 0)) DESC NULLS LAST,
+        GREATEST(ref_miktar, son_miktar) DESC,
         stok_mali ASC
       `,
       params

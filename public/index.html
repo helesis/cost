@@ -1295,7 +1295,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
             <div class="card-title" style="margin-bottom:4px">Kategori Bazında Miktar Değişimi</div>
-            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem karşılaştırması. Yalnızca <strong>her iki dönemde de</strong> miktarı olan SKU’lar (eşit ağırlıklı ortalama); başlangıç ayında veri yoksa ürün listelenmez. Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem karşılaştırması. Dönemlerden yalnız birinde olan ürünler de listelenir; eksik taraf <strong>0</strong> sayılır ve ortalamaya dahil edilir. Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="form-select" id="kat-miktar-baslangic" style="width:130px"></select>
@@ -6821,7 +6821,7 @@ async function katMiktarToggleRow(tr) {
     }
     if (!Array.isArray(urunler) || !urunler.length) {
       ic.innerHTML =
-        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu kategoride hem başlangıç hem bitiş döneminde miktarı olan ürün yok.</div>';
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu kategoride seçili dönemlerde miktar kaydı olan ürün yok.</div>';
       vcLucide();
       return;
     }
@@ -6833,8 +6833,8 @@ async function katMiktarToggleRow(tr) {
         <thead><tr><th>Ürün</th><th>Kaynak</th><th style="text-align:right">${thR}</th><th style="text-align:right">${thS}</th><th style="text-align:right">Δ %</th></tr></thead>
         <tbody>${urunler
           .map((u) => {
-            const ilkN = u.ilk_donem_miktar != null ? parseFloat(u.ilk_donem_miktar) : null;
-            const sonN = u.son_donem_miktar != null ? parseFloat(u.son_donem_miktar) : null;
+            const ilkN = u.ilk_donem_miktar != null ? parseFloat(u.ilk_donem_miktar) : 0;
+            const sonN = u.son_donem_miktar != null ? parseFloat(u.son_donem_miktar) : 0;
             const dlt = u.degisim_yuzde;
             const rd = u.ref_donem != null && String(u.ref_donem) !== '' ? String(u.ref_donem) : '—';
             return `<tr>
@@ -6905,7 +6905,7 @@ async function loadKategoriMiktar() {
       const nUrun = parseInt(String(r.n_urun || '0'), 10) || 0;
       const ilkRaw = r.ilk_donem_miktar;
       const sonRaw = r.son_donem_miktar;
-      const hasAgg = nUrun > 0 && ilkRaw != null && sonRaw != null;
+      const hasAgg = nUrun > 0;
       const dlt = r.degisim_yuzde;
       const dk = encodeURIComponent(r.kategori || '');
       const dik = escapeHtml(String(r.ilk_donem || ''));
@@ -6913,8 +6913,8 @@ async function loadKategoriMiktar() {
       return `<tr class="kat-miktar-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
         <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong>${nUrun ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${nUrun} ürün)</span>` : ''}</td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
-        <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw, tip, r.kategori) : '—'}</td>
-        <td style="text-align:right">${hasAgg ? fmtMiktarQty(sonRaw, tip, r.kategori) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw != null ? ilkRaw : 0, tip, r.kategori) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(sonRaw != null ? sonRaw : 0, tip, r.kategori) : '—'}</td>
         <td style="text-align:right">${hasAgg ? renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null) : '—'}</td>
       </tr>`;
     }).join('');
