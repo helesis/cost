@@ -1239,41 +1239,21 @@ app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
         FROM hist h
         JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
       ),
-      son_meta AS (
-        SELECT h.kategori, MAX(h.yil) AS sy, MAX(h.ay_no) AS sm
-        FROM hist h
-        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
-        GROUP BY h.kategori
-      ),
       sku_ilk_try AS (
         SELECT h.kategori, h.stok_mali, h.miktar AS ilk_miktar
         FROM hist h
         JOIN ilk i ON i.kategori = h.kategori AND h.tarih_str = i.ilk_donem
-      ),
-      sku_ref_lb AS (
-        SELECT DISTINCT ON (ss.kategori, ss.stok_mali)
-          ss.kategori,
-          ss.stok_mali,
-          h.tarih_str AS ref_ts,
-          h.miktar AS ref_miktar
-        FROM sku_son ss
-        JOIN son_meta sm ON sm.kategori = ss.kategori
-        JOIN hist h ON h.kategori = ss.kategori
-          AND h.stok_mali = ss.stok_mali
-          AND (h.yil < sm.sy OR (h.yil = sm.sy AND h.ay_no < sm.sm))
-        ORDER BY ss.kategori, ss.stok_mali, h.yil DESC, h.ay_no DESC, h.tarih_str DESC
       ),
       sku_resolved AS (
         SELECT
           ss.kategori,
           ss.stok_mali,
           ss.son_miktar,
-          COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) AS ref_miktar
+          it.ilk_miktar AS ref_miktar
         FROM sku_son ss
-        LEFT JOIN sku_ilk_try it ON it.kategori = ss.kategori AND it.stok_mali = ss.stok_mali
-        LEFT JOIN sku_ref_lb lb ON lb.kategori = ss.kategori AND lb.stok_mali = ss.stok_mali
-        WHERE COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) IS NOT NULL
-          AND COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) > 0
+        INNER JOIN sku_ilk_try it ON it.kategori = ss.kategori AND it.stok_mali = ss.stok_mali
+        WHERE it.ilk_miktar IS NOT NULL
+          AND it.ilk_miktar > 0
           AND ss.son_miktar IS NOT NULL
           AND ss.son_miktar > 0
       ),
@@ -1341,43 +1321,22 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
         ${catWhere}
         GROUP BY t.stok_mali, t.tarih_str, t.yil, t.ay_no
       ),
-      son_meta AS (
-        SELECT MAX(yil) AS sy, MAX(ay_no) AS sm FROM cat_base WHERE tarih_str = $3
-      ),
       son_row AS (
         SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $3
       ),
       ilk_row AS (
         SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $2
       ),
-      before_son AS (
-        SELECT cb.*
-        FROM cat_base cb
-        CROSS JOIN son_meta sm
-        WHERE cb.yil < sm.sy OR (cb.yil = sm.sy AND cb.ay_no < sm.sm)
-      ),
-      latest_ref AS (
-        SELECT DISTINCT ON (stok_mali)
-          stok_mali,
-          tarih_str AS ref_ts,
-          miktar AS ref_miktar
-        FROM before_son
-        ORDER BY stok_mali, yil DESC, ay_no DESC, tarih_str DESC
-      ),
       ref_merged AS (
         SELECT
           sr.stok_mali,
           sr.miktar AS son_miktar,
-          COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) AS ref_miktar,
-          CASE
-            WHEN ir.miktar IS NOT NULL AND ir.miktar > 0 THEN $2::text
-            ELSE lr.ref_ts
-          END AS ref_donem
+          ir.miktar AS ref_miktar,
+          $2::text AS ref_donem
         FROM son_row sr
-        LEFT JOIN ilk_row ir ON ir.stok_mali = sr.stok_mali
-        LEFT JOIN latest_ref lr ON lr.stok_mali = sr.stok_mali
-        WHERE COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) IS NOT NULL
-          AND COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) > 0
+        INNER JOIN ilk_row ir ON ir.stok_mali = sr.stok_mali
+        WHERE ir.miktar IS NOT NULL
+          AND ir.miktar > 0
           AND sr.miktar IS NOT NULL
           AND sr.miktar > 0
       )
