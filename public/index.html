@@ -1216,7 +1216,7 @@
               <option value="yiyecek">Yiyecek</option>
               <option value="icenek">İçecek</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyat()">Yenile</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyatVeMiktar()">Yenile</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -1231,6 +1231,30 @@
               </tr>
             </thead>
             <tbody id="kat-fiyat-tablo"><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Yükleniyor...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Kategori Bazında Miktar Değişimi</div>
+            <div style="font-size:12px;color:var(--text-dim)">Yukarıdaki dönem aralığı ile aynı. Ortalamalar: yalnızca son dönemde miktarı olan ve öncesinde referans miktarı bulunan SKU’lar (eşit ağırlıklı ürün ortalaması). Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyatVeMiktar()">Yenile</button>
+        </div>
+        <div class="table-wrap">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Aralık</th>
+                <th style="text-align:right" id="kat-miktar-th-ilk">Ref. ort.</th>
+                <th style="text-align:right" id="kat-miktar-th-son">Son ort.</th>
+                <th style="text-align:right">Δ %</th>
+              </tr>
+            </thead>
+            <tbody id="kat-miktar-tablo"><tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Yükleniyor...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -1970,7 +1994,7 @@ function vcRerenderActive() {
     else if (id === 'page-trend')    renderTrend();
     else if (id === 'page-kategori') renderKategori();
     else if (id === 'page-urun')     { if (document.getElementById('urun-q').value.trim()) urunAra(); }
-    else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyat(); }
+    else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyatVeMiktar(); }
     else if (id === 'page-yillik')   yillikAnalizYenile();
     else if (id === 'page-tuketim-talep') loadTalepAnaliz();
     else if (id === 'page-menu-engineering') loadMenuEngineeringData(false);
@@ -6051,8 +6075,9 @@ function initFiyatPage() {
       });
     }
     bindKategoriFiyatExpandOnce();
+    bindKategoriMiktarExpandOnce();
     fiyatPageInited = true;
-    loadKategoriFiyat();
+    loadKategoriFiyatVeMiktar();
   }
   const q = document.getElementById('fiyat-q');
   if (q) setTimeout(() => q.focus(), 50);
@@ -6318,6 +6343,35 @@ function bindKategoriFiyatExpandOnce() {
   });
 }
 
+function katMiktarTipFromKategori(kategori) {
+  const u = String(kategori || '').toUpperCase();
+  if (u.includes('ICENEK') || u.includes('İÇECEK') || u.includes('ICECEK')) return 'icenek';
+  return 'yiyecek';
+}
+
+function katMiktarBirimLabel(tipSel) {
+  if (tipSel === 'icenek') return 'L';
+  if (tipSel === 'yiyecek') return 'kg';
+  return '';
+}
+
+function katMiktarKind(tipSel, kategori) {
+  if (tipSel === 'icenek' || tipSel === 'yiyecek') return tipSel;
+  return katMiktarTipFromKategori(kategori);
+}
+
+function fmtMiktarQty(v, tipSel, kategori) {
+  if (v === null || v === undefined || v === '' || isNaN(v)) return '—';
+  const n = parseFloat(v);
+  const kind = katMiktarKind(tipSel, kategori);
+  if (kind === 'icenek') return `${fmtN(n, 2)} L`;
+  return `${fmtN(n / 1000, 2)} kg`;
+}
+
+function loadKategoriFiyatVeMiktar() {
+  return Promise.all([loadKategoriFiyat(), loadKategoriMiktar()]);
+}
+
 async function loadKategoriFiyat() {
   const bas = document.getElementById('kat-fiyat-baslangic').value;
   const bit = document.getElementById('kat-fiyat-bitis').value;
@@ -6358,6 +6412,141 @@ async function loadKategoriFiyat() {
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
         <td style="text-align:right">${hasAgg && !isNaN(ilk) ? fmtCur(ilk) : '—'}</td>
         <td style="text-align:right">${hasAgg && !isNaN(son) ? fmtCur(son) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null) : '—'}</td>
+      </tr>`;
+    }).join('');
+    vcLucide();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:20px">Hata: ${err.message}</td></tr>`;
+  }
+}
+
+async function katMiktarToggleRow(tr) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('kat-fiyat-urun-detay')) {
+    next.remove();
+    tr.classList.remove('kat-fiyat-expanded');
+    const tw = tr.querySelector('.kat-fiyat-twist');
+    if (tw) tw.textContent = '▸';
+    return;
+  }
+  const k = katFiyatDecodeK(tr.getAttribute('data-k') || '');
+  const ilk = tr.getAttribute('data-ilk') || '';
+  const son = tr.getAttribute('data-son') || '';
+  const tip = document.getElementById('kat-fiyat-tip')?.value || '';
+  const det = document.createElement('tr');
+  det.className = 'kat-fiyat-urun-detay';
+  det.innerHTML = '<td colspan="5"><div class="kat-fiyat-urun-ic"><div class="loading" style="padding:12px">Yükleniyor…</div></div></td>';
+  tr.after(det);
+  tr.classList.add('kat-fiyat-expanded');
+  const tw = tr.querySelector('.kat-fiyat-twist');
+  if (tw) tw.textContent = '▾';
+  try {
+    const params = new URLSearchParams({ kategori: k, ilk_donem: ilk, son_donem: son });
+    if (tip) params.append('tip', tip);
+    const urunler = await fetch('/api/miktar-analizi/kategori-urunleri?' + params.toString()).then((r) => r.json());
+    const ic = det.querySelector('.kat-fiyat-urun-ic');
+    if (!ic) return;
+    if (urunler && urunler.error) {
+      ic.innerHTML = `<div style="padding:12px;color:var(--red)">${escapeHtml(urunler.error)}</div>`;
+      vcLucide();
+      return;
+    }
+    if (!Array.isArray(urunler) || !urunler.length) {
+      ic.innerHTML =
+        '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu kategoride son dönemde miktarı olan ve öncesinde referans miktarı bulunan ürün yok.</div>';
+      vcLucide();
+      return;
+    }
+    const birim = katMiktarBirimLabel(tip) || 'birim';
+    const thR = tip ? `Ref. (${birim})` : 'Ref.';
+    const thS = tip ? `Son (${birim})` : 'Son';
+    ic.innerHTML = `
+      <table class="search-results" style="font-size:12px;margin:0">
+        <thead><tr><th>Ürün</th><th>Kaynak</th><th style="text-align:right">${thR}</th><th style="text-align:right">${thS}</th><th style="text-align:right">Δ %</th></tr></thead>
+        <tbody>${urunler
+          .map((u) => {
+            const ilkN = u.ilk_donem_miktar != null ? parseFloat(u.ilk_donem_miktar) : null;
+            const sonN = u.son_donem_miktar != null ? parseFloat(u.son_donem_miktar) : null;
+            const dlt = u.degisim_yuzde;
+            const rd = u.ref_donem != null && String(u.ref_donem) !== '' ? String(u.ref_donem) : '—';
+            return `<tr>
+            <td>${fiyatPaxUrunHlHtml(u.stok_mali || '', tip)}</td>
+            <td>${rd !== '—' ? `<span class="kat-fiyat-ref-chip">${escapeHtml(rd)}</span>` : '—'}</td>
+            <td style="text-align:right">${fmtMiktarQty(ilkN, tip, k)}</td>
+            <td style="text-align:right">${fmtMiktarQty(sonN, tip, k)}</td>
+            <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
+          </tr>`;
+          })
+          .join('')}</tbody>
+      </table>`;
+    vcLucide();
+  } catch (e) {
+    const ic = det.querySelector('.kat-fiyat-urun-ic');
+    if (ic) ic.innerHTML = `<div style="padding:12px;color:var(--red)">${escapeHtml(e.message)}</div>`;
+    vcLucide();
+  }
+}
+
+function katMiktarOnTbodyClick(e) {
+  const tr = e.target.closest('tr.kat-miktar-kat-row');
+  if (!tr) return;
+  void katMiktarToggleRow(tr);
+}
+
+function bindKategoriMiktarExpandOnce() {
+  const tb = document.getElementById('kat-miktar-tablo');
+  if (!tb || tb.dataset.expandBound === '1') return;
+  tb.dataset.expandBound = '1';
+  tb.addEventListener('click', katMiktarOnTbodyClick);
+  tb.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const tr = e.target.closest('tr.kat-miktar-kat-row');
+    if (!tr || !tb.contains(tr)) return;
+    e.preventDefault();
+    void katMiktarToggleRow(tr);
+  });
+}
+
+async function loadKategoriMiktar() {
+  const bas = document.getElementById('kat-fiyat-baslangic').value;
+  const bit = document.getElementById('kat-fiyat-bitis').value;
+  const tip = document.getElementById('kat-fiyat-tip').value;
+  const tbody = document.getElementById('kat-miktar-tablo');
+
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px"><div class="spinner" style="display:inline-block"></div> Yükleniyor...</td></tr>`;
+
+  try {
+    const params = new URLSearchParams();
+    if (bas) params.append('tarih_baslangic', bas);
+    if (bit) params.append('tarih_bitis', bit);
+    if (tip) params.append('tip', tip);
+    const rows = await fetch('/api/miktar-analizi/kategoriler?' + params).then(r => r.json());
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Veri bulunamadı</td></tr>`;
+      return;
+    }
+
+    const birim = katMiktarBirimLabel(tip);
+    const birimSuf = birim ? ` (${birim})` : '';
+    document.getElementById('kat-miktar-th-ilk').textContent = `Ref. ort.${birimSuf}`;
+    document.getElementById('kat-miktar-th-son').textContent = `Son ort.${birimSuf}`;
+
+    tbody.innerHTML = rows.map(r => {
+      const nUrun = parseInt(String(r.n_urun || '0'), 10) || 0;
+      const ilkRaw = r.ilk_donem_miktar;
+      const sonRaw = r.son_donem_miktar;
+      const hasAgg = nUrun > 0 && ilkRaw != null && sonRaw != null;
+      const dlt = r.degisim_yuzde;
+      const dk = encodeURIComponent(r.kategori || '');
+      const dik = escapeHtml(String(r.ilk_donem || ''));
+      const dson = escapeHtml(String(r.son_donem || ''));
+      return `<tr class="kat-fiyat-kat-row kat-miktar-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
+        <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong>${nUrun ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${nUrun} ürün)</span>` : ''}</td>
+        <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw, tip, r.kategori) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(sonRaw, tip, r.kategori) : '—'}</td>
         <td style="text-align:right">${hasAgg ? renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null) : '—'}</td>
       </tr>`;
     }).join('');

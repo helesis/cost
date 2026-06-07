@@ -1110,6 +1110,234 @@ app.get('/api/fiyat-analizi/kategori-urunleri', async (req, res) => {
   }
 });
 
+// ── API: Miktar Analizi — kategori bazında dönemler arası tüketim miktarı ───
+app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
+  const { tarih_baslangic, tarih_bitis, tip } = req.query;
+  try {
+    const params = [];
+    let where = `WHERE COALESCE(tuk_miktar, 0) > 0 AND kategori IS NOT NULL AND tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
+    if (tarih_baslangic) {
+      where += ` AND tarih_str >= $${params.length + 1}`;
+      params.push(tarih_baslangic);
+    }
+    let bitisParamNum = null;
+    if (tarih_bitis) {
+      bitisParamNum = params.length + 1;
+      where += ` AND tarih_str <= $${bitisParamNum}`;
+      params.push(tarih_bitis);
+    }
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
+
+    const histBitisClause = bitisParamNum != null ? ` AND t.tarih_str <= $${bitisParamNum}` : '';
+    const tipHistAliased = tipF.clause ? tipF.clause.replace(/\btip\b/g, 't.tip') : '';
+
+    const { rows } = await pool.query(
+      `
+      WITH donemler AS (
+        SELECT kategori, tarih_str, yil, ay_no
+        FROM fb_cost.tuketim
+        ${where}
+        GROUP BY kategori, tarih_str, yil, ay_no
+      ),
+      siralanmis AS (
+        SELECT
+          kategori, tarih_str, yil, ay_no,
+          ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY yil, ay_no) AS rn_ilk,
+          ROW_NUMBER() OVER (PARTITION BY kategori ORDER BY yil DESC, ay_no DESC) AS rn_son
+        FROM donemler
+      ),
+      ilk AS (SELECT kategori, tarih_str AS ilk_donem FROM siralanmis WHERE rn_ilk = 1),
+      son AS (SELECT kategori, tarih_str AS son_donem FROM siralanmis WHERE rn_son = 1),
+      hist AS (
+        SELECT
+          t.kategori,
+          t.stok_mali,
+          t.tarih_str,
+          t.yil,
+          t.ay_no,
+          SUM(t.tuk_miktar)::NUMERIC AS miktar
+        FROM fb_cost.tuketim t
+        WHERE COALESCE(t.tuk_miktar, 0) > 0
+          AND t.kategori IS NOT NULL
+          AND t.tarih_str NOT LIKE '%-15g'
+          AND (${SQL_EXC_FINANS_PP})
+          ${histBitisClause}
+          ${tipHistAliased}
+        GROUP BY t.kategori, t.stok_mali, t.tarih_str, t.yil, t.ay_no
+      ),
+      sku_son AS (
+        SELECT h.kategori, h.stok_mali, h.miktar AS son_miktar
+        FROM hist h
+        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
+      ),
+      son_meta AS (
+        SELECT h.kategori, MAX(h.yil) AS sy, MAX(h.ay_no) AS sm
+        FROM hist h
+        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
+        GROUP BY h.kategori
+      ),
+      sku_ilk_try AS (
+        SELECT h.kategori, h.stok_mali, h.miktar AS ilk_miktar
+        FROM hist h
+        JOIN ilk i ON i.kategori = h.kategori AND h.tarih_str = i.ilk_donem
+      ),
+      sku_ref_lb AS (
+        SELECT DISTINCT ON (ss.kategori, ss.stok_mali)
+          ss.kategori,
+          ss.stok_mali,
+          h.tarih_str AS ref_ts,
+          h.miktar AS ref_miktar
+        FROM sku_son ss
+        JOIN son_meta sm ON sm.kategori = ss.kategori
+        JOIN hist h ON h.kategori = ss.kategori
+          AND h.stok_mali = ss.stok_mali
+          AND (h.yil < sm.sy OR (h.yil = sm.sy AND h.ay_no < sm.sm))
+        ORDER BY ss.kategori, ss.stok_mali, h.yil DESC, h.ay_no DESC, h.tarih_str DESC
+      ),
+      sku_resolved AS (
+        SELECT
+          ss.kategori,
+          ss.stok_mali,
+          ss.son_miktar,
+          COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) AS ref_miktar
+        FROM sku_son ss
+        LEFT JOIN sku_ilk_try it ON it.kategori = ss.kategori AND it.stok_mali = ss.stok_mali
+        LEFT JOIN sku_ref_lb lb ON lb.kategori = ss.kategori AND lb.stok_mali = ss.stok_mali
+        WHERE COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) IS NOT NULL
+          AND COALESCE(NULLIF(it.ilk_miktar, 0), lb.ref_miktar) > 0
+          AND ss.son_miktar IS NOT NULL
+          AND ss.son_miktar > 0
+      ),
+      sku_fin AS (
+        SELECT
+          kategori,
+          COUNT(*)::int AS n_urun,
+          AVG(ref_miktar) AS ref_avg_miktar,
+          AVG(son_miktar) AS son_avg_miktar
+        FROM sku_resolved
+        GROUP BY kategori
+      )
+      SELECT
+        ik.kategori,
+        ik.ilk_donem,
+        sn.son_donem,
+        sf.ref_avg_miktar AS ilk_donem_miktar,
+        sf.son_avg_miktar AS son_donem_miktar,
+        sf.n_urun,
+        CASE WHEN sf.ref_avg_miktar > 0
+             THEN ((sf.son_avg_miktar - sf.ref_avg_miktar) / sf.ref_avg_miktar * 100)::NUMERIC
+             ELSE NULL END AS degisim_yuzde
+      FROM ilk ik
+      JOIN son sn USING (kategori)
+      LEFT JOIN sku_fin sf ON sf.kategori = ik.kategori
+      ORDER BY ABS(COALESCE(((sf.son_avg_miktar - sf.ref_avg_miktar) / NULLIF(sf.ref_avg_miktar, 0) * 100), 0)) DESC NULLS LAST
+      `,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('miktar-analizi/kategoriler hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
+  const kategori = (req.query.kategori || '').trim();
+  const ilk = (req.query.ilk_donem || '').trim();
+  const son = (req.query.son_donem || '').trim();
+  const tip = req.query.tip;
+  if (!kategori) return res.status(400).json({ error: 'kategori zorunlu' });
+  if (!ilk || !son) return res.status(400).json({ error: 'ilk_donem ve son_donem zorunlu' });
+  const re = /^\d{4}-\d{2}(-15g)?$/;
+  if (!re.test(ilk) || !re.test(son)) return res.status(400).json({ error: 'Geçersiz dönem' });
+  try {
+    const params = [kategori, ilk, son];
+    const tipF = tipFilterSql(params, tip);
+    if (!tipF.ok) return res.json([]);
+    const tipAliased = tipF.clause ? tipF.clause.replace(/\btip\b/g, 't.tip') : '';
+    let catWhere = `WHERE t.kategori = $1 AND t.tarih_str <= $3 AND COALESCE(t.tuk_miktar, 0) > 0 AND t.tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
+    catWhere += tipAliased;
+
+    const { rows } = await pool.query(
+      `
+      WITH cat_base AS (
+        SELECT
+          t.stok_mali,
+          t.tarih_str,
+          t.yil,
+          t.ay_no,
+          SUM(t.tuk_miktar)::NUMERIC AS miktar
+        FROM fb_cost.tuketim t
+        ${catWhere}
+        GROUP BY t.stok_mali, t.tarih_str, t.yil, t.ay_no
+      ),
+      son_meta AS (
+        SELECT MAX(yil) AS sy, MAX(ay_no) AS sm FROM cat_base WHERE tarih_str = $3
+      ),
+      son_row AS (
+        SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $3
+      ),
+      ilk_row AS (
+        SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $2
+      ),
+      before_son AS (
+        SELECT cb.*
+        FROM cat_base cb
+        CROSS JOIN son_meta sm
+        WHERE cb.yil < sm.sy OR (cb.yil = sm.sy AND cb.ay_no < sm.sm)
+      ),
+      latest_ref AS (
+        SELECT DISTINCT ON (stok_mali)
+          stok_mali,
+          tarih_str AS ref_ts,
+          miktar AS ref_miktar
+        FROM before_son
+        ORDER BY stok_mali, yil DESC, ay_no DESC, tarih_str DESC
+      ),
+      ref_merged AS (
+        SELECT
+          sr.stok_mali,
+          sr.miktar AS son_miktar,
+          COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) AS ref_miktar,
+          CASE
+            WHEN ir.miktar IS NOT NULL AND ir.miktar > 0 THEN $2::text
+            ELSE lr.ref_ts
+          END AS ref_donem
+        FROM son_row sr
+        LEFT JOIN ilk_row ir ON ir.stok_mali = sr.stok_mali
+        LEFT JOIN latest_ref lr ON lr.stok_mali = sr.stok_mali
+        WHERE COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) IS NOT NULL
+          AND COALESCE(NULLIF(ir.miktar, 0), lr.ref_miktar) > 0
+          AND sr.miktar IS NOT NULL
+          AND sr.miktar > 0
+      )
+      SELECT
+        stok_mali,
+        ref_donem,
+        ref_miktar AS ilk_donem_miktar,
+        son_miktar AS son_donem_miktar,
+        CASE
+          WHEN ref_miktar > 0
+          THEN ((son_miktar - ref_miktar) / ref_miktar * 100)::NUMERIC
+          ELSE NULL
+        END AS degisim_yuzde
+      FROM ref_merged
+      ORDER BY
+        ABS(COALESCE((son_miktar - ref_miktar) / NULLIF(ref_miktar, 0) * 100, 0)) DESC NULLS LAST,
+        stok_mali ASC
+      `,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('miktar-analizi/kategori-urunleri:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // YILLIK ANALİZ API'LERİ
 // ─────────────────────────────────────────────────────────────────────────────
