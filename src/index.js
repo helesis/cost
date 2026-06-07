@@ -1110,6 +1110,74 @@ app.get('/api/fiyat-analizi/kategori-urunleri', async (req, res) => {
   }
 });
 
+// ── API: Miktar Analizi — arama kutusu için ürün adayları (chip) ─────────────
+app.get('/api/miktar-analizi/urun-adaylari', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  const tip = req.query.tip;
+  if (!q) return res.json([]);
+  try {
+    const params = [`%${q}%`];
+    let where = `WHERE stok_mali ILIKE $1 AND COALESCE(tuk_miktar, 0) > 0 AND (${SQL_EXC_FINANS_PP})`;
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
+    const { rows } = await pool.query(
+      `
+      SELECT DISTINCT ON (stok_mali) stok_mali, tip, kategori
+      FROM fb_cost.tuketim
+      ${where}
+      ORDER BY stok_mali, yil DESC, ay_no DESC
+      LIMIT 35
+      `,
+      params
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('miktar-analizi/urun-adaylari:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── API: Miktar Analizi — ürün bazında dönemsel tüketim miktarı serisi ───────
+app.get('/api/miktar-analizi', async (req, res) => {
+  const { stok_mali, tip } = req.query;
+  const tam = req.query.tam === '1' || req.query.tam === 'true';
+  if (!stok_mali || !stok_mali.trim()) {
+    return res.status(400).json({ error: 'stok_mali parametresi zorunlu' });
+  }
+  try {
+    const raw = stok_mali.trim();
+    const params = [];
+    let where = '';
+    if (tam) {
+      params.push(raw);
+      where = `WHERE stok_mali = $1 AND COALESCE(tuk_miktar, 0) > 0 AND (${SQL_EXC_FINANS_PP})`;
+    } else {
+      params.push(`%${raw}%`);
+      where = `WHERE stok_mali ILIKE $1 AND COALESCE(tuk_miktar, 0) > 0 AND (${SQL_EXC_FINANS_PP})`;
+    }
+    const tipF = tipFilterSql(params, tip);
+    where += tipF.clause;
+
+    const { rows } = await pool.query(
+      `
+      SELECT
+        tarih_str, yil, ay_no, tip, kategori, stok_mali, birim,
+        SUM(tuk_miktar)::NUMERIC AS miktar
+      FROM fb_cost.tuketim
+      ${where}
+      GROUP BY tarih_str, yil, ay_no, tip, kategori, stok_mali, birim
+      ORDER BY yil, ay_no, stok_mali
+      `,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('miktar-analizi hatası:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── API: Miktar Analizi — kategori bazında dönemler arası tüketim miktarı ───
 app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
   const { tarih_baslangic, tarih_bitis, tip } = req.query;

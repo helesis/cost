@@ -747,9 +747,12 @@
     width: 100%;
     position: relative;
   }
-  .kat-fiyat-kat-row { cursor: pointer; }
-  .kat-fiyat-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
-  .kat-fiyat-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
+  .kat-fiyat-kat-row,
+  .kat-miktar-kat-row { cursor: pointer; }
+  .kat-fiyat-kat-row:hover,
+  .kat-miktar-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
+  .kat-fiyat-kat-row.kat-fiyat-expanded,
+  .kat-miktar-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
   .kat-fiyat-twist {
     display: inline-block;
     width: 1em;
@@ -880,6 +883,9 @@
     </a>
     <a class="nav-item" data-page="fiyat" href="#">
       <i class="nav-icon" data-lucide="line-chart"></i> Fiyat Analizi
+    </a>
+    <a class="nav-item" data-page="miktar" href="#">
+      <i class="nav-icon" data-lucide="bar-chart-3"></i> Miktar Analizi
     </a>
     <a class="nav-item" data-page="yillik" href="#">
       <i class="nav-icon" data-lucide="calendar-days"></i> Yıllık Analiz
@@ -1216,7 +1222,7 @@
               <option value="yiyecek">Yiyecek</option>
               <option value="icenek">İçecek</option>
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyatVeMiktar()">Yenile</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyat()">Yenile</button>
           </div>
         </div>
         <div class="table-wrap">
@@ -1235,13 +1241,73 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:20px">
+    </div>
+  </div>
+
+  <!-- ── MİKTAR ANALİZİ ─────────────────────────────────────────────────── -->
+  <div id="page-miktar" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Miktar Analizi</div>
+        <div class="page-sub">Ürün ve kategori bazında dönemsel tüketim miktarı değişimi</div>
+      </div>
+    </div>
+    <div class="page-body">
+
+      <div class="card mb-20">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="text" class="form-input" id="miktar-q" placeholder="Ürün adı yazın... (örn: DANA ANTRIKOT)" style="flex:1;min-width:260px">
+          <select class="form-select" id="miktar-tip" style="width:140px">
+            <option value="">Hepsi</option>
+            <option value="yiyecek">Yiyecek</option>
+            <option value="icenek">İçecek</option>
+          </select>
+          <button class="btn btn-primary" onclick="miktarAnalizEt()">Analiz Et</button>
+        </div>
+        <div id="miktar-urun-chips-host" class="fiyat-urun-chips-host" style="display:none">
+          <div class="fiyat-urun-chips-caption">Aramaya uyan ürünler — çipe tıklayınca yalnızca grafik ve tablo güncellenir.</div>
+          <div class="fiyat-urun-chips" id="miktar-urun-chips" role="list"></div>
+        </div>
+      </div>
+
+      <div class="card mb-20">
+        <div class="card-title" id="miktar-baslik">Ürün seçin veya aşağıdan seçin; "Analiz Et" ile geniş arama yapılabilir</div>
+        <div class="chart-wrap mb-20" style="display:none;height:320px" id="miktar-chart-wrap">
+          <canvas id="chart-miktar"></canvas>
+        </div>
+        <div class="table-wrap" id="miktar-tablo-wrap" style="display:none">
+          <table class="search-results">
+            <thead>
+              <tr>
+                <th>Dönem</th>
+                <th>Kategori</th>
+                <th style="text-align:right" id="miktar-th-m">Miktar</th>
+                <th>Birim</th>
+                <th style="text-align:right" id="miktar-th-d">Δ %</th>
+              </tr>
+            </thead>
+            <tbody id="miktar-tablo"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
             <div class="card-title" style="margin-bottom:4px">Kategori Bazında Miktar Değişimi</div>
-            <div style="font-size:12px;color:var(--text-dim)">Yukarıdaki dönem aralığı ile aynı. Ortalamalar: yalnızca son dönemde miktarı olan ve öncesinde referans miktarı bulunan SKU’lar (eşit ağırlıklı ürün ortalaması). Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem aralığı. Ortalamalar: yalnızca son dönemde miktarı olan ve öncesinde referans miktarı bulunan SKU’lar (eşit ağırlıklı ürün ortalaması). Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="loadKategoriFiyatVeMiktar()">Yenile</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select class="form-select" id="kat-miktar-baslangic" style="width:130px"></select>
+            <i data-lucide="arrow-right" class="date-arrow" style="opacity:.5"></i>
+            <select class="form-select" id="kat-miktar-bitis" style="width:130px"></select>
+            <select class="form-select" id="kat-miktar-tip" style="width:120px">
+              <option value="">Hepsi</option>
+              <option value="yiyecek">Yiyecek</option>
+              <option value="icenek">İçecek</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadKategoriMiktar()">Yenile</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table class="search-results">
@@ -1994,7 +2060,8 @@ function vcRerenderActive() {
     else if (id === 'page-trend')    renderTrend();
     else if (id === 'page-kategori') renderKategori();
     else if (id === 'page-urun')     { if (document.getElementById('urun-q').value.trim()) urunAra(); }
-    else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyatVeMiktar(); }
+    else if (id === 'page-fiyat')    { if (document.getElementById('fiyat-q').value.trim()) fiyatAnalizEt(); loadKategoriFiyat(); }
+    else if (id === 'page-miktar')   { if (document.getElementById('miktar-q').value.trim()) miktarAnalizEt(); loadKategoriMiktar(); }
     else if (id === 'page-yillik')   yillikAnalizYenile();
     else if (id === 'page-tuketim-talep') loadTalepAnaliz();
     else if (id === 'page-menu-engineering') loadMenuEngineeringData(false);
@@ -2900,6 +2967,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'alarmlar') { loadAlarmlar(); loadEsikler(); }
     if (page === 'yukle') yukleInitTab();
     if (page === 'fiyat') initFiyatPage();
+    if (page === 'miktar') initMiktarPage();
     if (page === 'yillik') initYillikPage();
     if (page === 'tuketim-talep') loadTalepAnaliz();
     if (page === 'siniflandirma') { classifyInitTab(); }
@@ -6075,13 +6143,316 @@ function initFiyatPage() {
       });
     }
     bindKategoriFiyatExpandOnce();
-    bindKategoriMiktarExpandOnce();
     fiyatPageInited = true;
-    loadKategoriFiyatVeMiktar();
+    loadKategoriFiyat();
   }
   const q = document.getElementById('fiyat-q');
   if (q) setTimeout(() => q.focus(), 50);
   scheduleFiyatUrunChips();
+}
+
+// ── MİKTAR ANALİZİ ─────────────────────────────────────────────────────────────
+let chartMiktar;
+let miktarPageInited = false;
+let miktarSecilenStok = null;
+let miktarChipTimer = null;
+
+function miktarBirimFromRow(tipVal, kategori) {
+  const kind = katMiktarKind(tipVal || '', kategori);
+  return kind === 'icenek' ? 'L' : 'kg';
+}
+
+function fmtMiktarSeriVal(v, tipVal, kategori) {
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  const n = parseFloat(v);
+  const kind = katMiktarKind(tipVal || '', kategori);
+  if (kind === 'icenek') return fmtN(n, 2);
+  return fmtN(n / 1000, 2);
+}
+
+function scheduleMiktarUrunChips() {
+  clearTimeout(miktarChipTimer);
+  miktarChipTimer = setTimeout(() => { refreshMiktarUrunChips(); }, 300);
+}
+
+async function refreshMiktarUrunChips() {
+  const qEl = document.getElementById('miktar-q');
+  const host = document.getElementById('miktar-urun-chips-host');
+  const wrap = document.getElementById('miktar-urun-chips');
+  if (!qEl || !host || !wrap) return;
+  const q = qEl.value.trim();
+  if (!q) {
+    host.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+  host.style.display = 'block';
+  wrap.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Aranıyor…</span>';
+  try {
+    const tip = document.getElementById('miktar-tip')?.value || '';
+    const params = new URLSearchParams({ q });
+    if (tip) params.append('tip', tip);
+    const list = await fetch('/api/miktar-analizi/urun-adaylari?' + params.toString()).then((r) => r.json());
+    if (!Array.isArray(list)) {
+      wrap.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Liste yüklenemedi</span>';
+      return;
+    }
+    if (!list.length) {
+      wrap.innerHTML = '<span style="font-size:12px;color:var(--text-dim)">Eşleşen ürün yok</span>';
+      return;
+    }
+    const sel = miktarSecilenStok;
+    wrap.innerHTML = list
+      .map((r) => {
+        const ice = tipRowIsIcenek(r.tip);
+        const tipCls = ice ? 'fiyat-urun-chip--ice' : 'fiyat-urun-chip--yiy';
+        const active = sel && sel === r.stok_mali ? ' active' : '';
+        const tit = fiyatChipEscAttr((r.kategori || '').slice(0, 160));
+        return `<button type="button" role="listitem" class="fiyat-urun-chip ${tipCls}${active}" data-stok="${fiyatChipEscAttr(r.stok_mali)}" title="${tit}"><span class="fiyat-urun-chip-txt">${escapeHtml(r.stok_mali)}</span></button>`;
+      })
+      .join('');
+  } catch (e) {
+    wrap.innerHTML = `<span style="font-size:12px;color:var(--red)">${fiyatChipEscHtml(e.message || 'Hata')}</span>`;
+  }
+}
+
+function miktarChipsUpdateActiveOnly() {
+  const wrap = document.getElementById('miktar-urun-chips');
+  if (!wrap) return;
+  const sel = miktarSecilenStok;
+  wrap.querySelectorAll('.fiyat-urun-chip').forEach((btn) => {
+    const st = btn.getAttribute('data-stok');
+    btn.classList.toggle('active', !!(sel && st === sel));
+  });
+}
+
+function initMiktarPage() {
+  if (!miktarPageInited) {
+    const bas = document.getElementById('kat-miktar-baslangic');
+    const bit = document.getElementById('kat-miktar-bitis');
+    const kTip = document.getElementById('kat-miktar-tip');
+    const uTip = document.getElementById('miktar-tip');
+    if (kTip) kTip.value = '';
+    if (uTip) uTip.value = '';
+    if (donemler && donemler.length) {
+      const sorted = [...donemler].sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
+      const opts = sorted
+        .map((d) => {
+          const kismi = d.tarih_str && d.tarih_str.endsWith('-15g');
+          const etiket = `${d.ay} ${d.yil}${kismi ? ' (15 gün)' : ''}`;
+          return `<option value="${d.tarih_str}">${etiket}</option>`;
+        })
+        .join('');
+      if (bas) bas.innerHTML = opts;
+      if (bit) bit.innerHTML = opts;
+      const { bas: basV, bit: bitV } = pickFiyatKategoriDonemleri(sorted);
+      if (bas) {
+        bas.value = basV;
+        if (!bas.value) bas.value = sorted[0].tarih_str;
+      }
+      if (bit) {
+        bit.value = bitV;
+        if (!bit.value) bit.value = sorted[sorted.length - 1].tarih_str;
+      }
+    }
+    const mq = document.getElementById('miktar-q');
+    const mt = document.getElementById('miktar-tip');
+    if (mq && !mq.dataset.chipsBound) {
+      mq.dataset.chipsBound = '1';
+      mq.addEventListener('input', () => {
+        miktarSecilenStok = null;
+        scheduleMiktarUrunChips();
+      });
+    }
+    if (mt && !mt.dataset.chipsBound) {
+      mt.dataset.chipsBound = '1';
+      mt.addEventListener('change', () => {
+        miktarSecilenStok = null;
+        scheduleMiktarUrunChips();
+      });
+    }
+    const host = document.getElementById('miktar-urun-chips-host');
+    if (host && !host.dataset.bound) {
+      host.dataset.bound = '1';
+      host.addEventListener('click', (e) => {
+        const btn = e.target.closest('.fiyat-urun-chip');
+        if (!btn) return;
+        e.preventDefault();
+        const stok = btn.getAttribute('data-stok');
+        if (!stok) return;
+        miktarSecilenStok = stok;
+        miktarChipsUpdateActiveOnly();
+        miktarAnalizEt({ tam: true, exactStokMali: stok });
+      });
+    }
+    bindKategoriMiktarExpandOnce();
+    miktarPageInited = true;
+    loadKategoriMiktar();
+  }
+  const q = document.getElementById('miktar-q');
+  if (q) setTimeout(() => q.focus(), 50);
+  scheduleMiktarUrunChips();
+}
+
+async function miktarAnalizEt(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const inputEl = document.getElementById('miktar-q');
+  const fromExact = o.exactStokMali != null && String(o.exactStokMali).trim() !== '';
+  const q = fromExact ? String(o.exactStokMali).trim() : inputEl.value.trim();
+  const tip = document.getElementById('miktar-tip').value;
+  const tam = fromExact || o.tam === true;
+
+  if (!q) {
+    if (!fromExact) toast('Ürün adı girin', 'warning');
+    return;
+  }
+
+  if (!tam) miktarSecilenStok = null;
+
+  const baslik = document.getElementById('miktar-baslik');
+  const chartWrap = document.getElementById('miktar-chart-wrap');
+  const tabloWrap = document.getElementById('miktar-tablo-wrap');
+  const tbody = document.getElementById('miktar-tablo');
+
+  baslik.innerHTML = '<div class="loading"><div class="spinner"></div> Analiz ediliyor...</div>';
+  chartWrap.style.display = 'none';
+  tabloWrap.style.display = 'none';
+
+  try {
+    const params = new URLSearchParams({ stok_mali: q });
+    if (tip) params.append('tip', tip);
+    if (tam) params.append('tam', '1');
+    const rows = await fetch('/api/miktar-analizi?' + params).then(r => r.json());
+    if (!Array.isArray(rows)) {
+      const msg = rows && rows.error ? rows.error : 'Sunucu yanıtı geçersiz';
+      baslik.textContent = msg;
+      toast(msg, 'error');
+      if (tam) miktarChipsUpdateActiveOnly();
+      else await refreshMiktarUrunChips();
+      return;
+    }
+
+    if (!rows.length) {
+      baslik.textContent = `"${q}" için miktar verisi bulunamadı`;
+      if (tam) miktarChipsUpdateActiveOnly();
+      else await refreshMiktarUrunChips();
+      return;
+    }
+
+    const mapDonem = new Map();
+    for (const r of rows) {
+      const k = r.tarih_str;
+      if (!mapDonem.has(k)) {
+        mapDonem.set(k, {
+          tarih_str: r.tarih_str, yil: r.yil, ay_no: r.ay_no, tip: r.tip,
+          kategoriler: new Set(), sumMiktar: 0, n: 0
+        });
+      }
+      const g = mapDonem.get(k);
+      if (r.kategori) g.kategoriler.add(r.kategori);
+      g.sumMiktar += parseFloat(r.miktar) || 0;
+      if (!g.tip && r.tip) g.tip = r.tip;
+      g.n++;
+    }
+    const seri = [...mapDonem.values()]
+      .map(g => ({
+        tarih_str: g.tarih_str, yil: g.yil, ay_no: g.ay_no, tip: g.tip,
+        kategori: [...g.kategoriler].join(', ') || '—',
+        miktar: g.sumMiktar
+      }))
+      .sort((a, b) => a.yil - b.yil || a.ay_no - b.ay_no);
+
+    const urunSayisi = new Set(rows.map(r => r.stok_mali)).size;
+    baslik.textContent = `${urunSayisi === 1 ? rows[0].stok_mali : `"${q}" (${urunSayisi} ürün)`} — ${seri.length} dönem`;
+
+    renderMiktarChart(seri, tip);
+    renderMiktarTablo(seri, tbody, tip);
+    chartWrap.style.display = 'block';
+    tabloWrap.style.display = 'block';
+    if (tam) miktarSecilenStok = q;
+    if (tam) miktarChipsUpdateActiveOnly();
+    else await refreshMiktarUrunChips();
+  } catch (err) {
+    baslik.textContent = 'Hata: ' + err.message;
+    toast('Analiz hatası: ' + err.message, 'error');
+    if (tam) miktarChipsUpdateActiveOnly();
+    else await refreshMiktarUrunChips();
+  }
+}
+
+function renderMiktarChart(seri, tipSel) {
+  const ctx = document.getElementById('chart-miktar').getContext('2d');
+  if (chartMiktar) chartMiktar.destroy();
+
+  const birim = katMiktarBirimLabel(tipSel) || 'miktar';
+  const color = '#2a5f8f';
+  const bg = 'rgba(42,95,143,0.12)';
+  const data = seri.map(d => {
+    const kind = katMiktarKind(tipSel, d.kategori);
+    const v = parseFloat(d.miktar) || 0;
+    return kind === 'icenek' ? v : v / 1000;
+  });
+
+  chartMiktar = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: seri.map(d => d.tarih_str),
+      datasets: [{
+        label: `Miktar (${birim || 'birim'})`,
+        data,
+        borderColor: color,
+        backgroundColor: bg,
+        borderWidth: 2,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: color,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const d = seri[ctx.dataIndex];
+              const kind = katMiktarKind(tipSel, d.kategori);
+              const u = kind === 'icenek' ? 'L' : 'kg';
+              return `Miktar: ${fmtN(ctx.parsed.y, 2)} ${u}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+        x: { grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+}
+
+function renderMiktarTablo(seri, tbody, tipSel) {
+  document.getElementById('miktar-th-m').textContent = 'Miktar';
+  document.getElementById('miktar-th-d').textContent = 'Δ %';
+
+  tbody.innerHTML = seri.map((d, i) => {
+    const prev = i > 0 ? seri[i - 1] : null;
+    const cur = parseFloat(d.miktar) || 0;
+    const pv = prev ? (parseFloat(prev.miktar) || 0) : 0;
+    const delta = pv > 0 ? ((cur - pv) / pv * 100) : null;
+    const birim = miktarBirimFromRow(tipSel, d.kategori);
+    return `<tr>
+      <td><strong>${d.tarih_str}</strong></td>
+      <td style="color:var(--text-dim);font-size:12px">${d.kategori}</td>
+      <td style="text-align:right">${fmtMiktarSeriVal(cur, tipSel, d.kategori)}</td>
+      <td style="color:var(--text-dim);font-size:12px">${birim}</td>
+      <td style="text-align:right">${renderDelta(delta)}</td>
+    </tr>`;
+  }).join('');
+  vcLucide();
 }
 
 async function fiyatAnalizEt(opts) {
@@ -6368,10 +6739,6 @@ function fmtMiktarQty(v, tipSel, kategori) {
   return `${fmtN(n / 1000, 2)} kg`;
 }
 
-function loadKategoriFiyatVeMiktar() {
-  return Promise.all([loadKategoriFiyat(), loadKategoriMiktar()]);
-}
-
 async function loadKategoriFiyat() {
   const bas = document.getElementById('kat-fiyat-baslangic').value;
   const bit = document.getElementById('kat-fiyat-bitis').value;
@@ -6433,7 +6800,7 @@ async function katMiktarToggleRow(tr) {
   const k = katFiyatDecodeK(tr.getAttribute('data-k') || '');
   const ilk = tr.getAttribute('data-ilk') || '';
   const son = tr.getAttribute('data-son') || '';
-  const tip = document.getElementById('kat-fiyat-tip')?.value || '';
+  const tip = document.getElementById('kat-miktar-tip')?.value || '';
   const det = document.createElement('tr');
   det.className = 'kat-fiyat-urun-detay';
   det.innerHTML = '<td colspan="5"><div class="kat-fiyat-urun-ic"><div class="loading" style="padding:12px">Yükleniyor…</div></div></td>';
@@ -6509,10 +6876,11 @@ function bindKategoriMiktarExpandOnce() {
 }
 
 async function loadKategoriMiktar() {
-  const bas = document.getElementById('kat-fiyat-baslangic').value;
-  const bit = document.getElementById('kat-fiyat-bitis').value;
-  const tip = document.getElementById('kat-fiyat-tip').value;
+  const bas = document.getElementById('kat-miktar-baslangic')?.value || '';
+  const bit = document.getElementById('kat-miktar-bitis')?.value || '';
+  const tip = document.getElementById('kat-miktar-tip')?.value || '';
   const tbody = document.getElementById('kat-miktar-tablo');
+  if (!tbody) return;
 
   tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px"><div class="spinner" style="display:inline-block"></div> Yükleniyor...</td></tr>`;
 
@@ -6542,7 +6910,7 @@ async function loadKategoriMiktar() {
       const dk = encodeURIComponent(r.kategori || '');
       const dik = escapeHtml(String(r.ilk_donem || ''));
       const dson = escapeHtml(String(r.son_donem || ''));
-      return `<tr class="kat-fiyat-kat-row kat-miktar-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
+      return `<tr class="kat-miktar-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
         <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong>${nUrun ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${nUrun} ürün)</span>` : ''}</td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
         <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw, tip, r.kategori) : '—'}</td>
@@ -6560,6 +6928,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'fiyat-q') {
     e.preventDefault();
     fiyatAnalizEt();
+  }
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'miktar-q') {
+    e.preventDefault();
+    miktarAnalizEt();
   }
 });
 
