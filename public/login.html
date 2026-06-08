@@ -26,6 +26,7 @@
   .login-card h1 { font-size: 1.35rem; margin: 0 0 8px; letter-spacing: -0.02em; }
   .login-card p { margin: 0 0 24px; color: var(--text-dim); font-size: 14px; line-height: 1.45; }
   .login-card label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: 8px; }
+  .login-card input[type="text"],
   .login-card input[type="password"] {
     width: 100%;
     box-sizing: border-box;
@@ -35,22 +36,24 @@
     background: rgba(0,0,0,.28);
     color: var(--text);
     font-size: 15px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
   .login-card input:focus { outline: 2px solid var(--gold-muted, rgba(201,169,96,.45)); outline-offset: 0; border-color: var(--gold-muted, rgba(201,169,96,.45)); }
   .login-msg { margin: 16px 0 0; min-height: 1.35em; font-size: 14px; color: var(--red, #e85d5d); }
   .login-msg.ok { color: var(--green, #62c962); }
-  .login-card .btn { width: 100%; justify-content: center; padding: 12px 20px; }
+  .login-card .btn { width: 100%; justify-content: center; padding: 12px 20px; margin-top: 4px; }
 </style>
 </head>
 <body>
 <div class="login-shell">
   <div class="login-card">
     <h1>F&amp;B Maliyet Analizi</h1>
-    <p>Devam etmek için şifreyi girin.</p>
+    <p>Devam etmek için kullanıcı adı ve parolanızı girin.</p>
     <form id="cost-login-form" autocomplete="on">
+      <label for="cost-user">Kullanıcı adı</label>
+      <input id="cost-user" name="username" type="text" required autocomplete="username" autocapitalize="none" spellcheck="false">
       <label for="cost-pw">Parola</label>
-      <input id="cost-pw" name="cost-pw" type="password" required autocomplete="current-password">
+      <input id="cost-pw" name="password" type="password" required autocomplete="current-password">
       <button type="submit" class="btn btn-primary">Giriş yap</button>
     </form>
     <div class="login-msg" id="cost-login-msg"></div>
@@ -59,10 +62,11 @@
 <script>
 (function () {
   const form = document.getElementById('cost-login-form');
-  const input = document.getElementById('cost-pw');
+  const userInput = document.getElementById('cost-user');
+  const pwInput = document.getElementById('cost-pw');
   const msg = document.getElementById('cost-login-msg');
 
-  async function login(password) {
+  async function login(username, password) {
     msg.textContent = '';
     msg.classList.remove('ok');
     try {
@@ -70,7 +74,7 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ username, password })
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -87,7 +91,7 @@
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    login(String(input.value));
+    login(String(userInput.value).trim(), String(pwInput.value));
   });
 })();
 </script>

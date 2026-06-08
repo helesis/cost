@@ -2,7 +2,6 @@
 
 require('dotenv').config();
 
-const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,92 +18,17 @@ const {
 } = require('./classifyWorker');
 const menuEngineering = require('./menuEngineering');
 const { normalizeTipInput, tipFilterSql } = require('./tipLabels');
+const {
+  ensureBootstrapUsers,
+  isAuthed,
+  attachUser,
+  registerAuthRoutes,
+} = require('./auth');
 
 const app = express();
 const PORT = parseInt(process.env.PORT) || 3010;
 
 const PUBLIC_DIR = path.join(__dirname, '../public');
-
-/** Geçici giriş (sonra ENV veya kalıcı auth önerilir) */
-const COST_APP_PASSWORD = 'Ali Ab882674..';
-const COST_AUTH_COOKIE_NAME = 'cost_auth_gate_v1';
-const COST_AUTH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const COST_COOKIE_HMAC_SECRET =
-  process.env.COST_COOKIE_SECRET || 'cost-analysis-gate-static-hmac-secret-change-me';
-
-function parseCookies(header) {
-  const out = Object.create(null);
-  if (!header || typeof header !== 'string') return out;
-  for (const part of header.split(';')) {
-    const idx = part.indexOf('=');
-    if (idx === -1) continue;
-    const k = part.slice(0, idx).trim();
-    let v = part.slice(idx + 1).trim();
-    try {
-      v = decodeURIComponent(v);
-    } catch (_) {
-      continue;
-    }
-    out[k] = v;
-  }
-  return out;
-}
-
-function requestIsHttps(req) {
-  if (req.secure) return true;
-  const p = String(req.headers['x-forwarded-proto'] || '')
-    .split(',')[0]
-    .trim()
-    .toLowerCase();
-  return p === 'https';
-}
-
-function signCostAuthCookiePayload(expMs) {
-  const payload = JSON.stringify({ v: 1, exp: expMs });
-  const b64 = Buffer.from(payload, 'utf8').toString('base64url');
-  const sig = crypto.createHmac('sha256', COST_COOKIE_HMAC_SECRET).update(b64).digest('base64url');
-  return `${b64}.${sig}`;
-}
-
-function verifyCostAuthCookieToken(tokenStr) {
-  if (!tokenStr || typeof tokenStr !== 'string') return false;
-  const lastDot = tokenStr.lastIndexOf('.');
-  if (lastDot <= 0) return false;
-  const b64 = tokenStr.slice(0, lastDot);
-  const sig = tokenStr.slice(lastDot + 1);
-  const expSig = crypto.createHmac('sha256', COST_COOKIE_HMAC_SECRET).update(b64).digest('base64url');
-  const a = Buffer.from(sig, 'utf8');
-  const b = Buffer.from(expSig, 'utf8');
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
-  let payload;
-  try {
-    payload = JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
-  } catch (_) {
-    return false;
-  }
-  if (!payload || payload.v !== 1 || typeof payload.exp !== 'number') return false;
-  return payload.exp > Date.now();
-}
-
-function isCostAuthed(req) {
-  const raw = parseCookies(req.headers.cookie || '')[COST_AUTH_COOKIE_NAME];
-  return !!(raw && verifyCostAuthCookieToken(raw));
-}
-
-function setCostAuthCookie(res, req) {
-  const token = signCostAuthCookiePayload(Date.now() + COST_AUTH_COOKIE_MAX_AGE_MS);
-  const encoded = encodeURIComponent(token);
-  const maxAgeSec = Math.floor(COST_AUTH_COOKIE_MAX_AGE_MS / 1000);
-  let cookie = `${COST_AUTH_COOKIE_NAME}=${encoded}; Path=/; Max-Age=${maxAgeSec}; HttpOnly; SameSite=Lax`;
-  if (requestIsHttps(req)) cookie += '; Secure';
-  res.setHeader('Set-Cookie', cookie);
-}
-
-function clearCostAuthCookie(res, req) {
-  let cookie = `${COST_AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
-  if (requestIsHttps(req)) cookie += '; Secure';
-  res.setHeader('Set-Cookie', cookie);
-}
 
 function sendNoStoreIndexHtml(req, res) {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
@@ -132,28 +56,18 @@ const ALARM_METRIK_TUTAR = new Set(['tutar_tl', 'tutar_eur']);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
+app.use(attachUser);
+
 // Cost Analysis giriş: tüm API'ler oturumsuz bloklanır (upload / KPI / USDA proxy dahil)
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   if (req.path === '/api/auth/login' && req.method === 'POST') return next();
   if (req.path === '/api/auth/logout' && req.method === 'POST') return next();
-  if (!isCostAuthed(req)) return res.status(401).json({ error: 'Oturum gerekli' });
+  if (!isAuthed(req)) return res.status(401).json({ error: 'Oturum gerekli' });
   next();
 });
 
-app.post('/api/auth/login', (req, res) => {
-  const pw = req.body && req.body.password;
-  if (typeof pw === 'string' && pw === COST_APP_PASSWORD) {
-    setCostAuthCookie(res, req);
-    return res.json({ ok: true });
-  }
-  return res.status(401).json({ ok: false, error: 'Geçersiz parola' });
-});
-
-app.post('/api/auth/logout', (req, res) => {
-  clearCostAuthCookie(res, req);
-  return res.json({ ok: true });
-});
+registerAuthRoutes(app, pool);
 
 // ── USDA besin servisi proxy (nutrition_service FastAPI, varsayılan 127.0.0.1:3012) ──
 const NUTRITION_SERVICE_URL = (process.env.NUTRITION_SERVICE_URL || 'http://127.0.0.1:3012').replace(
@@ -257,12 +171,12 @@ app.use(async (req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-  if (!isCostAuthed(req)) return res.redirect(302, '/login.html');
+  if (!isAuthed(req)) return res.redirect(302, '/login.html');
   sendNoStoreIndexHtml(req, res);
 });
 
 app.get('/index.html', (req, res) => {
-  if (!isCostAuthed(req)) return res.redirect(302, '/login.html');
+  if (!isAuthed(req)) return res.redirect(302, '/login.html');
   sendNoStoreIndexHtml(req, res);
 });
 
@@ -1952,6 +1866,9 @@ app.get('*', (req, res) => {
 // ── Başlat ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Cost Analysis → http://localhost:${PORT}`);
+  ensureBootstrapUsers(pool).catch((err) => {
+    console.error('[auth] Kullanıcı tablosu / bootstrap hatası:', err.message);
+  });
   setImmediate(() => {
     pingNutritionServiceHealth().then((o) => {
       if (o.backend_reachable) {

@@ -145,7 +145,19 @@ CREATE INDEX IF NOT EXISTS idx_tuketim_stok    ON fb_cost.tuketim(stok_mali);
 CREATE INDEX IF NOT EXISTS idx_tuketim_yil_ay  ON fb_cost.tuketim(yil, ay_no);
 CREATE INDEX IF NOT EXISTS idx_tuketim_kategori ON fb_cost.tuketim(kategori);
 
--- OTP kodları tablosu (login sistemi)
+-- Uygulama kullanıcıları (kullanıcı adı + parola, admin / user)
+CREATE TABLE IF NOT EXISTS fb_cost.kullanicilar (
+  id            SERIAL PRIMARY KEY,
+  kullanici_adi TEXT NOT NULL,
+  parola_hash   TEXT NOT NULL,
+  rol           TEXT NOT NULL DEFAULT 'user' CHECK (rol IN ('admin', 'user')),
+  aktif         BOOLEAN NOT NULL DEFAULT TRUE,
+  olusturma     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kullanicilar_adi_lower
+  ON fb_cost.kullanicilar (LOWER(kullanici_adi));
+
+-- OTP kodları tablosu (login sistemi — artık kullanılmıyor)
 CREATE TABLE IF NOT EXISTS fb_cost.otp_kodlari (
   id            SERIAL PRIMARY KEY,
   email         TEXT NOT NULL,

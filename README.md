@@ -300,7 +300,10 @@ Her iki script de:
 ## Veritabanı Şeması
 
 - `fb_cost.tuketim` — kayıt: `tuk_miktar`, `birim_fiyat`, `kur`, `cost_pax` + meta; `tutar_tl`, `tutar_eur`, `pp_*` sütunları **GENERATED** (formüller `fb_cost.tuketim_*` SQL fonksiyonları ve `migrate.sql` ile aynı).
+- `fb_cost.kullanicilar` — uygulama girişi (`admin` / `user` rolleri)
 - `fb_cost.otp_kodlari` (artık kullanılmıyor; geçmiş şema), `fb_cost.alarm_esikleri` — alarmlar
+
+**Giriş:** Kullanıcı adı + parola. İlk kurulumda `kullanicilar` tablosu boşsa sunucu açılışında yönetici (`COST_BOOTSTRAP_ADMIN_USER` / `COST_BOOTSTRAP_ADMIN_PASSWORD`, varsayılan `admin` + eski tek parola) ve örnek kullanıcı `Elvan` oluşturulur. Yöneticiler arayüzden **Sistem → Kullanıcılar** ile yeni hesap ekleyebilir.
 
 Detay: `migrate.sql` ve `fb_cost_functions.sql`.
 
