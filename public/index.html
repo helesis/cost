@@ -121,6 +121,8 @@
   .kat-urun-ozet-cap th { background: var(--gold-bg); color: var(--ink); font-weight: 700; border-bottom: none; padding-top: 8px; padding-bottom: 2px; text-align: left; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; }
   .kat-urun-ozet-val th { background: var(--gold-bg); color: var(--ink); font-weight: 700; text-align: right; border-bottom: 2px solid var(--gold-light); }
   .kat-urun-ozet-val th.kat-urun-col-stok { text-align: left; }
+  .kat-vs-sep { font-size: 11px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; padding: 0 1px; user-select: none; }
+  #kat-karsilastir { color: var(--gold); font-weight: 600; }
   .kat-pp-mom-chip {
     display: inline-flex;
     align-items: center;
@@ -1058,12 +1060,14 @@
         <div class="page-title">Kategoriler</div>
         <div class="page-sub">Dönem bazında kategori maliyetleri</div>
       </div>
-      <div style="display:flex;gap:8px">
-        <select class="form-select" id="kat-donem" style="width:180px"></select>
-        <select class="form-select" id="kat-tip" style="width:140px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="form-select" id="kat-donem" style="width:170px"></select>
+        <select class="form-select" id="kat-tip" style="width:130px">
           <option value="yiyecek">Yiyecek</option>
           <option value="icenek">İçecek</option>
         </select>
+        <span class="kat-vs-sep" title="Δ değişimi hangi döneme göre hesaplansın">vs</span>
+        <select class="form-select" id="kat-karsilastir" style="width:185px" title="Δ değişimi bu döneme göre hesaplanır"></select>
       </div>
     </div>
     <div class="page-body kat-page-body">
@@ -4868,6 +4872,8 @@ async function init() {
     ['ozet-donem','kat-donem'].forEach(id => {
       document.getElementById(id).innerHTML = donemOpts;
     });
+    const katKarsi = document.getElementById('kat-karsilastir');
+    if (katKarsi) katKarsi.innerHTML = '<option value="auto">↶ Önceki dönem (oto)</option>' + donemOpts;
     talepRebuildDonemSelect();
     const meB = document.getElementById('me-baslangic');
     const meE = document.getElementById('me-bitis');
@@ -5320,7 +5326,11 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
   const ice = tip === 'icenek' || tip === 'icecek';
-  const oncekiTarih = katOncekiTarihStr(tarih, tip);
+  const karsiSel = document.getElementById('kat-karsilastir');
+  const karsiVal = karsiSel ? karsiSel.value : 'auto';
+  const oncekiTarih = (karsiVal && karsiVal !== 'auto' && karsiVal !== tarih)
+    ? karsiVal
+    : katOncekiTarihStr(tarih, tip);
   const oncekiDon = oncekiTarih ? donemler.find((d) => d.tarih_str === oncekiTarih) : null;
   const oncekiEtiket = oncekiDon
     ? `${oncekiDon.ay} ${oncekiDon.yil}${oncekiTarih.endsWith('-15g') ? ' (15 gün)' : ''}`
@@ -5546,8 +5556,15 @@ async function renderKategori() {
 ['kat-donem','kat-tip'].forEach(id => {
   document.getElementById(id).addEventListener('change', () => {
     katSeciliKategori = null;
+    const ks = document.getElementById('kat-karsilastir');
+    if (ks) ks.value = 'auto';
     renderKategori();
   });
+});
+document.getElementById('kat-karsilastir').addEventListener('change', () => {
+  const tarih = document.getElementById('kat-donem').value;
+  const tip   = document.getElementById('kat-tip').value;
+  if (katSeciliKategori && tarih) loadKatUrunDetay(katSeciliKategori, tarih, tip);
 });
 
 // ── Ürün Arama ────────────────────────────────────────────────────────────────
