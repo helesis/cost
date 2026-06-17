@@ -1098,7 +1098,7 @@
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-bf">—</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-pp">—</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-g">—</th>
-                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-delta">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-delta" title="Kategori geneli miktar değişimi (kişi başı) — önceki döneme göre %">—</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-tutar">—</th>
                   </tr>
                   <tr>
@@ -5340,8 +5340,8 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   if (thDegisim) {
     thDegisim.textContent = 'Δ';
     thDegisim.title = oncekiEtiket
-      ? `Değişim — kişi başı tüketim, ${oncekiEtiket} dönemine göre %`
-      : 'Değişim — önceki döneme göre kişi başı tüketim %';
+      ? `Miktar değişimi (kişi başı tüketim) — ${oncekiEtiket} dönemine göre %`
+      : 'Miktar değişimi (kişi başı tüketim) — önceki döneme göre %';
   }
   if (thTut) {
     thTut.textContent = 'Tutar';
