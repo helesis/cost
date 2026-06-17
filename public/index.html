@@ -118,6 +118,9 @@
   #kat-urun-tablo tr[data-stok] { cursor: pointer; transition: background .12s; }
   #kat-urun-tablo tr[data-stok]:hover { background: var(--gold-bg); }
   #kat-urun-tablo tr.kat-urun-stok-active { background: rgba(42, 77, 122, 0.14); outline: 1px solid rgba(42, 77, 122, 0.45); }
+  .kat-urun-ozet-cap th { background: var(--gold-bg); color: var(--ink); font-weight: 700; border-bottom: none; padding-top: 8px; padding-bottom: 2px; text-align: left; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; }
+  .kat-urun-ozet-val th { background: var(--gold-bg); color: var(--ink); font-weight: 700; text-align: right; border-bottom: 2px solid var(--gold-light); }
+  .kat-urun-ozet-val th.kat-urun-col-stok { text-align: left; }
   .kat-pp-mom-chip {
     display: inline-flex;
     align-items: center;
@@ -1087,6 +1090,17 @@
             <div class="table-wrap kat-urun-pax-scroll" id="kat-urun-wrap" style="display:none">
               <table>
                 <thead>
+                  <tr class="kat-urun-ozet-cap">
+                    <th colspan="6">Kategori Toplamı</th>
+                  </tr>
+                  <tr class="kat-urun-ozet-val">
+                    <th class="kat-urun-col-stok">Toplam</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-bf">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-pp">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-g">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-delta">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-tutar">—</th>
+                  </tr>
                   <tr>
                     <th class="kat-urun-col-stok">Ürün (stok)</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-th-bf" title="Birim fiyat">B.fiyat</th>
@@ -5399,6 +5413,31 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         <td class="kat-urun-col-shrink">${fmtCur(pickCur(r, 'tutar'))}</td>
       </tr>`;
     }).join('');
+    // Kategori toplamları (özet satırı)
+    let tPp = 0, tPhys = 0, tTutar = 0, tCurDelta = 0, tPrevDelta = 0, hasDelta = false;
+    let bfWNum = 0, bfWDen = 0; // miktar-ağırlıklı ortalama birim fiyat
+    sorted.forEach(r => {
+      const bf = vcIsEUR() ? (parseFloat(r.birim_fiyat_ort_eur) || 0) : (parseFloat(r.birim_fiyat_ort_tl) || 0);
+      tPp += pickCur(r, 'pp');
+      tTutar += pickCur(r, 'tutar');
+      const curPhys = katUrunPhysNum(r, iceTip);
+      if (curPhys != null) {
+        tPhys += curPhys;
+        if (curPhys > 0) { bfWNum += bf * curPhys; bfWDen += curPhys; }
+      }
+      if (curPhys != null && prevMap.has(r.stok_mali)) {
+        const prevPhys = prevMap.get(r.stok_mali);
+        if (prevPhys != null && prevPhys > 0) { tCurDelta += curPhys; tPrevDelta += prevPhys; hasDelta = true; }
+      }
+    });
+    const setOzet = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    setOzet('kat-urun-ozet-bf', bfWDen > 0 ? fmtCur(bfWNum / bfWDen) : '—');
+    setOzet('kat-urun-ozet-pp', fmtCur(tPp));
+    setOzet('kat-urun-ozet-g', iceTip ? fmtN(tPhys * 10, 0) : fmtN(tPhys, 0));
+    setOzet('kat-urun-ozet-delta', hasDelta && tPrevDelta > 0
+      ? renderMomChip(((tCurDelta - tPrevDelta) / tPrevDelta) * 100, oncekiEtiket)
+      : '—');
+    setOzet('kat-urun-ozet-tutar', fmtCur(tTutar));
     document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
       tr.addEventListener('click', (ev) => {
         ev.stopPropagation();
