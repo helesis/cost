@@ -1204,7 +1204,7 @@ app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
       LEFT JOIN kat_pp pi ON pi.kategori = ik.kategori AND pi.tarih_str = ik.ilk_donem
       LEFT JOIN kat_pp ps ON ps.kategori = sn.kategori AND ps.tarih_str = sn.son_donem
       LEFT JOIN sku_n nu ON nu.kategori = ik.kategori
-      ORDER BY ABS(COALESCE(((ps.pp - pi.pp) / NULLIF(pi.pp, 0) * 100), 0)) DESC NULLS LAST
+      ORDER BY ((ps.pp - pi.pp) / NULLIF(pi.pp, 0) * 100) DESC NULLS LAST
       `,
       params
     );
