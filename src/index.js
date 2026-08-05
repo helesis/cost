@@ -1092,7 +1092,8 @@ app.get('/api/miktar-analizi', async (req, res) => {
   }
 });
 
-// ── API: Miktar Analizi — kategori bazında dönemler arası tüketim miktarı ───
+// ── API: Miktar Analizi — kategori bazında dönemler arası kişi başı tüketim ─
+// Metrik: kategori SUM(tuk_miktar) / dönem cost_pax (yiyecek: g/pax; içecek: cL/pax).
 app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
   const { tarih_baslangic, tarih_bitis, tip } = req.query;
   try {
@@ -1131,14 +1132,19 @@ app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
       ),
       ilk AS (SELECT kategori, tarih_str AS ilk_donem FROM siralanmis WHERE rn_ilk = 1),
       son AS (SELECT kategori, tarih_str AS son_donem FROM siralanmis WHERE rn_son = 1),
-      hist AS (
+      kat_donem AS (
         SELECT
           t.kategori,
-          t.stok_mali,
           t.tarih_str,
-          t.yil,
-          t.ay_no,
-          SUM(t.tuk_miktar)::NUMERIC AS miktar
+          CASE
+            WHEN SUM(CASE WHEN t.tip IN ('icenek', 'icecek') THEN 1 ELSE 0 END)
+                 >= SUM(CASE WHEN t.tip = 'yiyecek' THEN 1 ELSE 0 END)
+            THEN 'icenek'
+            ELSE 'yiyecek'
+          END AS tip_kind,
+          SUM(t.tuk_miktar)::NUMERIC AS miktar,
+          MAX(t.cost_pax)::NUMERIC AS pax,
+          COUNT(DISTINCT t.stok_mali)::int AS n_sku
         FROM fb_cost.tuketim t
         WHERE COALESCE(t.tuk_miktar, 0) > 0
           AND t.kategori IS NOT NULL
@@ -1146,57 +1152,59 @@ app.get('/api/miktar-analizi/kategoriler', async (req, res) => {
           AND (${SQL_EXC_FINANS_PP})
           ${histBitisClause}
           ${tipHistAliased}
-        GROUP BY t.kategori, t.stok_mali, t.tarih_str, t.yil, t.ay_no
+        GROUP BY t.kategori, t.tarih_str
       ),
-      sku_at_son AS (
-        SELECT h.kategori, h.stok_mali, h.miktar AS son_miktar
-        FROM hist h
-        JOIN son s ON s.kategori = h.kategori AND h.tarih_str = s.son_donem
-      ),
-      sku_at_ilk AS (
-        SELECT h.kategori, h.stok_mali, h.miktar AS ilk_miktar
-        FROM hist h
-        JOIN ilk i ON i.kategori = h.kategori AND h.tarih_str = i.ilk_donem
-      ),
-      sku_keys AS (
-        SELECT kategori, stok_mali FROM sku_at_ilk
-        UNION
-        SELECT kategori, stok_mali FROM sku_at_son
-      ),
-      sku_resolved AS (
-        SELECT
-          k.kategori,
-          k.stok_mali,
-          COALESCE(si.ilk_miktar, 0) AS ref_miktar,
-          COALESCE(ss.son_miktar, 0) AS son_miktar
-        FROM sku_keys k
-        LEFT JOIN sku_at_ilk si ON si.kategori = k.kategori AND si.stok_mali = k.stok_mali
-        LEFT JOIN sku_at_son ss ON ss.kategori = k.kategori AND ss.stok_mali = k.stok_mali
-        WHERE COALESCE(si.ilk_miktar, 0) > 0 OR COALESCE(ss.son_miktar, 0) > 0
-      ),
-      sku_fin AS (
+      kat_pp AS (
         SELECT
           kategori,
-          COUNT(*)::int AS n_urun,
-          AVG(ref_miktar) AS ref_avg_miktar,
-          AVG(son_miktar) AS son_avg_miktar
-        FROM sku_resolved
-        GROUP BY kategori
+          tarih_str,
+          tip_kind,
+          n_sku,
+          pax,
+          CASE
+            WHEN tip_kind = 'icenek' THEN
+              (100.0 * miktar / NULLIF(pax, 0))::NUMERIC
+            ELSE
+              (miktar / NULLIF(pax, 0))::NUMERIC
+          END AS pp
+        FROM kat_donem
+      ),
+      sku_n AS (
+        SELECT
+          k.kategori,
+          COUNT(DISTINCT t.stok_mali)::int AS n_urun
+        FROM (
+          SELECT kategori, ilk_donem AS d FROM ilk
+          UNION
+          SELECT kategori, son_donem AS d FROM son
+        ) k
+        JOIN fb_cost.tuketim t
+          ON t.kategori = k.kategori
+         AND t.tarih_str = k.d
+         AND COALESCE(t.tuk_miktar, 0) > 0
+         AND (${SQL_EXC_FINANS_PP})
+         ${tipHistAliased}
+        GROUP BY k.kategori
       )
       SELECT
         ik.kategori,
         ik.ilk_donem,
         sn.son_donem,
-        sf.ref_avg_miktar AS ilk_donem_miktar,
-        sf.son_avg_miktar AS son_donem_miktar,
-        sf.n_urun,
-        CASE WHEN sf.ref_avg_miktar > 0
-             THEN ((sf.son_avg_miktar - sf.ref_avg_miktar) / sf.ref_avg_miktar * 100)::NUMERIC
+        COALESCE(pi.tip_kind, ps.tip_kind) AS tip,
+        pi.pp AS ilk_donem_miktar,
+        ps.pp AS son_donem_miktar,
+        pi.pax AS ilk_pax,
+        ps.pax AS son_pax,
+        COALESCE(nu.n_urun, 0) AS n_urun,
+        CASE WHEN pi.pp > 0
+             THEN ((ps.pp - pi.pp) / pi.pp * 100)::NUMERIC
              ELSE NULL END AS degisim_yuzde
       FROM ilk ik
       JOIN son sn USING (kategori)
-      LEFT JOIN sku_fin sf ON sf.kategori = ik.kategori
-      ORDER BY ABS(COALESCE(((sf.son_avg_miktar - sf.ref_avg_miktar) / NULLIF(sf.ref_avg_miktar, 0) * 100), 0)) DESC NULLS LAST
+      LEFT JOIN kat_pp pi ON pi.kategori = ik.kategori AND pi.tarih_str = ik.ilk_donem
+      LEFT JOIN kat_pp ps ON ps.kategori = sn.kategori AND ps.tarih_str = sn.son_donem
+      LEFT JOIN sku_n nu ON nu.kategori = ik.kategori
+      ORDER BY ABS(COALESCE(((ps.pp - pi.pp) / NULLIF(pi.pp, 0) * 100), 0)) DESC NULLS LAST
       `,
       params
     );
@@ -1222,7 +1230,7 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
     const tipF = tipFilterSql(params, tip);
     if (!tipF.ok) return res.json([]);
     const tipAliased = tipF.clause ? tipF.clause.replace(/\btip\b/g, 't.tip') : '';
-    let catWhere = `WHERE t.kategori = $1 AND t.tarih_str <= $3 AND COALESCE(t.tuk_miktar, 0) > 0 AND t.tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
+    let catWhere = `WHERE t.kategori = $1 AND t.tarih_str IN ($2, $3) AND COALESCE(t.tuk_miktar, 0) > 0 AND t.tarih_str NOT LIKE '%-15g' AND (${SQL_EXC_FINANS_PP})`;
     catWhere += tipAliased;
 
     const { rows } = await pool.query(
@@ -1231,18 +1239,34 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
         SELECT
           t.stok_mali,
           t.tarih_str,
-          t.yil,
-          t.ay_no,
-          SUM(t.tuk_miktar)::NUMERIC AS miktar
+          CASE
+            WHEN SUM(CASE WHEN t.tip IN ('icenek', 'icecek') THEN 1 ELSE 0 END)
+                 >= SUM(CASE WHEN t.tip = 'yiyecek' THEN 1 ELSE 0 END)
+            THEN 'icenek'
+            ELSE 'yiyecek'
+          END AS tip_kind,
+          SUM(t.tuk_miktar)::NUMERIC AS miktar,
+          MAX(t.cost_pax)::NUMERIC AS pax
         FROM fb_cost.tuketim t
         ${catWhere}
-        GROUP BY t.stok_mali, t.tarih_str, t.yil, t.ay_no
+        GROUP BY t.stok_mali, t.tarih_str
+      ),
+      cat_pp AS (
+        SELECT
+          stok_mali,
+          tarih_str,
+          tip_kind,
+          CASE
+            WHEN tip_kind = 'icenek' THEN (100.0 * miktar / NULLIF(pax, 0))::NUMERIC
+            ELSE (miktar / NULLIF(pax, 0))::NUMERIC
+          END AS pp
+        FROM cat_base
       ),
       son_row AS (
-        SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $3
+        SELECT stok_mali, tip_kind, pp AS son_pp FROM cat_pp WHERE tarih_str = $3
       ),
       ilk_row AS (
-        SELECT stok_mali, miktar FROM cat_base WHERE tarih_str = $2
+        SELECT stok_mali, tip_kind, pp AS ref_pp FROM cat_pp WHERE tarih_str = $2
       ),
       sku_keys AS (
         SELECT stok_mali FROM son_row
@@ -1252,27 +1276,29 @@ app.get('/api/miktar-analizi/kategori-urunleri', async (req, res) => {
       ref_merged AS (
         SELECT
           k.stok_mali,
-          COALESCE(sr.miktar, 0) AS son_miktar,
-          COALESCE(ir.miktar, 0) AS ref_miktar,
+          COALESCE(sr.tip_kind, ir.tip_kind) AS tip_kind,
+          COALESCE(sr.son_pp, 0) AS son_pp,
+          COALESCE(ir.ref_pp, 0) AS ref_pp,
           $2::text AS ref_donem
         FROM sku_keys k
         LEFT JOIN son_row sr ON sr.stok_mali = k.stok_mali
         LEFT JOIN ilk_row ir ON ir.stok_mali = k.stok_mali
-        WHERE COALESCE(ir.miktar, 0) > 0 OR COALESCE(sr.miktar, 0) > 0
+        WHERE COALESCE(ir.ref_pp, 0) > 0 OR COALESCE(sr.son_pp, 0) > 0
       )
       SELECT
         stok_mali,
+        tip_kind AS tip,
         ref_donem,
-        ref_miktar AS ilk_donem_miktar,
-        son_miktar AS son_donem_miktar,
+        ref_pp AS ilk_donem_miktar,
+        son_pp AS son_donem_miktar,
         CASE
-          WHEN ref_miktar > 0
-          THEN ((son_miktar - ref_miktar) / ref_miktar * 100)::NUMERIC
+          WHEN ref_pp > 0
+          THEN ((son_pp - ref_pp) / ref_pp * 100)::NUMERIC
           ELSE NULL
         END AS degisim_yuzde
       FROM ref_merged
       ORDER BY
-        GREATEST(ref_miktar, son_miktar) DESC,
+        GREATEST(ref_pp, son_pp) DESC,
         stok_mali ASC
       `,
       params

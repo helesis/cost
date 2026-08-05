@@ -1317,7 +1317,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">
           <div>
             <div class="card-title" style="margin-bottom:4px">Kategori Bazında Miktar Değişimi</div>
-            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem karşılaştırması. Dönemlerden yalnız birinde olan ürünler de listelenir; eksik taraf <strong>0</strong> sayılır ve ortalamaya dahil edilir. Yiyecek: <strong>kg</strong>; içecek: <strong>L</strong>.</div>
+            <div style="font-size:12px;color:var(--text-dim)">İlk dönem → Son dönem karşılaştırması. Kategori satırı: o dönemdeki <strong>toplam tüketim ÷ pax</strong>. Yiyecek: <strong>g/pax</strong>; içecek: <strong>mL/pax</strong>. Ürün detayında eksik dönem <strong>0</strong> sayılır.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select class="form-select" id="kat-miktar-baslangic" style="width:130px"></select>
@@ -1337,8 +1337,8 @@
               <tr>
                 <th>Kategori</th>
                 <th>Aralık</th>
-                <th style="text-align:right" id="kat-miktar-th-ilk">Ref. ort.</th>
-                <th style="text-align:right" id="kat-miktar-th-son">Son ort.</th>
+                <th style="text-align:right" id="kat-miktar-th-ilk">Ref.</th>
+                <th style="text-align:right" id="kat-miktar-th-son">Son</th>
                 <th style="text-align:right">Δ %</th>
               </tr>
             </thead>
@@ -6602,7 +6602,7 @@ function renderMiktarChart(seri, tipSel) {
   const ctx = document.getElementById('chart-miktar').getContext('2d');
   if (chartMiktar) chartMiktar.destroy();
 
-  const birim = katMiktarBirimLabel(tipSel) || 'miktar';
+  const birim = katMiktarBirimLabelAbs(tipSel) || 'miktar';
   const color = '#2a5f8f';
   const bg = 'rgba(42,95,143,0.12)';
   const data = seri.map(d => {
@@ -6938,9 +6938,15 @@ function katMiktarTipFromKategori(kategori) {
   return 'yiyecek';
 }
 
-function katMiktarBirimLabel(tipSel) {
+function katMiktarBirimLabelAbs(tipSel) {
   if (tipSel === 'icenek') return 'L';
   if (tipSel === 'yiyecek') return 'kg';
+  return '';
+}
+
+function katMiktarBirimLabel(tipSel) {
+  if (tipSel === 'icenek') return 'mL/pax';
+  if (tipSel === 'yiyecek') return 'g/pax';
   return '';
 }
 
@@ -6949,12 +6955,13 @@ function katMiktarKind(tipSel, kategori) {
   return katMiktarTipFromKategori(kategori);
 }
 
+/** Kategori kişi başı: yiyecek g/pax; içecek API cL → gösterim mL/pax. */
 function fmtMiktarQty(v, tipSel, kategori) {
   if (v === null || v === undefined || v === '' || isNaN(v)) return '—';
   const n = parseFloat(v);
   const kind = katMiktarKind(tipSel, kategori);
-  if (kind === 'icenek') return `${fmtN(n, 2)} L`;
-  return `${fmtN(n / 1000, 2)} kg`;
+  if (kind === 'icenek') return `${fmtN(n * 10, 1)} mL`;
+  return `${fmtN(n, 1)} g`;
 }
 
 async function loadKategoriFiyat() {
@@ -7055,11 +7062,12 @@ async function katMiktarToggleRow(tr) {
             const sonN = u.son_donem_miktar != null ? parseFloat(u.son_donem_miktar) : 0;
             const dlt = u.degisim_yuzde;
             const rd = u.ref_donem != null && String(u.ref_donem) !== '' ? String(u.ref_donem) : '—';
+            const rowTip = tip || u.tip || '';
             return `<tr>
             <td>${fiyatPaxUrunHlHtml(u.stok_mali || '', tip)}</td>
             <td>${rd !== '—' ? `<span class="kat-fiyat-ref-chip">${escapeHtml(rd)}</span>` : '—'}</td>
-            <td style="text-align:right">${fmtMiktarQty(ilkN, tip, k)}</td>
-            <td style="text-align:right">${fmtMiktarQty(sonN, tip, k)}</td>
+            <td style="text-align:right">${fmtMiktarQty(ilkN, rowTip, k)}</td>
+            <td style="text-align:right">${fmtMiktarQty(sonN, rowTip, k)}</td>
             <td style="text-align:right">${renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null)}</td>
           </tr>`;
           })
@@ -7116,23 +7124,24 @@ async function loadKategoriMiktar() {
 
     const birim = katMiktarBirimLabel(tip);
     const birimSuf = birim ? ` (${birim})` : '';
-    document.getElementById('kat-miktar-th-ilk').textContent = `Ref. ort.${birimSuf}`;
-    document.getElementById('kat-miktar-th-son').textContent = `Son ort.${birimSuf}`;
+    document.getElementById('kat-miktar-th-ilk').textContent = `Ref.${birimSuf}`;
+    document.getElementById('kat-miktar-th-son').textContent = `Son${birimSuf}`;
 
     tbody.innerHTML = rows.map(r => {
       const nUrun = parseInt(String(r.n_urun || '0'), 10) || 0;
       const ilkRaw = r.ilk_donem_miktar;
       const sonRaw = r.son_donem_miktar;
-      const hasAgg = nUrun > 0;
+      const hasAgg = nUrun > 0 && (ilkRaw != null || sonRaw != null);
       const dlt = r.degisim_yuzde;
+      const rowTip = tip || r.tip || '';
       const dk = encodeURIComponent(r.kategori || '');
       const dik = escapeHtml(String(r.ilk_donem || ''));
       const dson = escapeHtml(String(r.son_donem || ''));
       return `<tr class="kat-miktar-kat-row" role="button" tabindex="0" data-k="${dk}" data-ilk="${dik}" data-son="${dson}">
         <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(r.kategori)}</strong>${nUrun ? ` <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${nUrun} ürün)</span>` : ''}</td>
         <td style="color:var(--text-dim);font-size:12px">${r.ilk_donem} <i data-lucide="arrow-right" class="date-arrow"></i> ${r.son_donem}</td>
-        <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw != null ? ilkRaw : 0, tip, r.kategori) : '—'}</td>
-        <td style="text-align:right">${hasAgg ? fmtMiktarQty(sonRaw != null ? sonRaw : 0, tip, r.kategori) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(ilkRaw != null ? ilkRaw : 0, rowTip, r.kategori) : '—'}</td>
+        <td style="text-align:right">${hasAgg ? fmtMiktarQty(sonRaw != null ? sonRaw : 0, rowTip, r.kategori) : '—'}</td>
         <td style="text-align:right">${hasAgg ? renderDelta(dlt !== null && dlt !== undefined ? parseFloat(dlt) : null) : '—'}</td>
       </tr>`;
     }).join('');
