@@ -513,9 +513,122 @@ async function exportFiltered(pool, query, sqlExcFinans, format) {
   return { body: exportRowsToCsv(filtered, tip, currency), contentType: 'text/csv; charset=utf-8' };
 }
 
+/**
+ * Seçilen başlangıç döneminden en son tam aya kadar kümülatif tüketim (SKU bazında).
+ * -15g hariç; yiyecek qty_display = kg (raw/1000), içecek = L.
+ */
+async function cumulativeConsumption(pool, query, sqlExcFinans) {
+  let baslangic = String(query.baslangic || '').trim();
+  if (!baslangic) throw new Error('baslangic parametresi gerekli');
+  if (baslangic.endsWith('-15g')) baslangic = baslangic.slice(0, -4);
+  if (!/^\d{4}-\d{2}$/.test(baslangic)) throw new Error('baslangic YYYY-MM olmalı');
+
+  const tipN = normalizeTipInput(query.tip);
+  const params = [baslangic];
+  let tipSql = '';
+  if (tipN === 'yiyecek') {
+    tipSql = ` AND tip = 'yiyecek'`;
+  } else if (tipN === 'icenek') {
+    tipSql = ` AND tip IN ('icenek', 'icecek')`;
+  }
+
+  const { rows: bitisRows } = await pool.query(
+    `
+    SELECT MAX(tarih_str) AS bitis
+    FROM fb_cost.tuketim
+    WHERE tarih_str >= $1
+      AND tarih_str NOT LIKE '%-15g'
+      AND (${sqlExcFinans})
+      ${tipSql}
+    `,
+    params
+  );
+  const bitis = bitisRows[0]?.bitis || null;
+  if (!bitis) {
+    return {
+      baslangic,
+      bitis: null,
+      items: [],
+      totals: { n_urun: 0, qty_kg: 0, qty_l: 0, tutar_tl: 0, tutar_eur: 0 }
+    };
+  }
+
+  const { rows } = await pool.query(
+    `
+    SELECT
+      stok_mali,
+      CASE
+        WHEN tip IN ('icenek', 'icecek') THEN 'icenek'
+        ELSE 'yiyecek'
+      END AS tip,
+      MAX(kategori) AS kategori,
+      SUM(ABS(COALESCE(tuk_miktar, 0)))::float8 AS qty_raw,
+      SUM(COALESCE(tutar_tl, 0))::float8 AS tutar_tl,
+      SUM(COALESCE(tutar_eur, 0))::float8 AS tutar_eur
+    FROM fb_cost.tuketim
+    WHERE tarih_str >= $1
+      AND tarih_str <= $2
+      AND tarih_str NOT LIKE '%-15g'
+      AND (${sqlExcFinans})
+      ${tipSql}
+    GROUP BY stok_mali,
+      CASE
+        WHEN tip IN ('icenek', 'icecek') THEN 'icenek'
+        ELSE 'yiyecek'
+      END
+    HAVING SUM(ABS(COALESCE(tuk_miktar, 0))) > 0
+    ORDER BY SUM(ABS(COALESCE(tuk_miktar, 0))) DESC
+    `,
+    [baslangic, bitis]
+  );
+
+  const items = rows.map((r) => {
+    const tip = r.tip === 'icenek' ? 'icenek' : 'yiyecek';
+    const qtyRaw = +r.qty_raw || 0;
+    const qtyDisplay = tip === 'yiyecek' ? qtyRaw / 1000 : qtyRaw;
+    return {
+      stok_mali: r.stok_mali,
+      kategori: r.kategori || '',
+      tip,
+      qty_raw: qtyRaw,
+      qty_display: +qtyDisplay.toFixed(6),
+      qty_unit: tip === 'yiyecek' ? 'kg' : 'L',
+      tutar_tl: +(r.tutar_tl || 0),
+      tutar_eur: +(r.tutar_eur || 0)
+    };
+  });
+
+  items.sort((a, b) => b.qty_display - a.qty_display);
+
+  let qty_kg = 0;
+  let qty_l = 0;
+  let tutar_tl = 0;
+  let tutar_eur = 0;
+  for (const it of items) {
+    if (it.tip === 'yiyecek') qty_kg += it.qty_display;
+    else qty_l += it.qty_display;
+    tutar_tl += it.tutar_tl;
+    tutar_eur += it.tutar_eur;
+  }
+
+  return {
+    baslangic,
+    bitis,
+    items,
+    totals: {
+      n_urun: items.length,
+      qty_kg: +qty_kg.toFixed(6),
+      qty_l: +qty_l.toFixed(6),
+      tutar_tl: +tutar_tl.toFixed(4),
+      tutar_eur: +tutar_eur.toFixed(4)
+    }
+  };
+}
+
 module.exports = {
   analyze,
   exportFiltered,
+  cumulativeConsumption,
   ALLOWED_THRESHOLDS,
   PARETO_CHART_MAX,
   Q,

@@ -1881,6 +1881,19 @@ app.get('/api/menu-engineering/export', async (req, res) => {
   }
 });
 
+app.get('/api/menu-engineering/kumulatif', async (req, res) => {
+  try {
+    const data = await menuEngineering.cumulativeConsumption(pool, req.query, SQL_EXC_FINANS_PP);
+    res.json(data);
+  } catch (err) {
+    if (err && err.message && (err.message.includes('gerekli') || err.message.includes('olmalı'))) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error('menu-engineering/kumulatif:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Catch-all → index.html ────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
