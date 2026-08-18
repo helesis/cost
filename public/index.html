@@ -780,11 +780,14 @@
     position: relative;
   }
   .kat-fiyat-kat-row,
-  .kat-miktar-kat-row { cursor: pointer; }
+  .kat-miktar-kat-row,
+  .mek-kat-row { cursor: pointer; }
   .kat-fiyat-kat-row:hover,
-  .kat-miktar-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
+  .kat-miktar-kat-row:hover,
+  .mek-kat-row:hover { background: rgba(138, 108, 46, 0.07); }
   .kat-fiyat-kat-row.kat-fiyat-expanded,
-  .kat-miktar-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
+  .kat-miktar-kat-row.kat-fiyat-expanded,
+  .mek-kat-row.kat-fiyat-expanded { background: rgba(138, 108, 46, 0.11); }
   .kat-fiyat-twist {
     display: inline-block;
     width: 1em;
@@ -1690,13 +1693,12 @@
         <div id="mek-content" style="display:none">
           <div class="me-kpis" id="mek-kpis"></div>
           <div class="card">
-            <div class="card-title">Ürün listesi</div>
+            <div class="card-title">Kategori listesi</div>
+            <p style="font-size:12px;color:var(--text-dim);margin:0 0 12px">Kategorilere tıklayarak altındaki ürünleri açın.</p>
             <div class="table-wrap" style="max-height:min(560px,70vh);overflow:auto">
               <table class="search-results" id="mek-table">
                 <thead>
                   <tr>
-                    <th>#</th>
-                    <th>Ürün</th>
                     <th>Kategori</th>
                     <th>Tip</th>
                     <th style="text-align:right">Kümülatif miktar</th>
@@ -1706,11 +1708,6 @@
                 </thead>
                 <tbody id="mek-tbody"></tbody>
               </table>
-            </div>
-            <div class="me-pager">
-              <span id="mek-page-info"></span>
-              <button type="button" class="btn btn-secondary btn-sm" id="mek-prev" onclick="mekPrevPage()">Önceki</button>
-              <button type="button" class="btn btn-secondary btn-sm" id="mek-next" onclick="mekNextPage()">Sonraki</button>
             </div>
           </div>
         </div>
@@ -3136,8 +3133,6 @@ function meExport(fmt) {
 }
 
 // ── Menu Engineering — Kümülatif tüketim ────────────────────────────────────
-let mekPage = 1;
-const MEK_PAGE_SIZE = 50;
 let _mekItems = [];
 let _mekMeta = null;
 let _mekActivePanel = 'matrix';
@@ -3236,12 +3231,10 @@ function initMeKumulatifFilters() {
     let qt;
     mq.addEventListener('input', () => {
       clearTimeout(qt);
-      qt = setTimeout(() => {
-        mekPage = 1;
-        mekRenderTable();
-      }, 300);
+      qt = setTimeout(() => mekRenderTable(), 300);
     });
   }
+  bindMekKategoriExpandOnce();
 }
 
 function mekFilteredItems() {
@@ -3252,6 +3245,77 @@ function mekFilteredItems() {
       String(r.stok_mali || '').toLocaleLowerCase('tr-TR').includes(q) ||
       String(r.kategori || '').toLocaleLowerCase('tr-TR').includes(q)
   );
+}
+
+/** Filtrelenmiş ürünleri kategoriye göre grupla; kategori toplam miktara göre azalan. */
+function mekGroupByKategori(items) {
+  const map = new Map();
+  for (const r of items) {
+    const k = r.kategori || '—';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(r);
+  }
+  const groups = [...map.entries()].map(([kategori, urunler]) => {
+    const sorted = [...urunler].sort((a, b) => (b.qty_display || 0) - (a.qty_display || 0));
+    let qtyKg = 0;
+    let qtyL = 0;
+    let tutarTl = 0;
+    let tutarEur = 0;
+    let nY = 0;
+    let nI = 0;
+    for (const u of sorted) {
+      if (u.tip === 'icenek') {
+        qtyL += +u.qty_display || 0;
+        nI++;
+      } else {
+        qtyKg += +u.qty_display || 0;
+        nY++;
+      }
+      tutarTl += +u.tutar_tl || 0;
+      tutarEur += +u.tutar_eur || 0;
+    }
+    let tip = 'yiyecek';
+    let qtyDisplay = qtyKg;
+    let qtyUnit = 'kg';
+    if (nI > 0 && nY === 0) {
+      tip = 'icenek';
+      qtyDisplay = qtyL;
+      qtyUnit = 'L';
+    } else if (nI > 0 && nY > 0) {
+      tip = 'mixed';
+      qtyDisplay = null;
+      qtyUnit = '';
+    }
+    return {
+      kategori,
+      tip,
+      n_urun: sorted.length,
+      qty_kg: qtyKg,
+      qty_l: qtyL,
+      qty_display: qtyDisplay,
+      qty_unit: qtyUnit,
+      tutar_tl: tutarTl,
+      tutar_eur: tutarEur,
+      urunler: sorted
+    };
+  });
+  groups.sort((a, b) => {
+    const qa = a.tip === 'icenek' ? a.qty_l : a.tip === 'mixed' ? a.qty_kg + a.qty_l : a.qty_kg;
+    const qb = b.tip === 'icenek' ? b.qty_l : b.tip === 'mixed' ? b.qty_kg + b.qty_l : b.qty_kg;
+    return qb - qa;
+  });
+  return groups;
+}
+
+function mekFmtKatQty(g) {
+  if (g.tip === 'mixed') {
+    const parts = [];
+    if (g.qty_kg > 0) parts.push(`${fmtN(g.qty_kg, 3)} kg`);
+    if (g.qty_l > 0) parts.push(`${fmtN(g.qty_l, 3)} L`);
+    return parts.join(' · ') || '—';
+  }
+  if (g.qty_display == null) return '—';
+  return fmtN(g.qty_display, 3);
 }
 
 function mekRenderKpis() {
@@ -3270,46 +3334,99 @@ function mekRenderKpis() {
 
 function mekRenderTable() {
   const tb = document.getElementById('mek-tbody');
-  const info = document.getElementById('mek-page-info');
-  const prev = document.getElementById('mek-prev');
-  const next = document.getElementById('mek-next');
   if (!tb) return;
-  const filtered = mekFilteredItems();
-  const totP = Math.max(1, Math.ceil(filtered.length / MEK_PAGE_SIZE));
-  if (mekPage > totP) mekPage = totP;
-  if (mekPage < 1) mekPage = 1;
-  const start = (mekPage - 1) * MEK_PAGE_SIZE;
-  const pageRows = filtered.slice(start, start + MEK_PAGE_SIZE);
-  tb.innerHTML = pageRows
-    .map((r, i) => {
-      const amt = vcIsEUR() ? r.tutar_eur : r.tutar_tl;
-      return `<tr>
-        <td>${start + i + 1}</td>
-        <td><strong>${escapeHtml(r.stok_mali || '')}</strong></td>
-        <td style="color:var(--text-dim);font-size:12px">${escapeHtml(r.kategori || '—')}</td>
-        <td><span class="badge ${r.tip === 'yiyecek' ? 'badge-gold' : 'badge-blue'}">${tipDisplayTr(r.tip)}</span></td>
-        <td style="text-align:right">${fmtN(r.qty_display, 3)}</td>
-        <td style="color:var(--text-dim)">${escapeHtml(r.qty_unit || '')}</td>
+  const groups = mekGroupByKategori(mekFilteredItems());
+  if (!groups.length) {
+    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Eşleşen kategori yok</td></tr>`;
+    return;
+  }
+  tb.innerHTML = groups
+    .map((g) => {
+      const dk = encodeURIComponent(g.kategori || '');
+      const amt = vcIsEUR() ? g.tutar_eur : g.tutar_tl;
+      const tipHtml =
+        g.tip === 'mixed'
+          ? '<span class="badge badge-gold">Yiyecek</span> <span class="badge badge-blue">İçecek</span>'
+          : `<span class="badge ${g.tip === 'yiyecek' ? 'badge-gold' : 'badge-blue'}">${tipDisplayTr(g.tip)}</span>`;
+      const birim = g.tip === 'mixed' ? '—' : escapeHtml(g.qty_unit || '');
+      return `<tr class="mek-kat-row" role="button" tabindex="0" data-k="${dk}">
+        <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(g.kategori)}</strong> <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${g.n_urun} ürün)</span></td>
+        <td>${tipHtml}</td>
+        <td style="text-align:right">${mekFmtKatQty(g)}</td>
+        <td style="color:var(--text-dim)">${birim}</td>
         <td style="text-align:right">${fmtCur(amt)}</td>
       </tr>`;
     })
     .join('');
-  if (info) info.textContent = `Sayfa ${mekPage} / ${totP} · ${filtered.length} ürün`;
-  if (prev) prev.disabled = mekPage <= 1;
-  if (next) next.disabled = mekPage >= totP;
 }
 
-function mekPrevPage() {
-  if (mekPage <= 1) return;
-  mekPage--;
-  mekRenderTable();
+function mekToggleKatRow(tr) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('kat-fiyat-urun-detay')) {
+    next.remove();
+    tr.classList.remove('kat-fiyat-expanded');
+    const tw = tr.querySelector('.kat-fiyat-twist');
+    if (tw) tw.textContent = '▸';
+    return;
+  }
+  const k = decodeURIComponent(tr.getAttribute('data-k') || '');
+  const groups = mekGroupByKategori(mekFilteredItems());
+  const g = groups.find((x) => x.kategori === k);
+  const det = document.createElement('tr');
+  det.className = 'kat-fiyat-urun-detay';
+  det.innerHTML = '<td colspan="5"><div class="kat-fiyat-urun-ic"></div></td>';
+  tr.after(det);
+  tr.classList.add('kat-fiyat-expanded');
+  const tw = tr.querySelector('.kat-fiyat-twist');
+  if (tw) tw.textContent = '▾';
+  const ic = det.querySelector('.kat-fiyat-urun-ic');
+  if (!ic) return;
+  if (!g || !g.urunler.length) {
+    ic.innerHTML = '<div style="padding:12px;color:var(--text-dim);font-size:12px">Bu kategoride ürün yok.</div>';
+    return;
+  }
+  ic.innerHTML = `
+    <table class="search-results" style="font-size:12px;margin:0">
+      <thead><tr>
+        <th>Ürün</th>
+        <th>Tip</th>
+        <th style="text-align:right">Kümülatif miktar</th>
+        <th>Birim</th>
+        <th style="text-align:right">Tutar (${curLabel()})</th>
+      </tr></thead>
+      <tbody>${g.urunler
+        .map((u) => {
+          const amt = vcIsEUR() ? u.tutar_eur : u.tutar_tl;
+          return `<tr>
+            <td>${escapeHtml(u.stok_mali || '')}</td>
+            <td><span class="badge ${u.tip === 'yiyecek' ? 'badge-gold' : 'badge-blue'}">${tipDisplayTr(u.tip)}</span></td>
+            <td style="text-align:right">${fmtN(u.qty_display, 3)}</td>
+            <td style="color:var(--text-dim)">${escapeHtml(u.qty_unit || '')}</td>
+            <td style="text-align:right">${fmtCur(amt)}</td>
+          </tr>`;
+        })
+        .join('')}</tbody>
+    </table>`;
 }
 
-function mekNextPage() {
-  const totP = Math.max(1, Math.ceil(mekFilteredItems().length / MEK_PAGE_SIZE));
-  if (mekPage >= totP) return;
-  mekPage++;
-  mekRenderTable();
+function mekOnTbodyClick(e) {
+  const tr = e.target.closest('tr.mek-kat-row');
+  if (!tr) return;
+  mekToggleKatRow(tr);
+}
+
+function bindMekKategoriExpandOnce() {
+  const tb = document.getElementById('mek-tbody');
+  if (!tb || tb.dataset.expandBound === '1') return;
+  tb.dataset.expandBound = '1';
+  tb.addEventListener('click', mekOnTbodyClick);
+  tb.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const tr = e.target.closest('tr.mek-kat-row');
+    if (!tr || !tb.contains(tr)) return;
+    e.preventDefault();
+    mekToggleKatRow(tr);
+  });
 }
 
 async function loadMeKumulatif(resetPage) {
@@ -3326,7 +3443,6 @@ async function loadMeKumulatif(resetPage) {
     if (hint) hint.textContent = '';
     return;
   }
-  if (resetPage) mekPage = 1;
   loadEl.style.display = 'block';
   contentEl.style.display = 'none';
   emptyEl.style.display = 'none';
