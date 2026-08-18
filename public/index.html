@@ -5305,12 +5305,18 @@ function katUrunPhysNum(r, iceTip) {
   return Number.isNaN(gr) ? null : gr;
 }
 
-function renderMomChip(v, oncekiEtiket) {
+function renderMomChip(v, oncekiEtiket, oncekiMiktarStr) {
   if (v === null || v === undefined || isNaN(v)) return '';
   const ic = v > 0.01 ? 'arrow-up' : v < -0.01 ? 'arrow-down' : 'minus';
   const cls = v > 0.01 ? 'kat-pp-mom-up' : v < -0.01 ? 'kat-pp-mom-down' : 'kat-pp-mom-flat';
-  const tit = oncekiEtiket ? `Önceki döneme göre (${oncekiEtiket})` : 'Önceki döneme göre';
+  let tit = oncekiEtiket ? `Önceki döneme göre (${oncekiEtiket})` : 'Önceki döneme göre';
+  if (oncekiMiktarStr) tit += ` — ${oncekiMiktarStr}`;
   return `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(tit)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(v), 1)}%</span>`;
+}
+
+function fmtKatUrunPrevPhys(prevPhys, iceTip) {
+  if (prevPhys == null || isNaN(prevPhys)) return '';
+  return iceTip ? `${fmtN(prevPhys * 10, 0)} mL` : `${fmtN(prevPhys, 0)} g`;
 }
 
 async function loadKatUrunDetay(kategoriDb, tarih, tip) {
@@ -5409,7 +5415,11 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
       if (curPhys != null && prevMap.has(r.stok_mali)) {
         const prevPhys = prevMap.get(r.stok_mali);
         if (prevPhys != null && prevPhys > 0) {
-          momChip = renderMomChip(((curPhys - prevPhys) / prevPhys) * 100, oncekiEtiket);
+          momChip = renderMomChip(
+            ((curPhys - prevPhys) / prevPhys) * 100,
+            oncekiEtiket,
+            fmtKatUrunPrevPhys(prevPhys, iceTip)
+          );
         }
       }
       const stokTit = escapeHtml(r.stok_mali || '').replace(/"/g, '&quot;');
@@ -5445,8 +5455,18 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     setOzet('kat-urun-ozet-pp', fmtCur(tPp));
     setOzet('kat-urun-ozet-g', iceTip ? fmtN(tPhys * 10, 0) : fmtN(tPhys, 0));
     setOzet('kat-urun-ozet-delta', hasDelta && tPrevDelta > 0
-      ? renderMomChip(((tCurDelta - tPrevDelta) / tPrevDelta) * 100, oncekiEtiket)
+      ? renderMomChip(
+          ((tCurDelta - tPrevDelta) / tPrevDelta) * 100,
+          oncekiEtiket,
+          fmtKatUrunPrevPhys(tPrevDelta, iceTip)
+        )
       : '—');
+    const ozetDeltaEl = document.getElementById('kat-urun-ozet-delta');
+    if (ozetDeltaEl) {
+      ozetDeltaEl.title = oncekiEtiket
+        ? `Kategori geneli miktar değişimi (kişi başı) — ${oncekiEtiket} dönemine göre %`
+        : 'Kategori geneli miktar değişimi (kişi başı) — önceki döneme göre %';
+    }
     setOzet('kat-urun-ozet-tutar', fmtCur(tTutar));
     document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
       tr.addEventListener('click', (ev) => {
