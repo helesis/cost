@@ -1703,6 +1703,7 @@
                     <th>Tip</th>
                     <th style="text-align:right">Kümülatif miktar</th>
                     <th>Birim</th>
+                    <th style="text-align:right" id="mek-th-ort-fiyat" title="Tarih aralığındaki tutar ÷ miktar (ağırlıklı ortalama birim fiyat)">Ort. fiyat</th>
                     <th style="text-align:right" id="mek-th-tutar">Tutar</th>
                   </tr>
                 </thead>
@@ -3318,6 +3319,15 @@ function mekFmtKatQty(g) {
   return fmtN(g.qty_display, 3);
 }
 
+/** Aralık içi ağırlıklı ort. birim fiyat = toplam tutar ÷ toplam miktar. */
+function mekWeightedAvgPrice(qtyDisplay, tutar, unit) {
+  const q = +qtyDisplay;
+  const a = +tutar;
+  if (!(q > 0) || !Number.isFinite(a)) return '—';
+  const u = unit ? `/${unit}` : '';
+  return `${fmtCur(a / q)}${u}`;
+}
+
 function mekRenderKpis() {
   const el = document.getElementById('mek-kpis');
   if (!el || !_mekMeta) return;
@@ -3328,6 +3338,8 @@ function mekRenderKpis() {
     <div class="me-kpi"><div class="me-kpi-val">${fmtN(t.qty_l || 0, 1)}</div><div class="me-kpi-lbl">Toplam L</div></div>
     <div class="me-kpi"><div class="me-kpi-val">${fmtCur(vcIsEUR() ? t.tutar_eur : t.tutar_tl)}</div><div class="me-kpi-lbl">Toplam ${curLabel()}</div></div>
   `;
+  const thOrt = document.getElementById('mek-th-ort-fiyat');
+  if (thOrt) thOrt.textContent = `Ort. fiyat (${curLabel()})`;
   const th = document.getElementById('mek-th-tutar');
   if (th) th.textContent = `Tutar (${curLabel()})`;
 }
@@ -3337,7 +3349,7 @@ function mekRenderTable() {
   if (!tb) return;
   const groups = mekGroupByKategori(mekFilteredItems());
   if (!groups.length) {
-    tb.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">Eşleşen kategori yok</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:20px">Eşleşen kategori yok</td></tr>`;
     return;
   }
   tb.innerHTML = groups
@@ -3349,11 +3361,16 @@ function mekRenderTable() {
           ? '<span class="badge badge-gold">Yiyecek</span> <span class="badge badge-blue">İçecek</span>'
           : `<span class="badge ${g.tip === 'yiyecek' ? 'badge-gold' : 'badge-blue'}">${tipDisplayTr(g.tip)}</span>`;
       const birim = g.tip === 'mixed' ? '—' : escapeHtml(g.qty_unit || '');
+      const ort =
+        g.tip === 'mixed'
+          ? '—'
+          : mekWeightedAvgPrice(g.qty_display, amt, g.qty_unit);
       return `<tr class="mek-kat-row" role="button" tabindex="0" data-k="${dk}">
         <td><span class="kat-fiyat-twist" aria-hidden="true">▸</span><strong>${escapeHtml(g.kategori)}</strong> <span style="font-size:11px;color:var(--text-dim);font-weight:400">(${g.n_urun} ürün)</span></td>
         <td>${tipHtml}</td>
         <td style="text-align:right">${mekFmtKatQty(g)}</td>
         <td style="color:var(--text-dim)">${birim}</td>
+        <td style="text-align:right">${ort}</td>
         <td style="text-align:right">${fmtCur(amt)}</td>
       </tr>`;
     })
@@ -3374,7 +3391,7 @@ function mekToggleKatRow(tr) {
   const g = groups.find((x) => x.kategori === k);
   const det = document.createElement('tr');
   det.className = 'kat-fiyat-urun-detay';
-  det.innerHTML = '<td colspan="5"><div class="kat-fiyat-urun-ic"></div></td>';
+  det.innerHTML = '<td colspan="6"><div class="kat-fiyat-urun-ic"></div></td>';
   tr.after(det);
   tr.classList.add('kat-fiyat-expanded');
   const tw = tr.querySelector('.kat-fiyat-twist');
@@ -3392,6 +3409,7 @@ function mekToggleKatRow(tr) {
         <th>Tip</th>
         <th style="text-align:right">Kümülatif miktar</th>
         <th>Birim</th>
+        <th style="text-align:right">Ort. fiyat (${curLabel()})</th>
         <th style="text-align:right">Tutar (${curLabel()})</th>
       </tr></thead>
       <tbody>${g.urunler
@@ -3402,6 +3420,7 @@ function mekToggleKatRow(tr) {
             <td><span class="badge ${u.tip === 'yiyecek' ? 'badge-gold' : 'badge-blue'}">${tipDisplayTr(u.tip)}</span></td>
             <td style="text-align:right">${fmtN(u.qty_display, 3)}</td>
             <td style="color:var(--text-dim)">${escapeHtml(u.qty_unit || '')}</td>
+            <td style="text-align:right">${mekWeightedAvgPrice(u.qty_display, amt, u.qty_unit)}</td>
             <td style="text-align:right">${fmtCur(amt)}</td>
           </tr>`;
         })
