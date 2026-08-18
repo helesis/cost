@@ -3319,13 +3319,14 @@ function mekFmtKatQty(g) {
   return fmtN(g.qty_display, 3);
 }
 
-/** Aralık içi ağırlıklı ort. birim fiyat = toplam tutar ÷ toplam miktar. */
+/** Aralık içi ağırlıklı ort. birim fiyat = toplam tutar ÷ toplam miktar (2 ondalık). */
 function mekWeightedAvgPrice(qtyDisplay, tutar, unit) {
   const q = +qtyDisplay;
   const a = +tutar;
   if (!(q > 0) || !Number.isFinite(a)) return '—';
   const u = unit ? `/${unit}` : '';
-  return `${fmtCur(a / q)}${u}`;
+  const opts = { style: 'currency', currency: vcIsEUR() ? 'EUR' : 'TRY', minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  return `${new Intl.NumberFormat('tr-TR', opts).format(a / q)}${u}`;
 }
 
 function mekRenderKpis() {
