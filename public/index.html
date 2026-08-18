@@ -5434,7 +5434,9 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
       </tr>`;
     }).join('');
     // Kategori toplamları (özet satırı)
-    let tPp = 0, tPhys = 0, tTutar = 0, tCurDelta = 0, tPrevDelta = 0, hasDelta = false;
+    // Δ = tüm kategori kişi başı toplam (bu dönem) vs tüm kategori kişi başı toplam (karşılaştırma dönemi).
+    // Yalnızca ortak SKU’larla sınırlamak, Toplam g/mL sütunu ile tutarsız Δ üretir.
+    let tPp = 0, tPhys = 0, tTutar = 0;
     let bfWNum = 0, bfWDen = 0; // miktar-ağırlıklı ortalama birim fiyat
     sorted.forEach(r => {
       const bf = vcIsEUR() ? (parseFloat(r.birim_fiyat_ort_eur) || 0) : (parseFloat(r.birim_fiyat_ort_tl) || 0);
@@ -5445,20 +5447,20 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         tPhys += curPhys;
         if (curPhys > 0) { bfWNum += bf * curPhys; bfWDen += curPhys; }
       }
-      if (curPhys != null && prevMap.has(r.stok_mali)) {
-        const prevPhys = prevMap.get(r.stok_mali);
-        if (prevPhys != null && prevPhys > 0) { tCurDelta += curPhys; tPrevDelta += prevPhys; hasDelta = true; }
-      }
+    });
+    let tPrevAll = 0;
+    prevMap.forEach((prevPhys) => {
+      if (prevPhys != null && !isNaN(prevPhys)) tPrevAll += prevPhys;
     });
     const setOzet = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
     setOzet('kat-urun-ozet-bf', bfWDen > 0 ? fmtCur(bfWNum / bfWDen) : '—');
     setOzet('kat-urun-ozet-pp', fmtCur(tPp));
     setOzet('kat-urun-ozet-g', iceTip ? fmtN(tPhys * 10, 0) : fmtN(tPhys, 0));
-    setOzet('kat-urun-ozet-delta', hasDelta && tPrevDelta > 0
+    setOzet('kat-urun-ozet-delta', tPrevAll > 0
       ? renderMomChip(
-          ((tCurDelta - tPrevDelta) / tPrevDelta) * 100,
+          ((tPhys - tPrevAll) / tPrevAll) * 100,
           oncekiEtiket,
-          fmtKatUrunPrevPhys(tPrevDelta, iceTip)
+          fmtKatUrunPrevPhys(tPrevAll, iceTip)
         )
       : '—');
     const ozetDeltaEl = document.getElementById('kat-urun-ozet-delta');
