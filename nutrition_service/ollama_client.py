@@ -12,7 +12,7 @@ from nutrition_service.name_clean import extract_english_core, preprocess_turkis
 
 _DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
 _OLLAMA_URL = (os.environ.get("OLLAMA_URL") or _DEFAULT_URL).strip()
-_OLLAMA_MODEL = (os.environ.get("OLLAMA_USDA_MODEL") or os.environ.get("OLLAMA_MODEL") or "qwen2.5:32b").strip()
+_OLLAMA_MODEL = (os.environ.get("OLLAMA_USDA_MODEL") or os.environ.get("OLLAMA_MODEL") or "gemma4:31b").strip()
 _OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT_SEC", "180"))
 
 _TRANSLATE_SYSTEM = """Sen bir otel F&B (yiyecek-içecek) stok ve USDA FoodData Central uzmanısın.

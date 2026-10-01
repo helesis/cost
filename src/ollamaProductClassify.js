@@ -73,7 +73,7 @@ function buildUserPayload(stok_mali, kategori) {
 
 function getOllamaConfig() {
   const url = (process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate').trim();
-  const model = (process.env.OLLAMA_MODEL || 'gemma2:27b').trim();
+  const model = (process.env.OLLAMA_MODEL || 'gemma4:31b').trim();
   const u = new URL(url);
   return {
     url,

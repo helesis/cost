@@ -135,7 +135,7 @@ cost/
    python3 -m nutrition_service.sync_ingredients --force STK12345
    ```
 
-   Ortam: `USDA_API_KEY`, `DB_*`, `OLLAMA_URL`, `OLLAMA_USDA_MODEL` (varsayılan `qwen2.5:32b`), `OLLAMA_TIMEOUT_SEC` (.env). İstekler arası gecikme: `USDA_REQUEST_DELAY_SEC` (varsayılan 0.35s).
+   Ortam: `USDA_API_KEY`, `DB_*`, `OLLAMA_URL`, `OLLAMA_USDA_MODEL` (varsayılan `gemma4:31b`; yoksa `OLLAMA_MODEL`), `OLLAMA_TIMEOUT_SEC` (.env). İstekler arası gecikme: `USDA_REQUEST_DELAY_SEC` (varsayılan 0.35s).
 
 3. Besin/USDA mikro API (Python):
 
