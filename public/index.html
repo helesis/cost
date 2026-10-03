@@ -1125,7 +1125,7 @@
               <table>
                 <thead>
                   <tr class="kat-urun-ozet-cap">
-                    <th colspan="6">Kategori Toplamı</th>
+                    <th colspan="7">Kategori Toplamı</th>
                   </tr>
                   <tr class="kat-urun-ozet-val">
                     <th class="kat-urun-col-stok">Toplam</th>
@@ -1134,6 +1134,7 @@
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-g">—</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-delta" title="Kategori geneli miktar değişimi (kişi başı) — önceki döneme göre %">—</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-ozet-tutar">—</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-ozet-tutar-delta" title="Kategori geneli tutar değişimi — önceki döneme göre %">—</th>
                   </tr>
                   <tr>
                     <th class="kat-urun-col-stok">Ürün (stok)</th>
@@ -1142,6 +1143,7 @@
                     <th class="kat-urun-col-shrink" id="kat-urun-th-ppg" title="Pax başı (g)">g</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-th-degisim" title="Değişim">Δ</th>
                     <th class="kat-urun-col-shrink" id="kat-urun-th-tutar" title="Tutar">Tutar</th>
+                    <th class="kat-urun-col-shrink" id="kat-urun-th-tutar-delta" title="Tutar değişimi">Δ tutar</th>
                   </tr>
                 </thead>
                 <tbody id="kat-urun-tablo"></tbody>
@@ -5809,6 +5811,7 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
   const thDegisim = document.getElementById('kat-urun-th-degisim');
   const thBf = document.getElementById('kat-urun-th-bf');
   const thTut = document.getElementById('kat-urun-th-tutar');
+  const thTutDelta = document.getElementById('kat-urun-th-tutar-delta');
   const displayKat = kategoriDb?.split(' - ').slice(1).join(' ').trim() || kategoriDb || '—';
   if (baslik) baslik.textContent = `Ürün — pax başı · ${displayKat}`;
   const ice = tip === 'icenek' || tip === 'icecek';
@@ -5843,6 +5846,12 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
     thTut.textContent = 'Tutar';
     thTut.title = `Tutar (${curLabel()})`;
   }
+  if (thTutDelta) {
+    thTutDelta.textContent = 'Δ tutar';
+    thTutDelta.title = oncekiEtiket
+      ? `Tutar değişimi — ${oncekiEtiket} dönemine göre %`
+      : 'Tutar değişimi — önceki döneme göre %';
+  }
   if (hint) { hint.textContent = 'Yükleniyor…'; hint.style.display = ''; }
   if (wrap) wrap.style.display = 'none';
 
@@ -5874,7 +5883,11 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
       if (Array.isArray(prevList)) {
         prevList.forEach((r) => {
           const n = katUrunPhysNum(r, iceTip);
-          if (n != null) prevMap.set(r.stok_mali, n);
+          const tut = pickCur(r, 'tutar');
+          prevMap.set(r.stok_mali, {
+            phys: n != null && !Number.isNaN(n) ? n : null,
+            tutar: Number.isFinite(tut) ? tut : 0,
+          });
         });
       }
     }
@@ -5886,21 +5899,28 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         : (parseFloat(r.birim_fiyat_ort_tl) || 0);
       let physCell = '—';
       let momChip = '';
+      let tutarChip = '';
       const curPhys = katUrunPhysNum(r, iceTip);
+      const curTutar = pickCur(r, 'tutar');
       if (iceTip) {
         if (curPhys != null) physCell = `${fmtN(curPhys * 10, 0)}`;
       } else if (curPhys != null) {
         physCell = fmtN(curPhys, 0);
       }
-      if (curPhys != null && prevMap.has(r.stok_mali)) {
-        const prevPhys = prevMap.get(r.stok_mali);
-        if (prevPhys != null && prevPhys > 0) {
-          momChip = renderMomChip(
-            ((curPhys - prevPhys) / prevPhys) * 100,
-            oncekiEtiket,
-            fmtKatUrunPrevPhys(prevPhys, iceTip)
-          );
-        }
+      const prev = prevMap.get(r.stok_mali);
+      if (curPhys != null && prev && prev.phys != null && prev.phys > 0) {
+        momChip = renderMomChip(
+          ((curPhys - prev.phys) / prev.phys) * 100,
+          oncekiEtiket,
+          fmtKatUrunPrevPhys(prev.phys, iceTip)
+        );
+      }
+      if (prev && prev.tutar > 0 && Number.isFinite(curTutar)) {
+        tutarChip = renderMomChip(
+          ((curTutar - prev.tutar) / prev.tutar) * 100,
+          oncekiEtiket,
+          fmtCur(prev.tutar)
+        );
       }
       const stokTit = escapeHtml(r.stok_mali || '').replace(/"/g, '&quot;');
       return `
@@ -5910,14 +5930,14 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         <td class="kat-urun-col-shrink">${fmtCur(pickCur(r, 'pp'))}</td>
         <td class="kat-urun-col-shrink">${physCell}</td>
         <td class="kat-urun-col-shrink">${momChip || '—'}</td>
-        <td class="kat-urun-col-shrink">${fmtCur(pickCur(r, 'tutar'))}</td>
+        <td class="kat-urun-col-shrink">${fmtCur(curTutar)}</td>
+        <td class="kat-urun-col-shrink">${tutarChip || '—'}</td>
       </tr>`;
     }).join('');
     // Kategori toplamları (özet satırı)
     // Δ = tüm kategori kişi başı toplam (bu dönem) vs tüm kategori kişi başı toplam (karşılaştırma dönemi).
-    // Yalnızca ortak SKU’larla sınırlamak, Toplam g/mL sütunu ile tutarsız Δ üretir.
     let tPp = 0, tPhys = 0, tTutar = 0;
-    let bfWNum = 0, bfWDen = 0; // miktar-ağırlıklı ortalama birim fiyat
+    let bfWNum = 0, bfWDen = 0;
     sorted.forEach(r => {
       const bf = vcIsEUR() ? (parseFloat(r.birim_fiyat_ort_eur) || 0) : (parseFloat(r.birim_fiyat_ort_tl) || 0);
       tPp += pickCur(r, 'pp');
@@ -5929,8 +5949,10 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
       }
     });
     let tPrevAll = 0;
-    prevMap.forEach((prevPhys) => {
-      if (prevPhys != null && !isNaN(prevPhys)) tPrevAll += prevPhys;
+    let tPrevTutarAll = 0;
+    prevMap.forEach((p) => {
+      if (p.phys != null && !isNaN(p.phys)) tPrevAll += p.phys;
+      if (p.tutar != null && !isNaN(p.tutar)) tPrevTutarAll += p.tutar;
     });
     const setOzet = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
     setOzet('kat-urun-ozet-bf', bfWDen > 0 ? fmtCur(bfWNum / bfWDen) : '—');
@@ -5950,7 +5972,19 @@ async function loadKatUrunDetay(kategoriDb, tarih, tip) {
         : 'Kategori geneli miktar değişimi (kişi başı) — önceki döneme göre %';
     }
     setOzet('kat-urun-ozet-tutar', fmtCur(tTutar));
-    document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
+    setOzet('kat-urun-ozet-tutar-delta', tPrevTutarAll > 0
+      ? renderMomChip(
+          ((tTutar - tPrevTutarAll) / tPrevTutarAll) * 100,
+          oncekiEtiket,
+          fmtCur(tPrevTutarAll)
+        )
+      : '—');
+    const ozetTutDeltaEl = document.getElementById('kat-urun-ozet-tutar-delta');
+    if (ozetTutDeltaEl) {
+      ozetTutDeltaEl.title = oncekiEtiket
+        ? `Kategori geneli tutar değişimi — ${oncekiEtiket} dönemine göre %`
+        : 'Kategori geneli tutar değişimi — önceki döneme göre %';
+    }    document.querySelectorAll('#kat-urun-tablo tr[data-stok]').forEach(tr => {
       tr.addEventListener('click', (ev) => {
         ev.stopPropagation();
         document.querySelectorAll('#kat-urun-tablo tr.kat-urun-stok-active').forEach(x => x.classList.remove('kat-urun-stok-active'));
