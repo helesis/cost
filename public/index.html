@@ -1110,7 +1110,12 @@
           <div class="card-title">Kategori detay</div>
           <div class="table-wrap kat-detay-table-wrap">
             <table class="kat-tablo-master">
-              <thead><tr><th>Kategori</th><th style="text-align:right" id="kat-tablo-th-deger">Tutar</th><th style="text-align:right">Pay %</th></tr></thead>
+              <thead><tr>
+                <th>Kategori</th>
+                <th style="text-align:right" id="kat-tablo-th-deger">Tutar</th>
+                <th style="text-align:right" id="kat-tablo-th-delta" title="Seçilen karşılaştırma dönemine göre tutar % değişimi">Δ</th>
+                <th style="text-align:right">Pay %</th>
+              </tr></thead>
               <tbody id="kat-tablo"></tbody>
             </table>
           </div>
@@ -6007,7 +6012,29 @@ async function renderKategori() {
   const tip   = document.getElementById('kat-tip').value;
   if (!tarih) return;
 
-  const rows = await fetch(`/api/kategoriler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}`).then(r => r.json());
+  const karsiSel = document.getElementById('kat-karsilastir');
+  const karsiVal = karsiSel ? karsiSel.value : 'auto';
+  const oncekiTarih = (karsiVal && karsiVal !== 'auto' && karsiVal !== tarih)
+    ? karsiVal
+    : katOncekiTarihStr(tarih, tip);
+  const oncekiDon = oncekiTarih ? donemler.find((d) => d.tarih_str === oncekiTarih) : null;
+  const oncekiEtiket = oncekiDon
+    ? `${oncekiDon.ay} ${oncekiDon.yil}${oncekiTarih.endsWith('-15g') ? ' (15 gün)' : ''}`
+    : '';
+
+  const [rows, prevRows] = await Promise.all([
+    fetch(`/api/kategoriler?tarih=${encodeURIComponent(tarih)}&tip=${encodeURIComponent(tip)}`).then(r => r.json()),
+    oncekiTarih
+      ? fetch(`/api/kategoriler?tarih=${encodeURIComponent(oncekiTarih)}&tip=${encodeURIComponent(tip)}`).then(r => r.json())
+      : Promise.resolve([]),
+  ]);
+  if (!Array.isArray(rows)) return;
+  const prevMap = new Map();
+  if (Array.isArray(prevRows)) {
+    prevRows.forEach((r) => {
+      prevMap.set(r.kategori, pickCur(r, 'tutar'));
+    });
+  }
   const toplam = rows.reduce((s, r) => s + pickCur(r, 'tutar'), 0);
 
   const katTop10 = rows.slice(0, 10);
@@ -6054,13 +6081,31 @@ async function renderKategori() {
   });
 
   document.getElementById('kat-tablo-th-deger').textContent = `Tutar (${curLabel()})`;
-  document.getElementById('kat-tablo').innerHTML = rows.map(r => `
+  const thDelta = document.getElementById('kat-tablo-th-delta');
+  if (thDelta) {
+    thDelta.title = oncekiEtiket
+      ? `Tutar değişimi — ${oncekiEtiket} dönemine göre %`
+      : 'Tutar değişimi — önceki döneme göre %';
+  }
+  document.getElementById('kat-tablo').innerHTML = rows.map(r => {
+    const cur = pickCur(r, 'tutar');
+    const prev = prevMap.has(r.kategori) ? prevMap.get(r.kategori) : null;
+    let deltaCell = '—';
+    if (prev != null && prev > 0 && Number.isFinite(cur)) {
+      deltaCell = renderMomChip(
+        ((cur - prev) / prev) * 100,
+        oncekiEtiket,
+        fmtCur(prev)
+      ) || '—';
+    }
+    return `
     <tr data-kategori="${encodeURIComponent(r.kategori || '')}">
       <td>${escapeHtml(r.kategori?.split(' - ').slice(1).join(' ') || r.kategori)}</td>
-      <td style="text-align:right">${fmtCur(pickCur(r, 'tutar'))}</td>
-      <td style="text-align:right">${toplam > 0 ? fmtN((pickCur(r, 'tutar')/toplam)*100, 1) : '0'}%</td>
-    </tr>
-  `).join('');
+      <td style="text-align:right">${fmtCur(cur)}</td>
+      <td style="text-align:right">${deltaCell}</td>
+      <td style="text-align:right">${toplam > 0 ? fmtN((cur / toplam) * 100, 1) : '0'}%</td>
+    </tr>`;
+  }).join('');
 
   document.querySelectorAll('#kat-tablo tr[data-kategori]').forEach(tr => {
     tr.addEventListener('click', () => {
@@ -6087,6 +6132,7 @@ async function renderKategori() {
   } else {
     resetKatUrunPanel();
   }
+  vcLucide();
 }
 
 ['kat-donem','kat-tip'].forEach(id => {
@@ -6098,9 +6144,7 @@ async function renderKategori() {
   });
 });
 document.getElementById('kat-karsilastir').addEventListener('change', () => {
-  const tarih = document.getElementById('kat-donem').value;
-  const tip   = document.getElementById('kat-tip').value;
-  if (katSeciliKategori && tarih) loadKatUrunDetay(katSeciliKategori, tarih, tip);
+  renderKategori();
 });
 
 // ── Ürün Arama ────────────────────────────────────────────────────────────────
