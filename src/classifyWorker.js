@@ -1,6 +1,6 @@
 'use strict';
 
-const { classifyProductWithRetries, PROMPT_VERSION } = require('./ollamaProductClassify');
+const { classifyProductWithRetries, PROMPT_VERSION, PROMPT_VERSION_HATA } = require('./ollamaProductClassify');
 
 const SQL_EXC_YIYECEK = `t.tip = 'yiyecek'
   AND (t.stok_no IS DISTINCT FROM '__DUZELTME__' AND t.stok_no IS DISTINCT FROM '__KDV_ILAVE__')`;
@@ -30,12 +30,12 @@ async function countPairStats(pool, { skipExisting }) {
       OR EXISTS (
         SELECT 1 FROM fb_cost.product_classifications p
         WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
-        AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '')
+        AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '' OR p.prompt_version IS DISTINCT FROM $1)
       )
     ) AS unclassified_pairs,
     (SELECT COUNT(*)::int FROM fb_cost.product_classifications) AS saved_rows
   `;
-  const { rows } = await pool.query(q);
+  const { rows } = await pool.query(q, [PROMPT_VERSION]);
   const r = rows[0] || { total_pairs: 0, unclassified_pairs: 0, saved_rows: 0 };
   const skip = !!skipExisting;
   return {
@@ -70,7 +70,7 @@ async function fetchNextPair(pool, skipExisting, cursor) {
         OR EXISTS (
           SELECT 1 FROM fb_cost.product_classifications p
           WHERE p.stok_mali = ap.stok_mali AND (p.kategori IS NOT DISTINCT FROM ap.kategori)
-          AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '')
+          AND (p.cost_proxy IS NULL OR BTRIM(p.cost_proxy) = '' OR p.prompt_version IS DISTINCT FROM $4)
         )
       )
     ) OR (
@@ -85,7 +85,7 @@ async function fetchNextPair(pool, skipExisting, cursor) {
   SELECT * FROM todo
   `;
   const p3 = lastStok == null ? '' : (lastKatNorm || '');
-  const { rows } = await pool.query(q, [skip, lastStok, p3]);
+  const { rows } = await pool.query(q, [skip, lastStok, p3, PROMPT_VERSION]);
   return rows[0] || null;
 }
 
@@ -198,7 +198,7 @@ async function runJobLoop(pool, { skipExisting }) {
             gerekce: 'Veritabanı kaydı başarısız',
             notes: (e.message || String(e)).slice(0, 2000),
             model_name: null,
-            prompt_version: PROMPT_VERSION,
+            prompt_version: PROMPT_VERSION_HATA,
             raw_response: null
           });
         } catch (_) { /* ignore */ }

@@ -1755,7 +1755,7 @@
     <div class="page-header">
       <div>
         <div class="page-title">Ürün Sınıflandırma</div>
-        <div class="page-sub">Ollama (gemma4:31b) ile protein_bucket, food_group ve menu engineering için cost_proxy (HIGH/MEDIUM/LOW). «Yalnız eksikler» satırı olmayan veya cost_proxy boş çiftleri tamamlar.</div>
+        <div class="page-sub">Ollama (gemma4:31b) ile protein_bucket, food_group ve menu engineering için cost_proxy (HIGH/MEDIUM/LOW). «Yalnız eksikler» satırı olmayan, cost_proxy boş veya eski prompt sürümüyle sınıflanmış çiftleri tamamlar.</div>
       </div>
     </div>
     <div class="page-body">
@@ -2252,7 +2252,7 @@ function vcRerenderActive() {
 }
 
 const COLORS = [
-  '#8a6c2e','#2d6a4f','#2a4d7a','#7a2d2d','#92672a',
+  '#8a6c2e','#2d6a4f','#2a4d7a','#7a2d2d','#3f7f86',
   '#c4a45a','#5a9e7a','#6a8dc4','#c47a7a','#d4a45a',
   '#4a3a1e','#1d4a33','#1a3050','#4a1d1d','#5a3a10',
 ];
@@ -4977,13 +4977,14 @@ function destroyTalepCharts() {
 
 function talepPremiumLabel(seg, talepTip) {
   if (talepTip === 'icenek') {
-    if (seg === 'premium') return 'Premium (Alkollü)';
-    if (seg === 'standard') return 'Standart (Su, sıcak, gazlı, meyve)';
+    if (seg === 'premium') return 'Premium (alkollü)';
+    if (seg === 'standard') return 'Standart (alkolsüz)';
     return 'Diğer';
   }
-  if (seg === 'premium') return 'Premium (Antrikot, Bonfile, Somon)';
-  if (seg === 'standard') return 'Standart (Tavuk, Hindi, Kıyma)';
-  return 'Diğer';
+  if (seg === 'premium') return 'Premium (yüksek maliyetli)';
+  if (seg === 'orta') return 'Orta';
+  if (seg === 'ekonomik') return 'Ekonomik (düşük maliyetli)';
+  return 'Sınıflanmamış';
 }
 
 function talepSetCardCopy(tip) {
@@ -4994,16 +4995,16 @@ function talepSetCardCopy(tip) {
   };
   set('talep-card1-title', ice ? '1. İçecek ana grupları' : '1. Protein talep yapısı');
   set('talep-note-1', ice
-    ? 'Alkollü, sıcak içecek, su, gazlı ve meyve içecekleri için dönem içi tutar payı (ana sürücü kurala göre). Eşleşmeyen satırlar “Diğer”.'
-    : 'Dönem içi yiyecek tutarına göre tahmini pay (ana sürücü: dana / deniz / balık). Eşleşmeyen satırlar “Diğer”.');
+    ? 'Sert alkol, bira, şarap, meşrubat, su ve diğer içecek grupları için dönem içi tutar payı (ERP kategori koduna göre).'
+    : 'Yalnız hayvansal protein kalemleri arasında tutar payı (LLM sınıflandırması, yoksa ad kuralı).');
   set('talep-card2-title', ice ? '2. Premium vs standart (içecek)' : '2. Premium vs standart');
   set('talep-note-2', ice
-    ? 'Premium: alkollü içecekler · Standart: su, sıcak içecek, gazlı ve meyve içecekleri'
-    : 'Premium: antrikot, bonfile, somon · Standart: tavuk, hindi, kıyma');
+    ? 'Premium: sert alkol, bira, şarap · Standart: su, soda, meşrubat, meyve suyu, şurup'
+    : 'Ürün başına LLM maliyet yoğunluğu (cost_proxy): premium = deniz ürünü, kırmızı et; orta = hindi, şarküteri, peynir; ekonomik = tavuk, sebze, karbonhidrat.');
   set('talep-card3-title', ice ? '3. Kategori yoğunluğu (alt satır)' : '3. Kategori talep yoğunluğu');
   set('talep-note-3', ice
     ? 'Kategori metninde “ - ” sonrası alt satıra göre makro gruplandırma; ortak veride tutar payı.'
-    : 'Kategori adına göre makro gruplar: et, sebze, şarküteri, süt, karbonhidrat — ortak veride “yer kaplama” (tutar payı).');
+    : 'Ürün başına food_group (LLM, yoksa kategori adı): et, şarküteri, süt, meyve/sebze, karbonhidrat, tatlı/pastane, kuruyemiş, baharat/sos… — tutar payı.');
   set('talep-note-4', 'Aynı dönem ve seçilen tipte tutar bazında sıralı SKU’lar: toplam cirosunun %50 / %70 / %80 / %90’ını karşılamak için kaç ürün yeterli (ürün sayısı ve katalog içindeki yüzde)? Tablo satırının üzerine gelince o eşiğe dahil ürünler tutara göre azalan sırada listelenir. Altta: cirosu en yüksek ürünlerin ~%20’si toplam tutarın kaçını oluşturuyor?');
   set('talep-card6-title', ice ? '6. İçecek karmaşıklığı (aktif SKU)' : '6. Üretim karmaşıklığı (aktif SKU)');
   set('talep-note-6', ice
@@ -5230,6 +5231,11 @@ async function loadTalepAnaliz() {
     talepRenderPareto(data.pareto, data.tarih_str, tipRes);
 
     const pRows = data.protein_yapisi || [];
+    const pd = data.protein_disi;
+    const note1 = document.getElementById('talep-note-1');
+    if (note1 && pd && pd.pay_yuzde != null) {
+      note1.textContent += ` Protein dışı kalemler (sebze, süt, karbonhidrat vb.) yiyecek tutarının %${fmtN(pd.pay_yuzde, 1)}’i — ${fmtCur(vcIsEUR() ? pd.tutar_eur : pd.tutar_tl)} — grafikte yok.`;
+    }
     const pLabels = pRows.map(x => x.etiket || x.bucket);
     const pAmt = pRows.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl);
     new Chart(document.getElementById('chart-talep-protein'), {
@@ -5253,7 +5259,9 @@ async function loadTalepAnaliz() {
         datasets: [{
           label: curLabel(),
           data: pr.map(x => vcIsEUR() ? x.tutar_eur : x.tutar_tl),
-          backgroundColor: pr.map(x => x.segment === 'premium' ? '#8a6c2e' : x.segment === 'standard' ? '#2d6a4f' : '#7a7369')
+          backgroundColor: pr.map(x => x.segment === 'premium' ? '#8a6c2e'
+            : x.segment === 'orta' ? '#2a4d7a'
+            : x.segment === 'standard' || x.segment === 'ekonomik' ? '#2d6a4f' : '#7a7369')
         }]
       },
       options: {

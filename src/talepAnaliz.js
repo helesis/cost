@@ -50,25 +50,36 @@ const SQL_PREMIUM_STD = `
     ELSE 'diger'
   END`;
 
+/** Kategori adından food_group (LLM sınıflandırması yoksa). Değerler LLM anahtarlarıyla aynı. */
 const SQL_MACRO_KATEGORI = `
   CASE
     WHEN kategori ILIKE '%ŞARKÜTERİ%' OR kategori ILIKE '%SARKUTERI%' OR kategori ILIKE '%SOSİS%'
-      OR kategori ILIKE '%SOSIS%' OR kategori ILIKE '%SUCUK%' OR kategori ILIKE '%SALAM%' THEN 'şarküteri'
-    WHEN kategori ILIKE '%SEBZE%' OR kategori ILIKE '%YEŞİLLİK%' OR kategori ILIKE '%YESILLIK%'
-      OR kategori ILIKE '%YEŞİL%' OR kategori ILIKE '%SALATA%' OR kategori ILIKE '%MARUL%'
-      OR kategori ILIKE '%DOMATES%' OR kategori ILIKE '%BİBER%' THEN 'sebze'
+      OR kategori ILIKE '%SOSIS%' OR kategori ILIKE '%SUCUK%' OR kategori ILIKE '%SALAM%' THEN 'sarkuteri'
+    WHEN kategori ILIKE '%YUMURTA%' THEN 'yumurta'
+    WHEN kategori ILIKE '%PASTANE%' OR kategori ILIKE '%DONDURMA%' OR kategori ILIKE '%TATLI%'
+      OR kategori ILIKE '%CIKOLATA%' OR kategori ILIKE '%ÇİKOLATA%' OR kategori ILIKE '%LOKUM%'
+      OR kategori ILIKE '%SEKER%' OR kategori ILIKE '%ŞEKER%' OR kategori ILIKE '%RECEL%'
+      OR kategori ILIKE '%REÇEL%' OR kategori ILIKE '%MARMELAT%' OR kategori ILIKE '%BAL %' THEN 'tatli_pastane'
+    WHEN kategori ILIKE '%KURUYEMI%' OR kategori ILIKE '%KURUYEMİ%' OR kategori ILIKE '%KURU MEYVE%' THEN 'kuruyemis'
+    WHEN kategori ILIKE '%KAHVE%' OR kategori ILIKE '%CAYLAR%' OR kategori ILIKE '%ÇAYLAR%' THEN 'sicak_icecek'
+    WHEN kategori ILIKE '%BAHARAT%' OR kategori ILIKE '%SOSLAR%' OR kategori ILIKE '%SIRKE%'
+      OR kategori ILIKE '%SİRKE%' OR kategori ILIKE '%CESNI%' OR kategori ILIKE '%ÇEŞNİ%' THEN 'baharat_sos'
+    WHEN kategori ILIKE '%YAG%' OR kategori ILIKE '%YAĞ%' OR kategori ILIKE '%MARGARIN%' THEN 'yag'
+    WHEN kategori ILIKE '%SEBZE%' OR kategori ILIKE '%MEYVE%' OR kategori ILIKE '%YEŞİLLİK%'
+      OR kategori ILIKE '%YESILLIK%' OR kategori ILIKE '%SALATA%' OR kategori ILIKE '%ZEYTIN%'
+      OR kategori ILIKE '%ZEYTİN%' OR kategori ILIKE '%DOMATES%' OR kategori ILIKE '%BİBER%' THEN 'meyve_sebze'
     WHEN kategori ILIKE '%SÜT%' OR kategori ILIKE '%SUT %' OR kategori ILIKE '%PEYNİR%'
       OR kategori ILIKE '%PEYNIR%' OR kategori ILIKE '%YOĞURT%' OR kategori ILIKE '%YOGURT%'
-      OR kategori ILIKE '%KREMA%' OR kategori ILIKE '%TEREYA%' OR kategori ILIKE '%KAYMAK%' THEN 'süt ürünleri'
+      OR kategori ILIKE '%KREMA%' OR kategori ILIKE '%KAYMAK%' THEN 'sut_urunleri'
     WHEN kategori ILIKE '%MAKARNA%' OR kategori ILIKE '%PİRİNÇ%' OR kategori ILIKE '%PIRINC%'
-      OR kategori ILIKE '%BULGUR%' OR kategori ILIKE '%UN %' OR kategori ILIKE '% EKMEK%'
-      OR kategori ILIKE '%PATATES%' OR kategori ILIKE '%TATLISI%' OR kategori ILIKE '%TATLI%'
+      OR kategori ILIKE '%BULGUR%' OR kategori ILIKE '%UN %' OR kategori ILIKE '%EKMEK%'
+      OR kategori ILIKE '%UNLU MAMUL%' OR kategori ILIKE '%BAKLIYAT%' OR kategori ILIKE '%PATATES%'
       OR kategori ILIKE '%KARBON%' OR kategori ILIKE '%TARHANA%' OR kategori ILIKE '%GALETA%' THEN 'karbonhidrat'
     WHEN kategori ILIKE '%ET %' OR kategori ILIKE '%ET)' OR kategori ILIKE '%ETÜRÜN%'
       OR kategori ILIKE '%TAVUK%' OR kategori ILIKE '%BALIK%' OR kategori ILIKE '%BALI%'
       OR kategori ILIKE '%DENİZ%' OR kategori ILIKE '%KUZU%' OR kategori ILIKE '%DANA%'
-      OR kategori ILIKE '%HİNDİ%' OR kategori ILIKE '%KIRMIZI%' THEN 'et ürünleri'
-    ELSE 'diğer'
+      OR kategori ILIKE '%HİNDİ%' OR kategori ILIKE '%KIRMIZI%' THEN 'et_urunleri'
+    ELSE 'diger'
   END`;
 
 const SQL_YIYECEK_BASE = `tip = 'yiyecek' AND ${SQL_EXC_FINANS}`;
@@ -77,72 +88,87 @@ const SQL_YIYECEK_BASE_T = `t.tip = 'yiyecek' AND (t.stok_no IS DISTINCT FROM '$
 const SQL_ICENEK_BASE = `tip IN ('icenek', 'icecek') AND ${SQL_EXC_FINANS}`;
 const SQL_ICENEK_BASE_T = `t.tip IN ('icenek', 'icecek') AND (t.stok_no IS DISTINCT FROM '${STOK_NO_DUZELTME}' AND t.stok_no IS DISTINCT FROM '${STOK_NO_KDV_ILAVE}')`;
 
-/** İçecek için kaba kural kümesi — karşılık gelen grafiklere uygun */
-const SQL_ICE_ALKOLLU = `(
-  t.kategori ILIKE '%ŞARAP%' OR t.kategori ILIKE '%VİSKİ%' OR t.kategori ILIKE '%VISKI%' OR t.kategori ILIKE '%VODKA%'
-  OR t.kategori ILIKE '%RAKI%' OR t.kategori ILIKE '%RAKI%' OR t.kategori ILIKE '%BİRA%' OR t.kategori ILIKE '%BIRA%'
-  OR t.kategori ILIKE '%ALKOL%' OR t.kategori ILIKE '%COGNAC%' OR t.kategori ILIKE '%KONYAK%'
-  OR t.kategori ILIKE '%TEKİLA%' OR t.kategori ILIKE '%TEKILA%' OR t.kategori ILIKE '%ROM %'
-  OR t.stok_mali ILIKE '%ŞARAP%' OR t.stok_mali ILIKE '%VİSKİ%' OR t.stok_mali ILIKE '%BIRA%'
-)`;
-
-const SQL_ICE_SICAK = `(
-  t.kategori ILIKE '%ÇAY%' OR t.kategori ILIKE '%CAY %' OR t.kategori ILIKE '%KAHVE%'
-  OR t.kategori ILIKE '%ÇİKOLATA%' OR t.kategori ILIKE '%CIKOLATA%' OR t.kategori ILIKE '%SICAK%'
-  OR t.stok_mali ILIKE '%ÇAY%' OR t.stok_mali ILIKE '%KAHVE%'
-)`;
-
-const SQL_ICE_SU = `(
-  t.kategori ILIKE '%SU %' OR t.kategori ILIKE '%SU)' OR t.kategori ILIKE '%İÇME SUYU%' OR t.kategori ILIKE '%ICME SUYU%'
-  OR t.kategori ILIKE '%DAMACANA%' OR t.kategori ILIKE '%ŞİŞE SU%' OR t.stok_mali ILIKE '%SU %'
-  OR BTRIM(COALESCE(t.kategori,'')) ILIKE 'SU'
-)`;
-
-const SQL_ICE_GAZLI_MEYVE = `(
-  t.kategori ILIKE '%MEŞRUBAT%' OR t.kategori ILIKE '%MESRUBAT%' OR t.kategori ILIKE '%GAZLI%'
-  OR t.kategori ILIKE '%KOLA%' OR t.kategori ILIKE '%GAZOZ%' OR t.kategori ILIKE '%MEYVE SUYU%'
-  OR t.kategori ILIKE '%ENERJİ İÇ%' OR t.kategori ILIKE '%ENERJI%'
-)`;
+/**
+ * İçecek ana grubu — önce ERP kategori kodu (ilk 4 hane), yoksa ad/kategori anahtar kelimesi.
+ * Kategori adları ASCII büyük harf (ör. "2007006 - WHISKYLER"); Türkçe karakterli kelimeler yetmez.
+ * 2001 meşrubat · 2002 soda/su · 2003 meyve suyu · 2004 konsantre · 2005 içecek sosu/şurup
+ * 2006 bira · 2007 sert alkol · 2008 şarap · 2009 şampanya
+ */
+const SQL_ICE_KOD = `LEFT(BTRIM(COALESCE(t.kategori, '')), 4)`;
+const sqlIceKelime = (kelimeler) =>
+  '(' + kelimeler.map(k => `t.kategori ILIKE '%${k}%' OR t.stok_mali ILIKE '%${k}%'`).join(' OR ') + ')';
 
 const SQL_ICENEK_ANA_GRUP = `
-  CASE
-    WHEN ${SQL_ICE_ALKOLLU} THEN 'alkollu'
-    WHEN ${SQL_ICE_SICAK} THEN 'sicak'
-    WHEN ${SQL_ICE_SU} THEN 'su'
-    WHEN ${SQL_ICE_GAZLI_MEYVE} THEN 'gazli_meyve'
-    ELSE 'diger'
+  CASE ${SQL_ICE_KOD}
+    WHEN '2001' THEN 'gazli_meyve'
+    WHEN '2002' THEN 'su_soda'
+    WHEN '2003' THEN 'gazli_meyve'
+    WHEN '2004' THEN 'gazli_meyve'
+    WHEN '2005' THEN 'surup_sos'
+    WHEN '2006' THEN 'bira'
+    WHEN '2007' THEN 'sert_alkol'
+    WHEN '2008' THEN 'sarap'
+    WHEN '2009' THEN 'sarap'
+    ELSE CASE
+      WHEN ${sqlIceKelime(['BIRA', 'BİRA'])} THEN 'bira'
+      WHEN ${sqlIceKelime(['SARAP', 'ŞARAP', 'SAMPANYA', 'ŞAMPANYA', 'PROSECCO'])} THEN 'sarap'
+      WHEN ${sqlIceKelime(['WHISKY', 'VISKI', 'VİSKİ', 'VOTKA', 'VODKA', 'RAKI', 'GIN ', 'LIKOR', 'LİKÖR',
+        'ROM ', 'KANYAK', 'KONYAK', 'COGNAC', 'TEKILA', 'TEQUILA', 'APERATIF'])} THEN 'sert_alkol'
+      WHEN ${sqlIceKelime(['CAY', 'ÇAY', 'KAHVE', 'SICAK'])} THEN 'sicak'
+      WHEN ${sqlIceKelime(['SULAR', 'SODA', 'MADEN SU', 'DAMACANA', 'ICME SUYU', 'İÇME SUYU'])} THEN 'su_soda'
+      WHEN ${sqlIceKelime(['MESRUBAT', 'MEŞRUBAT', 'MEYVE SU', 'GAZLI', 'KOLA', 'GAZOZ', 'ENERJI', 'KONSANTRE'])} THEN 'gazli_meyve'
+      WHEN ${sqlIceKelime(['SURUP', 'ŞURUP', 'ICECEK SOS'])} THEN 'surup_sos'
+      ELSE 'diger'
+    END
   END`;
+
+const SQL_ICE_ALKOLLU = `((${SQL_ICENEK_ANA_GRUP}) IN ('bira', 'sarap', 'sert_alkol'))`;
 
 const SQL_ICENEK_SEGMENT = `
   CASE
-    WHEN ${SQL_ICE_ALKOLLU} THEN 'premium'
-    WHEN ${SQL_ICE_SU} OR ${SQL_ICE_SICAK} OR ${SQL_ICE_GAZLI_MEYVE} THEN 'standard'
-    ELSE 'diger'
+    WHEN (${SQL_ICENEK_ANA_GRUP}) IN ('bira', 'sarap', 'sert_alkol') THEN 'premium'
+    WHEN (${SQL_ICENEK_ANA_GRUP}) = 'diger' THEN 'diger'
+    ELSE 'standard'
   END`;
 
-const SQL_ICENEK_DUSUK_GRUP_COST = `(NOT (${SQL_ICE_ALKOLLU})) AND (${SQL_ICE_SU} OR ${SQL_ICE_SICAK} OR ${SQL_ICE_GAZLI_MEYVE})`;
+const SQL_ICENEK_DUSUK_GRUP_COST = `((${SQL_ICENEK_ANA_GRUP}) IN ('su_soda', 'sicak', 'gazli_meyve', 'surup_sos'))`;
 
 const SQL_PROTEIN_BUCKET_T = SQL_PROTEIN_BUCKET.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
 const SQL_MACRO_KATEGORI_T = SQL_MACRO_KATEGORI.replace(/\bkategori\b/g, 't.kategori');
 const SQL_PREMIUM_STD_T = SQL_PREMIUM_STD.replace(/\bstok_mali\b/g, 't.stok_mali').replace(/\bkategori\b/g, 't.kategori');
 
-/** LLM food_group → grafik etiketi (yoğunluk kartı) */
-const SQL_FOOD_MACRO_PC = `
-  CASE pc.food_group
-    WHEN 'karbonhidrat' THEN 'Karbonhidrat'
-    WHEN 'et_urunleri' THEN 'Et ürünleri'
-    WHEN 'sut_urunleri' THEN 'Süt ürünleri'
-    WHEN 'meyve_sebze' THEN 'Meyve/Sebze'
-    WHEN 'sarkuteri' THEN 'Şarküteri'
-    WHEN 'yag' THEN 'Yağ'
-    WHEN 'diger' THEN 'Diğer'
+/** food_group anahtarı → grafik etiketi (yoğunluk kartı) */
+const FOOD_GROUP_ETIKET = {
+  et_urunleri: 'Et ürünleri',
+  sarkuteri: 'Şarküteri',
+  sut_urunleri: 'Süt ürünleri',
+  yumurta: 'Yumurta',
+  meyve_sebze: 'Meyve/Sebze',
+  karbonhidrat: 'Karbonhidrat',
+  yag: 'Yağ',
+  tatli_pastane: 'Tatlı/Pastane',
+  kuruyemis: 'Kuruyemiş',
+  baharat_sos: 'Baharat/Sos',
+  sicak_icecek: 'Kahve/Çay',
+  diger: 'Diğer'
+};
+
+/** Satırın food_group'u: LLM, yoksa kategori kuralı */
+const SQL_FOOD_GROUP_T = `COALESCE(pc.food_group, ${SQL_MACRO_KATEGORI_T})`;
+
+/** Satırın maliyet segmenti: LLM cost_proxy, yoksa ad kuralı (standart → ekonomik) */
+const SQL_PREMIUM_SEGMENT_T = `
+  CASE pc.cost_proxy
+    WHEN 'HIGH' THEN 'premium'
+    WHEN 'MEDIUM' THEN 'orta'
+    WHEN 'LOW' THEN 'ekonomik'
+    ELSE CASE (${SQL_PREMIUM_STD_T}) WHEN 'standard' THEN 'ekonomik' ELSE (${SQL_PREMIUM_STD_T}) END
   END`;
 
 const SQL_COST_LOW_JOINED = `(
   COALESCE(pc.protein_bucket, ${SQL_PROTEIN_BUCKET_T}) IN ('tavuk','hindi')
   OR t.kategori ILIKE '%SEBZE%'
-  OR COALESCE(pc.food_group, '') IN ('karbonhidrat','sarkuteri','sut_urunleri','meyve_sebze')
-  OR (${SQL_MACRO_KATEGORI_T}) IN ('karbonhidrat','şarküteri','süt ürünleri')
+  OR (${SQL_FOOD_GROUP_T}) IN ('karbonhidrat','sarkuteri','sut_urunleri','meyve_sebze','yumurta')
 )`;
 
 /**
@@ -151,7 +177,7 @@ const SQL_COST_LOW_JOINED = `(
  */
 const JOIN_CLASSIFICATION = `
 LEFT JOIN LATERAL (
-  SELECT pc2.id, pc2.protein_bucket, pc2.food_group
+  SELECT pc2.id, pc2.protein_bucket, pc2.food_group, pc2.cost_proxy
   FROM fb_cost.product_classifications pc2
   WHERE pc2.stok_mali = t.stok_mali
   ORDER BY
@@ -395,9 +421,10 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
     ),
     pool.query(
       `
-      SELECT ${SQL_PREMIUM_STD_T} AS segment,
+      SELECT (${SQL_PREMIUM_SEGMENT_T}) AS segment,
              SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
       FROM fb_cost.tuketim t
+      ${JOIN_CLASSIFICATION}
       WHERE t.tarih_str = $1 AND ${SQL_YIYECEK_BASE_T}
       GROUP BY 1
       `,
@@ -405,7 +432,7 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
     ),
     pool.query(
       `
-      SELECT COALESCE((${SQL_FOOD_MACRO_PC}), (${SQL_MACRO_KATEGORI_T})) AS macro,
+      SELECT (${SQL_FOOD_GROUP_T}) AS grup,
              SUM(t.tutar_tl) AS tutar_tl, SUM(t.tutar_eur) AS tutar_eur
       FROM fb_cost.tuketim t
       ${JOIN_CLASSIFICATION}
@@ -524,7 +551,17 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
     diger: 'Diğer'
   };
 
-  const protein = toShareRows(proteinRows.rows.map(r => ({ ...r, etiket: proteinLabels[r.bucket] || r.bucket }))).map(
+  // Protein grafiği yalnız hayvansal protein kalemleri üzerinden; protein dışı tutar ayrı raporlanır.
+  const proteinDisiRow = proteinRows.rows.find(r => r.bucket === 'diger');
+  const proteinYiyecekTl = proteinRows.rows.reduce((a, r) => a + (parseFloat(r.tutar_tl) || 0), 0);
+  const protein_disi = {
+    tutar_tl: parseFloat(proteinDisiRow?.tutar_tl) || 0,
+    tutar_eur: parseFloat(proteinDisiRow?.tutar_eur) || 0,
+    pay_yuzde: pct(parseFloat(proteinDisiRow?.tutar_tl) || 0, proteinYiyecekTl)
+  };
+  const protein = toShareRows(
+    proteinRows.rows.filter(r => r.bucket !== 'diger').map(r => ({ ...r, etiket: proteinLabels[r.bucket] || r.bucket }))
+  ).map(
     r => ({
       bucket: r.bucket,
       etiket: r.etiket,
@@ -534,7 +571,9 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
     })
   );
 
-  const premium_std = toShareRows(premiumRows.rows).map(r => ({
+  const segmentSira = { premium: 0, orta: 1, ekonomik: 2, diger: 3 };
+  const premiumSirali = [...premiumRows.rows].sort((a, b) => (segmentSira[a.segment] ?? 9) - (segmentSira[b.segment] ?? 9));
+  const premium_std = toShareRows(premiumSirali).map(r => ({
     segment: r.segment,
     tutar_tl: parseFloat(r.tutar_tl) || 0,
     tutar_eur: parseFloat(r.tutar_eur) || 0,
@@ -542,7 +581,8 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
   }));
 
   const density = toShareRows(densityRows.rows).map(r => ({
-    macro: r.macro,
+    grup: r.grup,
+    macro: FOOD_GROUP_ETIKET[r.grup] || r.grup,
     tutar_tl: parseFloat(r.tutar_tl) || 0,
     tutar_eur: parseFloat(r.tutar_eur) || 0,
     pay_yuzde: r.pay_yuzde
@@ -597,6 +637,7 @@ async function buildTalepYiyecekAnaliz(pool, tarihIn) {
     zincir: zincir.map(z => z.tarih_str),
     toplam: { tutar_tl: topl_tl, tutar_eur: parseFloat(toplamCur.eur) || 0 },
     protein_yapisi: protein,
+    protein_disi,
     premium_vs_standard: premium_std,
     kategori_yogunluk: density,
     dusuk_tuketim_urunler: dusuk_kullanim.map(r => ({
@@ -631,10 +672,13 @@ async function buildTalepIcenekAnaliz(pool, tarihIn) {
   }
 
   const icenekAnaEtiket = {
-    alkollu: 'Alkollü',
+    sert_alkol: 'Sert alkol',
+    bira: 'Bira',
+    sarap: 'Şarap / şampanya',
+    gazli_meyve: 'Meşrubat / meyve suyu',
+    su_soda: 'Su / soda',
+    surup_sos: 'Şurup / içecek sosu',
     sicak: 'Sıcak içecek',
-    su: 'Su',
-    gazli_meyve: 'Gazlı / meyve suyu',
     diger: 'Diğer'
   };
 

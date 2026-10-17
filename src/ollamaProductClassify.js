@@ -3,7 +3,7 @@
 const http = require('http');
 const https = require('https');
 
-const PROMPT_VERSION = 'v2_protein_food_group_cost_proxy';
+const PROMPT_VERSION = 'v3_food_group_genis';
 
 const SYSTEM_PROMPT = `Rol: Sen bir F&B maliyet, menü analizi ve ürün sınıflandırma uzmanısın.
 
@@ -18,16 +18,24 @@ deniz > balik > kuzu > dana > hindi > tavuk > diger
 
 2) food_group
 Zorunlu gruplar:
-karbonhidrat | et_urunleri | sut_urunleri | meyve_sebze | sarkuteri | yag | diger
+karbonhidrat | et_urunleri | sarkuteri | sut_urunleri | yumurta | meyve_sebze | yag | tatli_pastane | kuruyemis | baharat_sos | sicak_icecek | diger
 
 food_group kuralları:
-- Ekmek, un, makarna, pirinç, bulgur, bakliyat, hamur işi, bisküvi, börek, mantı, pizza hamuru, tortilla gibi ürünler: karbonhidrat
-- Taze kırmızı et, kuzu, dana, tavuk, hindi, balık, deniz ürünü ve sakatat: et_urunleri
-- Sucuk, salam, sosis, jambon, füme et, pastırma, bacon, pepperoni, işlenmiş et ürünleri: sarkuteri
-- Peynir, süt, yoğurt, ayran, kefir, krema, kaymak gibi süt bazlı ürünler: sut_urunleri
-- Tereyağı, margarin, ayçiçek yağı, zeytinyağı, kızartmalık yağ, susam yağı vb.: yag
-- Taze sebze/meyve, donuk sebze/meyve, püre meyve, konserve sebze/meyve: meyve_sebze
-- Baharat, sos, çay, kahve, şeker, reçel, çikolata, tatlı, katkı, içecek hammaddesi gibi ürünler: diger
+- Ekmek, un, makarna, pirinç, bulgur, bakliyat, irmik, nişasta, hamur, yufka, börek, mantı, pizza hamuru, tortilla, galeta, patates, cips, kraker, mısır gevreği, tuzlu atıştırmalık: karbonhidrat
+- Taze/donuk kırmızı et, kuzu, dana, tavuk, hindi, balık, deniz ürünü ve sakatat: et_urunleri
+- Sucuk, salam, sosis, jambon, füme et, pastırma, bacon, pepperoni, kavurma, işlenmiş et: sarkuteri
+- Peynir, süt, yoğurt, ayran, kefir, krema, kaymak, labne, süt tozu: sut_urunleri
+- Yumurta (kabuklu, sıvı, toz): yumurta
+- Taze/donuk/konserve sebze ve meyve, mantar, zeytin, turşu, taze yeşillik ve otlar, deniz yosunu (nori): meyve_sebze
+- Tereyağı, margarin, ayçiçek/zeytin/mısır/fındık yağı, kızartmalık yağ: yag
+- Baklava, pasta, kek, kurabiye, bisküvi, dondurma, çikolata, kakao, şeker, pudra şekeri, lokum, helva, bal, reçel, marmelat, tatlı sosu, fondan, krema şanti, pastane malzemesi: tatli_pastane
+- Fındık, ceviz, badem, fıstık, kaju, leblebi, çekirdek, kuru üzüm, kuru kayısı, hurma ve diğer kuru meyveler: kuruyemis
+- Baharat, tuz, sirke, ketçap, mayonez, hardal, soya sosu, salça, bulyon, çeşni, aroma, sos, dressing: baharat_sos
+- Kahve, çay, bitki çayı, sıcak çikolata tozu, salep: sicak_icecek
+- diger yalnız yukarıdakilerin hiçbirine uymayanlar içindir (ör. maya, jelatin, katkı maddesi, ambalajlı hazır yemek). Mümkünse diger kullanma.
+
+Ürün adını kategoriye tercih et: kategori ERP grubudur ve yanıltıcı olabilir (ör. "SUT - YOGURTLAR" altında baklava → tatli_pastane).
+Ürün adlarında ERP kısaltmaları olabilir (ör. "(AU)", "(PA)", "KG", "LT", "DONUK", "PKT") — bunları yok say.
 
 3) cost_proxy (Menu engineering — tipik hammadde maliyet yoğunluğu; gerçek fatura/fiyat değil)
 Zorunlu değer (İngilizce büyük harf): HIGH | MEDIUM | LOW
@@ -45,6 +53,8 @@ LOW: Tavuk, pirinç, makarna, bulgur, patates, sebze, ekmek, hamur işi gibi gen
 - Somon protein_bucket=balik, food_group=et_urunleri olmalıdır.
 - Karides protein_bucket=deniz, food_group=et_urunleri olmalıdır.
 - Zeytinyağı protein_bucket=diger, food_group=yag olmalıdır.
+- Yumurta protein_bucket=diger, food_group=yumurta olmalıdır.
+- Baklava protein_bucket=diger, food_group=tatli_pastane olmalıdır.
 - cost_proxy yalnızca HIGH, MEDIUM veya LOW olmalı (tam bu yazım).
 - Açıklama yazma.
 - Markdown kullanma.
@@ -55,7 +65,7 @@ JSON şeması:
   "stok_mali": "string",
   "kategori": "string veya null",
   "protein_bucket": "dana|kuzu|tavuk|balik|deniz|hindi|diger",
-  "food_group": "karbonhidrat|et_urunleri|sut_urunleri|meyve_sebze|sarkuteri|yag|diger",
+  "food_group": "karbonhidrat|et_urunleri|sarkuteri|sut_urunleri|yumurta|meyve_sebze|yag|tatli_pastane|kuruyemis|baharat_sos|sicak_icecek|diger",
   "cost_proxy": "HIGH|MEDIUM|LOW",
   "confidence": "yüksek|orta|düşük",
   "gerekce": "string",
@@ -63,7 +73,10 @@ JSON şeması:
 }`;
 
 const ALLOW_PROTEIN = new Set(['dana', 'kuzu', 'tavuk', 'balik', 'deniz', 'hindi', 'diger']);
-const ALLOW_FOOD = new Set(['karbonhidrat', 'et_urunleri', 'sut_urunleri', 'meyve_sebze', 'sarkuteri', 'yag', 'diger']);
+const ALLOW_FOOD = new Set([
+  'karbonhidrat', 'et_urunleri', 'sarkuteri', 'sut_urunleri', 'yumurta', 'meyve_sebze', 'yag',
+  'tatli_pastane', 'kuruyemis', 'baharat_sos', 'sicak_icecek', 'diger'
+]);
 const ALLOW_COST = new Set(['HIGH', 'MEDIUM', 'LOW']);
 const ALLOW_CONF = new Set(['yüksek', 'orta', 'düşük']);
 
@@ -162,6 +175,11 @@ function normalizeAndFix(obj, stok_mali, kategori, fixNotes) {
     notesParts.push(`Geçersiz food_group "${obj.food_group}" → diger`);
     food_group = 'diger';
   }
+  // Protein kovası yalnız et / şarküteri için anlamlı (ör. "MAKARNA DENIZ KABUGU" deniz ürünü değildir).
+  if (protein_bucket !== 'diger' && food_group !== 'et_urunleri' && food_group !== 'sarkuteri') {
+    notesParts.push(`protein_bucket "${protein_bucket}" → diger (food_group=${food_group})`);
+    protein_bucket = 'diger';
+  }
   if (!ALLOW_CONF.has(confidence)) {
     notesParts.push(`Geçersiz confidence → düşük`);
     confidence = 'düşük';
@@ -196,17 +214,40 @@ function normalizeAndFix(obj, stok_mali, kategori, fixNotes) {
   };
 }
 
-async function callOllamaOnce(stok_mali, kategori) {
+/** Ollama yapılandırılmış çıktı şeması: sabit anahtarlar + enum; fazladan alan / tekrar döngüsünü engeller. */
+const OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    stok_mali: { type: 'string' },
+    kategori: { type: ['string', 'null'] },
+    protein_bucket: { type: 'string', enum: [...ALLOW_PROTEIN] },
+    food_group: { type: 'string', enum: [...ALLOW_FOOD] },
+    cost_proxy: { type: 'string', enum: [...ALLOW_COST] },
+    confidence: { type: 'string', enum: [...ALLOW_CONF] },
+    gerekce: { type: 'string', maxLength: 300 },
+    notes: { type: ['string', 'null'] }
+  },
+  required: ['protein_bucket', 'food_group', 'cost_proxy', 'confidence', 'gerekce'],
+  additionalProperties: false
+};
+
+/** Başarısız (fallback) kayıtların sürümü — «yalnız eksikler» bunları yeniden dener. */
+const PROMPT_VERSION_HATA = `${PROMPT_VERSION}_hata`;
+
+async function callOllamaOnce(stok_mali, kategori, attempt = 1) {
   const cfg = getOllamaConfig();
   const prompt = `${SYSTEM_PROMPT}\n\n${buildUserPayload(stok_mali, kategori)}`;
   const payload = {
     model: cfg.model,
     prompt,
     stream: false,
-    format: 'json',
+    format: OUTPUT_SCHEMA,
     options: {
-      temperature: 0.1,
+      // Tekrar denemede sıcaklığı artır: aynı tekrar döngüsüne düşmesin.
+      temperature: attempt === 1 ? 0.1 : attempt === 2 ? 0.4 : 0.7,
       top_p: 0.9,
+      repeat_penalty: 1.15,
+      num_predict: 400,
       num_ctx: 4096
     }
   };
@@ -234,7 +275,7 @@ async function classifyProductWithRetries(stok_mali, kategori) {
   let lastErr = '';
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      return await callOllamaOnce(stok_mali, kategori);
+      return await callOllamaOnce(stok_mali, kategori, attempt);
     } catch (e) {
       lastErr = e.message || String(e);
       await new Promise(r => setTimeout(r, 400 * attempt));
@@ -251,13 +292,14 @@ async function classifyProductWithRetries(stok_mali, kategori) {
     notes: lastErr.slice(0, 2000),
     raw_response: null,
     model_name: getOllamaConfig().model,
-    prompt_version: PROMPT_VERSION
+    prompt_version: PROMPT_VERSION_HATA
   };
 }
 
 module.exports = {
   SYSTEM_PROMPT,
   PROMPT_VERSION,
+  PROMPT_VERSION_HATA,
   classifyProductWithRetries,
   getOllamaConfig,
   ALLOW_PROTEIN,
