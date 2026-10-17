@@ -136,6 +136,9 @@
     vertical-align: middle;
   }
   .kat-pp-mom-chip .delta-icon { width: 10px; height: 10px; }
+  #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
+  #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
+  #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
   .kat-pp-mom-up { background: var(--green-bg); color: var(--green); border: 1px solid rgba(45, 106, 79, 0.35); }
   .kat-pp-mom-down { background: rgba(200, 50, 50, 0.12); color: var(--red); border: 1px solid rgba(200, 50, 50, 0.28); }
   .kat-pp-mom-flat { background: rgba(0, 0, 0, 0.04); color: var(--text-dim); border: 1px solid var(--border); }
@@ -5405,18 +5408,66 @@ async function init() {
 }
 
 // ── Özet ──────────────────────────────────────────────────────────────────────
-function renderOzet() {
-  const tarih = document.getElementById('ozet-donem').value;
+const ozetIsKismi = (tarihStr) => String(tarihStr || '').endsWith('-15g');
+
+/** Bir dönemin Genel Özet KPI değerleri (seçili para birimine göre). */
+function ozetMetrics(tarih) {
   const rows = ozetData.filter(r => r.tarih_str === tarih);
   const yiy = rows.find(r => r.tip === 'yiyecek') || {};
-  const ice = rows.find(r => tipRowIsIcenek(r.tip))  || {};
+  const ice = rows.find(r => tipRowIsIcenek(r.tip)) || {};
   const don = donemler.find(d => d.tarih_str === tarih) || {};
-
-  const ppTop = pickCur(yiy, 'toplam_pp') + pickCur(ice, 'toplam_pp');
-  const ppYiy = pickCur(yiy, 'toplam_pp');
-  const ppIce = pickCur(ice, 'toplam_pp');
   const yiyTop = pickCur(yiy, 'toplam');
   const iceTop = pickCur(ice, 'toplam');
+  const ppYiy = pickCur(yiy, 'toplam_pp');
+  const ppIce = pickCur(ice, 'toplam_pp');
+  return {
+    yiy, ice, don,
+    top: yiyTop + iceTop,
+    ppTop: ppYiy + ppIce,
+    kur: parseFloat(don.kur) || 0,
+    yiyTop, ppYiy, gYiy: +yiy.toplam_pp_gr || 0,
+    iceTop, ppIce, mlIce: (+ice.toplam_pp_cl || 0) * 10,
+  };
+}
+
+/** Takvim olarak verilen yıl/aydaki dönem; aynı kısmi (15 gün) durumundakini tercih eder. */
+function ozetDonemBul(yil, ayNo, kismi) {
+  const aday = donemler.filter(d => +d.yil === yil && +d.ay_no === ayNo);
+  return aday.find(d => ozetIsKismi(d.tarih_str) === kismi) || aday[0] || null;
+}
+
+function ozetDonemEtiket(d) {
+  return d ? `${d.ay} ${d.yil}${ozetIsKismi(d.tarih_str) ? ' (15 gün)' : ''}` : '';
+}
+
+function ozetCmpChip(lbl, cur, prev, d, kismiUyumsuz) {
+  if (kismiUyumsuz) {
+    return `<span class="ozet-cmp-item"><span class="ozet-cmp-lbl">${lbl}</span><span class="kat-pp-mom-chip kat-pp-mom-flat" title="${escapeHtml(ozetDonemEtiket(d))} — 15 günlük dönem tam ayla toplamda karşılaştırılmaz">—</span></span>`;
+  }
+  if (!d || !prev) {
+    return `<span class="ozet-cmp-item"><span class="ozet-cmp-lbl">${lbl}</span><span class="kat-pp-mom-chip kat-pp-mom-flat" title="Karşılaştırma verisi yok">—</span></span>`;
+  }
+  const chip = renderMomChip(((cur - prev) / Math.abs(prev)) * 100)
+    .replace(/title="[^"]*"/, `title="${escapeHtml(ozetDonemEtiket(d))}"`);
+  return `<span class="ozet-cmp-item"><span class="ozet-cmp-lbl">${lbl}</span>${chip}</span>`;
+}
+
+function renderOzet() {
+  const tarih = document.getElementById('ozet-donem').value;
+  const m = ozetMetrics(tarih);
+  const { don } = m;
+  const yil = +don.yil, ayNo = +don.ay_no, kismi = ozetIsKismi(tarih);
+  const prevD = ayNo ? ozetDonemBul(ayNo === 1 ? yil - 1 : yil, ayNo === 1 ? 12 : ayNo - 1, kismi) : null;
+  const yoyD = ayNo ? ozetDonemBul(yil - 1, ayNo, kismi) : null;
+  const mPrev = prevD ? ozetMetrics(prevD.tarih_str) : null;
+  const mYoy = yoyD ? ozetMetrics(yoyD.tarih_str) : null;
+  // Toplam tutarlar: 15 günlük dönem ile tam ay kıyaslanmaz (pax başı ve kur kıyaslanabilir).
+  const uyumsuz = (d) => !!d && ozetIsKismi(d.tarih_str) !== kismi;
+  const cmp = (key, toplam = false) => `<div class="ozet-cmp">${
+    ozetCmpChip('Önceki ay', m[key], mPrev?.[key], prevD, toplam && uyumsuz(prevD))}${
+    ozetCmpChip('Geçen yıl', m[key], mYoy?.[key], yoyD, toplam && uyumsuz(yoyD))}</div>`;
+
+  const { yiy, ice, ppTop, ppYiy, ppIce, yiyTop, iceTop } = m;
 
   document.getElementById('ozet-subtitle').textContent =
     `${don.ay || ''} ${don.yil || ''} · ${fmtN(don.cost_pax || 0, 0)} pax · Kur: ${fmtN(don.kur || 0, 4)} TL/€`;
@@ -5428,14 +5479,17 @@ function renderOzet() {
         <div class="stat-card gold">
           <div class="stat-value">${fmtCur(yiyTop + iceTop)}</div>
           <div class="stat-label">Toplam F&B Maliyet (${curLabel()})</div>
+          ${cmp('top', true)}
         </div>
         <div class="stat-card green">
           <div class="stat-value">${fmtCur(ppTop)}</div>
           <div class="stat-label">Pax Başına Toplam (${curLabel()})</div>
+          ${cmp('ppTop')}
         </div>
         <div class="stat-card">
           <div class="stat-value">${fmtN(don.kur || 0, 2)}</div>
           <div class="stat-label">Kur (TL/€)</div>
+          ${cmp('kur')}
         </div>
       </div>
     </section>
@@ -5445,14 +5499,17 @@ function renderOzet() {
         <div class="stat-card green">
           <div class="stat-value">${fmtCur(yiyTop)}</div>
           <div class="stat-label">Yiyecek Maliyet (${curLabel()})</div>
+          ${cmp('yiyTop', true)}
         </div>
         <div class="stat-card yellow">
           <div class="stat-value">${fmtCur(ppYiy)}</div>
           <div class="stat-label">Pax Başına (${curLabel()})</div>
+          ${cmp('ppYiy')}
         </div>
         <div class="stat-card">
-          <div class="stat-value">${fmtN(+yiy.toplam_pp_gr || 0, 0)} g</div>
+          <div class="stat-value">${fmtN(m.gYiy, 0)} g</div>
           <div class="stat-label">Pax başına (g)</div>
+          ${cmp('gYiy')}
         </div>
       </div>
     </section>
@@ -5462,17 +5519,21 @@ function renderOzet() {
         <div class="stat-card blue">
           <div class="stat-value">${fmtCur(iceTop)}</div>
           <div class="stat-label">İçecek Maliyet (${curLabel()})</div>
+          ${cmp('iceTop', true)}
         </div>
         <div class="stat-card blue">
           <div class="stat-value">${fmtCur(ppIce)}</div>
           <div class="stat-label">Pax Başına (${curLabel()})</div>
+          ${cmp('ppIce')}
         </div>
         <div class="stat-card">
-          <div class="stat-value">${fmtN((+ice.toplam_pp_cl || 0) * 10, 0)} mL</div>
+          <div class="stat-value">${fmtN(m.mlIce, 0)} mL</div>
           <div class="stat-label">Pax başına (mL)</div>
+          ${cmp('mlIce')}
         </div>
       </div>
     </section>`;
+  vcLucide();
 
   // Dağılım pasta
   if (chartDagilim) chartDagilim.destroy();
