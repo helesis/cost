@@ -982,8 +982,11 @@
      "type": "Kırmızı",
      "image": null,
      "image_alt": "Kumkale Kırmızı",
-     "vivino": null,
-     "description": "Günlük içime uygun, hafif gövdeli kırmızı sofra şarabı.",
+     "vivino": {
+      "rating": 3.3,
+      "url": "https://www.vivino.com/en/suvla-kumkale-syrah-karasakiz/w/8429617"
+     },
+     "description": "Syrah ve Karasakız kupajı, meyvemsi ve yumuşak içimli bir kırmızı.",
      "note": null,
      "stock": [
       "KUMKALE KIRMIZI 75 cl"
@@ -1011,8 +1014,11 @@
      "type": "Beyaz",
      "image": null,
      "image_alt": "Kumkale Beyaz",
-     "vivino": null,
-     "description": "Hafif ve ferah, günlük içimlik beyaz sofra şarabı.",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/suvla-kumkale-sauvignon-blanc-narince/w/8148622"
+     },
+     "description": "Sauvignon Blanc ve Narince kupajı, ferah ve narenciye notalı bir beyaz.",
      "note": null,
      "stock": [
       "KUMKALE BEYAZ 75 cl"
