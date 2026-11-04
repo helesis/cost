@@ -13,7 +13,7 @@
    "2026": "Mar–Eki"
   },
   "bottle_cl": 75,
-  "notes": "Tüketim ve ortalama € fiyat: fb_cost.tuketim (ay sonu kayıtları, sıfır fiyatlı satırlar hariç, tüketime göre ağırlıklı). Sıralama: bölüm ortalama fiyatına göre, köpürenler en sonda."
+  "notes": "Tüketim ve ortalama € fiyat: fb_cost.tuketim (ay sonu kayıtları, sıfır fiyatlı satırlar hariç, tüketime göre ağırlıklı). Sıralama: bölüm ortalama fiyatına göre, köpürenler en sonda. Son alış: o ürünün sıfırdan büyük birim fiyatlı en son ay kaydı (birim_fiyat × 0,75; € için o ayın kuru)."
  },
  "sections": [
   {
@@ -46,8 +46,13 @@
      },
      "price_2027": {
       "tl": 352,
-      "eur": 6.26,
-      "base_year": "2026"
+      "eur": 6.26
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 270.94,
+      "eur": 4.9,
+      "rate": 55.2592
      }
     }
    ]
@@ -83,8 +88,13 @@
      },
      "price_2027": {
       "tl": 420,
-      "eur": 7.47,
-      "base_year": "2026"
+      "eur": 7.47
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 320.0,
+      "eur": 5.79,
+      "rate": 55.2592
      }
     },
     {
@@ -113,8 +123,13 @@
      },
      "price_2027": {
       "tl": 420,
-      "eur": 7.47,
-      "base_year": "2026"
+      "eur": 7.47
+     },
+     "last_purchase": {
+      "period": "2026-06",
+      "tl": 285.0,
+      "eur": 5.35,
+      "rate": 53.247
      }
     },
     {
@@ -146,8 +161,13 @@
      },
      "price_2027": {
       "tl": 420,
-      "eur": 7.47,
-      "base_year": "2026"
+      "eur": 7.47
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 320.0,
+      "eur": 5.79,
+      "rate": 55.2592
      }
     }
    ]
@@ -182,8 +202,13 @@
      },
      "price_2027": {
       "tl": 317,
-      "eur": 5.63,
-      "base_year": "2026"
+      "eur": 5.63
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 290.66,
+      "eur": 5.26,
+      "rate": 55.2592
      }
     },
     {
@@ -213,8 +238,13 @@
      },
      "price_2027": {
       "tl": 317,
-      "eur": 5.63,
-      "base_year": "2026"
+      "eur": 5.63
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 304.48,
+      "eur": 5.51,
+      "rate": 55.2592
      }
     },
     {
@@ -243,8 +273,13 @@
      },
      "price_2027": {
       "tl": 317,
-      "eur": 5.63,
-      "base_year": "2026"
+      "eur": 5.63
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 301.8,
+      "eur": 5.46,
+      "rate": 55.2592
      }
     }
    ]
@@ -279,8 +314,13 @@
      },
      "price_2027": {
       "tl": 257,
-      "eur": 4.57,
-      "base_year": "2026"
+      "eur": 4.57
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 250.29,
+      "eur": 4.53,
+      "rate": 55.2592
      }
     }
    ]
@@ -315,8 +355,13 @@
      },
      "price_2027": {
       "tl": 300,
-      "eur": 5.33,
-      "base_year": "2026"
+      "eur": 5.33
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 283.61,
+      "eur": 5.13,
+      "rate": 55.2592
      }
     },
     {
@@ -345,8 +390,13 @@
      },
      "price_2027": {
       "tl": 300,
-      "eur": 5.33,
-      "base_year": "2026"
+      "eur": 5.33
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 284.94,
+      "eur": 5.16,
+      "rate": 55.2592
      }
     },
     {
@@ -375,8 +425,13 @@
      },
      "price_2027": {
       "tl": 300,
-      "eur": 5.33,
-      "base_year": "2026"
+      "eur": 5.33
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 284.99,
+      "eur": 5.16,
+      "rate": 55.2592
      }
     }
    ]
@@ -411,8 +466,13 @@
      },
      "price_2027": {
       "tl": 330,
-      "eur": 5.87,
-      "base_year": "2025"
+      "eur": 5.87
+     },
+     "last_purchase": {
+      "period": "2025-04",
+      "tl": 168.2,
+      "eur": 3.93,
+      "rate": 42.8114
      }
     },
     {
@@ -441,8 +501,13 @@
      },
      "price_2027": {
       "tl": 330,
-      "eur": 5.87,
-      "base_year": "2026"
+      "eur": 5.87
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 286.96,
+      "eur": 5.19,
+      "rate": 55.2592
      }
     },
     {
@@ -471,8 +536,13 @@
      },
      "price_2027": {
       "tl": 330,
-      "eur": 5.87,
-      "base_year": "2026"
+      "eur": 5.87
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 85.37,
+      "eur": 1.54,
+      "rate": 55.2592
      }
     }
    ]
@@ -507,8 +577,13 @@
      },
      "price_2027": {
       "tl": 240,
-      "eur": 4.27,
-      "base_year": "2026"
+      "eur": 4.27
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 161.24,
+      "eur": 2.92,
+      "rate": 55.2592
      }
     },
     {
@@ -537,8 +612,13 @@
      },
      "price_2027": {
       "tl": 240,
-      "eur": 4.27,
-      "base_year": "2026"
+      "eur": 4.27
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 167.81,
+      "eur": 3.04,
+      "rate": 55.2592
      }
     },
     {
@@ -567,8 +647,13 @@
      },
      "price_2027": {
       "tl": 240,
-      "eur": 4.27,
-      "base_year": "2026"
+      "eur": 4.27
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 166.47,
+      "eur": 3.01,
+      "rate": 55.2592
      }
     }
    ]
@@ -603,8 +688,13 @@
      },
      "price_2027": {
       "tl": 220,
-      "eur": 3.91,
-      "base_year": "2026"
+      "eur": 3.91
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 149.58,
+      "eur": 2.71,
+      "rate": 55.2592
      }
     },
     {
@@ -633,8 +723,13 @@
      },
      "price_2027": {
       "tl": 220,
-      "eur": 3.91,
-      "base_year": "2026"
+      "eur": 3.91
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 150.0,
+      "eur": 2.71,
+      "rate": 55.2592
      }
     },
     {
@@ -663,8 +758,13 @@
      },
      "price_2027": {
       "tl": 220,
-      "eur": 3.91,
-      "base_year": "2026"
+      "eur": 3.91
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 149.95,
+      "eur": 2.71,
+      "rate": 55.2592
      }
     }
    ]
@@ -699,8 +799,13 @@
      },
      "price_2027": {
       "tl": 320,
-      "eur": 5.69,
-      "base_year": "2026"
+      "eur": 5.69
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 319.26,
+      "eur": 5.78,
+      "rate": 55.2592
      }
     },
     {
@@ -723,6 +828,12 @@
       "2024": null,
       "2025": null,
       "2026": 3.55
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 195.0,
+      "eur": 3.53,
+      "rate": 55.2592
      }
     },
     {
@@ -748,6 +859,12 @@
       "2024": 3.69,
       "2025": 3.14,
       "2026": 3.07
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 165.0,
+      "eur": 2.99,
+      "rate": 55.2592
      }
     },
     {
@@ -770,6 +887,12 @@
       "2024": 3.07,
       "2025": 2.54,
       "2026": 2.22
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 118.01,
+      "eur": 2.14,
+      "rate": 55.2592
      }
     },
     {
@@ -792,6 +915,12 @@
       "2024": 5.36,
       "2025": 4.71,
       "2026": 4.17
+     },
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 224.37,
+      "eur": 4.06,
+      "rate": 55.2592
      }
     }
    ]

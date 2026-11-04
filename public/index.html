@@ -162,6 +162,7 @@
   .hws-2027-lbl { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
   .hws-2027-val { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
   .hws-2027-val small { font-family: 'Mulish', sans-serif; font-size: 12px; color: var(--text-dim); margin-left: 4px; }
+  .hws-lp { margin-top: 3px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
   #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
   #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
@@ -3558,6 +3559,12 @@ async function loadMeKumulatif(resetPage) {
 // ── Housewine Selection ────────────────────────────────────────────────────────
 let hwsData = null;
 
+const HWS_AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+function hwsPeriodLabel(p) {
+  const [y, m] = String(p || '').split('-').map(Number);
+  return y && m ? `${HWS_AYLAR[m - 1]} ${y}` : String(p || '');
+}
+
 function hwsCard(w) {
   const years = ['2024', '2025', '2026'];
   const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
@@ -3569,17 +3576,21 @@ function hwsCard(w) {
   let p27 = '';
   if (w.price_2027) {
     const p = w.price_2027;
-    const base = w.avg_eur?.[p.base_year];
+    const lp = w.last_purchase;
     let chip = '';
-    if (base) {
-      const pct = (p.eur / base - 1) * 100;
+    let lpLine = '';
+    if (lp?.eur) {
+      const pct = (p.eur / lp.eur - 1) * 100;
+      const pctTl = (p.tl / lp.tl - 1) * 100;
+      const per = hwsPeriodLabel(lp.period);
       const cls = pct > 0 ? 'kat-pp-mom-up' : pct < 0 ? 'kat-pp-mom-down' : 'kat-pp-mom-flat';
       const ic = pct > 0 ? 'arrow-up' : pct < 0 ? 'arrow-down' : 'minus';
-      const tit = `2027 € fiyatı, ${p.base_year} cost ortalamasına (${fmtEUR(base)}) göre`;
-      chip = `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(tit)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(pct), 1)}% <span style="font-weight:600;opacity:.75;margin-left:3px">vs ${p.base_year}</span></span>`;
+      const tit = `2027 € fiyatı, son alış fiyatına (${per}: ${fmtEUR(lp.eur)}) göre · TL bazında ${pctTl >= 0 ? '+' : '−'}${fmtN(Math.abs(pctTl), 1)}%`;
+      chip = `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(tit)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(pct), 1)}% <span style="font-weight:600;opacity:.75;margin-left:3px">vs son alış</span></span>`;
+      lpLine = `<div class="hws-lp">Son alış · ${escapeHtml(per)}: ${fmtTL(lp.tl)} · ${fmtEUR(lp.eur)}</div>`;
     }
     p27 = `<div class="hws-2027">
-        <div><div class="hws-2027-lbl">2027 fiyatı · şişe</div><div class="hws-2027-val">${fmtTL(p.tl)}<small>${fmtEUR(p.eur)}</small></div></div>
+        <div><div class="hws-2027-lbl">2027 fiyatı · şişe</div><div class="hws-2027-val">${fmtTL(p.tl)}<small>${fmtEUR(p.eur)}</small></div>${lpLine}</div>
         ${chip}
       </div>`;
   }
