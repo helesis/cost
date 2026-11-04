@@ -375,31 +375,53 @@ app.post('/api/spirits/:stokNo/image', (req, res, next) => spiritsImgUpload.sing
   }
 });
 
-/** Google Görseller sonuçları (SerpApi, SERPAPI_KEY) — kotayı korumak için sorgular 24 saat bellekte tutulur */
+/** Google Görseller sonuçları (Serper.dev ya da SerpApi) — kotayı korumak için sorgular 24 saat bellekte tutulur */
 const spiritsAramaOnbellek = new Map();
+
+/** Serper.dev anahtarı 40, SerpApi anahtarı 64 karakter; SERPER_API_KEY varsa doğrudan Serper kullanılır */
+function spiritsAramaSaglayici() {
+  if (process.env.SERPER_API_KEY) return { ad: 'serper', key: process.env.SERPER_API_KEY };
+  const k = process.env.SERPAPI_KEY;
+  if (!k) return null;
+  return { ad: k.length === 64 ? 'serpapi' : 'serper', key: k };
+}
+
+async function spiritsGorselAra(q, signal) {
+  const s = spiritsAramaSaglayici();
+  if (s.ad === 'serper') {
+    const r = await fetch('https://google.serper.dev/images', {
+      method: 'POST',
+      signal,
+      headers: { 'X-API-KEY': s.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q, gl: 'tr', hl: 'tr', num: 40 }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.message || `Görsel arama başarısız (HTTP ${r.status})`);
+    return (j.images || []).map(x => ({ thumb: x.thumbnailUrl, url: x.imageUrl, title: x.title || '', source: x.domain || x.source || '', w: x.imageWidth || null, h: x.imageHeight || null }));
+  }
+  const u = new URL('https://serpapi.com/search.json');
+  u.search = new URLSearchParams({ engine: 'google_images', q, hl: 'tr', gl: 'tr', api_key: s.key }).toString();
+  const r = await fetch(u, { signal });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `Görsel arama başarısız (HTTP ${r.status})`);
+  return (j.images_results || []).map(x => ({ thumb: x.thumbnail, url: x.original, title: x.title || '', source: x.source || '', w: x.original_width || null, h: x.original_height || null }));
+}
 app.get('/api/spirits/image-search', async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 200);
   if (!q) return res.status(400).json({ error: 'Arama metni gerekli' });
-  const key = process.env.SERPAPI_KEY;
-  if (!key) return res.status(503).json({ error: 'Görsel arama yapılandırılmamış (SERPAPI_KEY yok)', yapilandirilmamis: true });
+  if (!spiritsAramaSaglayici()) return res.status(503).json({ error: 'Görsel arama yapılandırılmamış (SERPAPI_KEY yok)', yapilandirilmamis: true });
   const onb = spiritsAramaOnbellek.get(q.toLocaleLowerCase('tr-TR'));
   if (onb && Date.now() - onb.t < 24 * 3600 * 1000) return res.json({ results: onb.results, cached: true });
   try {
-    const u = new URL('https://serpapi.com/search.json');
-    u.search = new URLSearchParams({ engine: 'google_images', q, hl: 'tr', gl: 'tr', api_key: key }).toString();
     const ac = new AbortController();
     const to = setTimeout(() => ac.abort(), 20000);
-    let r;
+    let liste;
     try {
-      r = await fetch(u, { signal: ac.signal });
+      liste = await spiritsGorselAra(q, ac.signal);
     } finally {
       clearTimeout(to);
     }
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || j.error) return res.status(502).json({ error: j.error || `Görsel arama başarısız (HTTP ${r.status})` });
-    const results = (j.images_results || []).slice(0, 48)
-      .filter(x => x.original && x.thumbnail)
-      .map(x => ({ thumb: x.thumbnail, url: x.original, title: x.title || '', source: x.source || '', w: x.original_width || null, h: x.original_height || null }));
+    const results = liste.filter(x => x.url && x.thumb).slice(0, 48);
     spiritsAramaOnbellek.set(q.toLocaleLowerCase('tr-TR'), { t: Date.now(), results });
     if (spiritsAramaOnbellek.size > 500) spiritsAramaOnbellek.delete(spiritsAramaOnbellek.keys().next().value);
     res.json({ results });
