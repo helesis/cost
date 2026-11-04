@@ -375,6 +375,39 @@ app.post('/api/spirits/:stokNo/image', (req, res, next) => spiritsImgUpload.sing
   }
 });
 
+/** Google Görseller sonuçları (SerpApi, SERPAPI_KEY) — kotayı korumak için sorgular 24 saat bellekte tutulur */
+const spiritsAramaOnbellek = new Map();
+app.get('/api/spirits/image-search', async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 200);
+  if (!q) return res.status(400).json({ error: 'Arama metni gerekli' });
+  const key = process.env.SERPAPI_KEY;
+  if (!key) return res.status(503).json({ error: 'Görsel arama yapılandırılmamış (SERPAPI_KEY yok)', yapilandirilmamis: true });
+  const onb = spiritsAramaOnbellek.get(q.toLocaleLowerCase('tr-TR'));
+  if (onb && Date.now() - onb.t < 24 * 3600 * 1000) return res.json({ results: onb.results, cached: true });
+  try {
+    const u = new URL('https://serpapi.com/search.json');
+    u.search = new URLSearchParams({ engine: 'google_images', q, hl: 'tr', gl: 'tr', api_key: key }).toString();
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 20000);
+    let r;
+    try {
+      r = await fetch(u, { signal: ac.signal });
+    } finally {
+      clearTimeout(to);
+    }
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) return res.status(502).json({ error: j.error || `Görsel arama başarısız (HTTP ${r.status})` });
+    const results = (j.images_results || []).slice(0, 48)
+      .filter(x => x.original && x.thumbnail)
+      .map(x => ({ thumb: x.thumbnail, url: x.original, title: x.title || '', source: x.source || '', w: x.original_width || null, h: x.original_height || null }));
+    spiritsAramaOnbellek.set(q.toLocaleLowerCase('tr-TR'), { t: Date.now(), results });
+    if (spiritsAramaOnbellek.size > 500) spiritsAramaOnbellek.delete(spiritsAramaOnbellek.keys().next().value);
+    res.json({ results });
+  } catch (err) {
+    res.status(502).json({ error: err.name === 'AbortError' ? 'Görsel arama zaman aşımına uğradı' : err.message });
+  }
+});
+
 /** Seçilen görseli kaldırır; varsa repodaki görsele, yoksa ikona döner */
 app.delete('/api/spirits/:stokNo/image', (req, res) => {
   const { stokNo } = req.params;
