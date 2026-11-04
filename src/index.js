@@ -204,6 +204,7 @@ const SPIRITS_BOLUMLER = [
 ];
 const SPIRITS_TEKILA_RE = /TEK[Iİ]LA|TEQUILA|MEZCAL/i;
 const SPIRITS_IMG_DIR = path.join(PUBLIC_DIR, 'img/spirits');
+const SPIRITS_NAMES_FILE = path.join(__dirname, '../pages/spirits-names.json');
 
 app.get('/api/spirits', async (req, res) => {
   try {
@@ -245,6 +246,8 @@ app.get('/api/spirits', async (req, res) => {
     const years = per.map(p => String(p.yil)).reverse();
     const periods = Object.fromEntries(per.map(p => [String(p.yil), [p.ilk, p.son]]));
     const latest = years[years.length - 1];
+    let adlar = {};
+    try { adlar = JSON.parse(fs.readFileSync(SPIRITS_NAMES_FILE, 'utf8')); } catch (_) { /* ad listesi yoksa ERP adı kullanılır */ }
     const sections = SPIRITS_BOLUMLER.map(b => ({ key: b.key, title: b.title, items: [] }));
     const byKey = Object.fromEntries(sections.map(s => [s.key, s]));
     for (const r of rows) {
@@ -259,6 +262,7 @@ app.get('/api/spirits', async (req, res) => {
       byKey[b].items.push({
         stok_no: r.stok_no,
         name: r.name,
+        display: adlar[r.stok_no] || null,
         image: ['jpg', 'png'].map(e => `${r.stok_no}.${e}`).find(f => fs.existsSync(path.join(SPIRITS_IMG_DIR, f)))
           ?.replace(/^/, '/img/spirits/') || null,
         years: yrs,

@@ -3674,18 +3674,19 @@ let spsData = null;
 
 const SPS_KISA = new Set(['YO', 'VS', 'VSOP', 'XO', 'XR', 'IPA', 'NO', 'II', 'III', 'JW', 'DOC', 'IGT', 'USA', 'UK']);
 const SPS_TUR = /\b(WHISKY|WHISKEY|VOTKA|VODKA|CIN|GIN|RAKI|RAKISI|LIKOR|LİKÖR|KANYAK|VERMUT|TEKILA|ROM|SARAP)\b/g;
-function spsAd(raw) {
+function spsAd(raw, display) {
   const m = String(raw).match(/(\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?)\s*cl\b/i);
   const boyut = m ? m[1].replace(/\s+/g, '') + ' cl' : null;
   let ad = String(raw).replace(/\(.*?\)/g, ' ').replace(/\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*cl\b/i, ' ')
     .replace(SPS_TUR, ' ').replace(/[,\s]+$/, '').replace(/\s+/g, ' ').trim() || String(raw).trim();
-  ad = ad.split(' ').map(w => (SPS_KISA.has(w) || /\d/.test(w) ? w : w.charAt(0) + w.slice(1).toLocaleLowerCase('tr-TR'))).join(' ');
+  if (display) return { ad: display, boyut };
+  ad = ad.split(' ').map(w => (SPS_KISA.has(w) || /\d/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join(' ');
   return { ad, boyut };
 }
 
 function spsCard(it, sec, years, latest) {
   const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
-  const { ad, boyut } = spsAd(it.name);
+  const { ad, boyut } = spsAd(it.name, it.display);
   const lp = it.last_purchase;
   const prev = years[years.length - 2];
   let box = '';
