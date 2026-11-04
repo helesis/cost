@@ -294,7 +294,10 @@
      "type": "Beyaz",
      "image": "/img/housewine/piccini-famiglia--mamma-piccini-bianco.jpg",
      "image_alt": "Mamma Piccini Bianco Toscana",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/piccini-mamma-piccini-bianco-toscana/w/4760225"
+     },
      "description": "Trebbiano %70, Malvasia Bianca Lunga %20, Chardonnay %10. %12,5, kuru; limon rengi, diri asidite, hafif tütün bitiş.",
      "note": null,
      "stock": [
@@ -348,7 +351,10 @@
      "type": "Kırmızı",
      "image": "/img/housewine/piccini-famiglia--mamma-piccini-rosso.jpg",
      "image_alt": "Mamma Piccini Rosso di Toscana",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/piccini-mamma-piccini-rosso-di-toscana-tuscany/w/5903047"
+     },
      "description": "Sangiovese, Cabernet Sauvignon ve Merlot. %13, orta gövde; vişne, erik, hafif topraksı, yumuşak tanen. Peynir ve kırmızı etle.",
      "note": null,
      "stock": [
