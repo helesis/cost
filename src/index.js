@@ -231,7 +231,7 @@ const SPIRITS_IMG_EXT = ['jpg', 'png', 'webp', 'gif'];
 const SPIRITS_IMG_MAX = 10 * 1024 * 1024;
 
 /** Görsel anahtarı: sert alkol/bira için stok no, şarap için "hw-<dosya adı>" */
-const SECKI_ANAHTAR_RE = /^(\d{6,14}|hw-[a-z0-9-]{1,80})$/;
+const SECKI_ANAHTAR_RE = /^(\d{6,14}|(hw|alt)-[a-z0-9-]{1,80})$/;
 
 function spiritsImagePath(stokNo, varsayilan = null) {
   for (const e of SPIRITS_IMG_EXT) {
@@ -360,6 +360,21 @@ async function seckiKalemleri(kod) {
   return { years, periods, latest, items };
 }
 
+const SECKI_ALT_FILE = path.join(__dirname, '../pages/spirits-alternatives.json');
+
+/** 2027 alternatif adayları; katalogda alınmış olanlara son alış ve görsel bağlanır */
+function seckiAlternatifler(bolum, items) {
+  let liste = [];
+  try { liste = JSON.parse(fs.readFileSync(SECKI_ALT_FILE, 'utf8'))[bolum] || []; } catch (_) { /* dosya yoksa liste boş */ }
+  const TR = { ı: 'i', ğ: 'g', ü: 'u', ş: 's', ö: 'o', ç: 'c', é: 'e', ò: 'o', ñ: 'n' };
+  return liste.map(a => {
+    const it = a.stok_no ? items.find(x => x.stok_no === a.stok_no) : null;
+    const key = a.stok_no || 'alt-' + a.ad.toLocaleLowerCase('tr-TR').replace(/[ığüşöçéòñ]/g, c => TR[c])
+      .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    return { ...a, key, image: spiritsImagePath(key), last_purchase: it?.last_purchase || null };
+  });
+}
+
 /** En pahalıdan ucuza (son alış €/L, yoksa son yıl ortalaması); eşitlikte çok tüketilen önde */
 function seckiSirala(items, years, latest) {
   const lit = (it, y) => it.years[y]?.litre || 0;
@@ -379,7 +394,10 @@ app.get('/api/spirits', async (req, res) => {
         : (SPIRITS_BOLUMLER.find(x => x.kod === it.kod) || SPIRITS_BOLUMLER[SPIRITS_BOLUMLER.length - 1]).key;
       byKey[b].items.push(it);
     }
-    for (const s of sections) s.total = seckiSirala(s.items, years, latest);
+    for (const s of sections) {
+      s.total = seckiSirala(s.items, years, latest);
+      s.alternatives = seckiAlternatifler(s.key, items);
+    }
     res.json({ years, periods, sections: sections.filter(s => s.items.length) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -393,7 +411,7 @@ app.get('/api/beers', async (req, res) => {
     const { years, periods, latest, items } = await seckiKalemleri('2006');
     for (const it of items) it.tag = /ALKOLS[UÜ]Z/i.test(it.name) ? 'Alkolsüz' : BIRA_TUR[it.kod] || 'Bira';
     const total = seckiSirala(items, years, latest);
-    res.json({ years, periods, sections: [{ key: 'bira', title: 'Biralar', items, total }] });
+    res.json({ years, periods, sections: [{ key: 'bira', title: 'Biralar', items, total, alternatives: seckiAlternatifler('bira', items) }] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -486,7 +504,7 @@ app.delete('/api/spirits/:stokNo/image', (req, res) => {
 });
 
 app.get('/api/spirits/img/:file', (req, res) => {
-  if (!/^(\d{6,14}|hw-[a-z0-9-]{1,80})\.(jpg|png|webp|gif)$/.test(req.params.file)) return res.status(404).end();
+  if (!/^(\d{6,14}|(hw|alt)-[a-z0-9-]{1,80})\.(jpg|png|webp|gif)$/.test(req.params.file)) return res.status(404).end();
   res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.sendFile(path.join(SPIRITS_UPLOAD_DIR, req.params.file), err => { if (err && !res.headersSent) res.status(404).end(); });

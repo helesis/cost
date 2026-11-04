@@ -1,0 +1,58 @@
+{
+  "_not": "Spirits ve Biralar bölümlerinin altındaki kapalı '2027'de eklenebilecek alternatifler' listesi. stok_no verilen ürün katalogda daha önce alınmıştır; kartta son alış fiyatı gösterilir. stok_no olmayanlar için tedarikçiden teklif alınmalı. rol: Ev markası (marka söylenmeyen servis), Ara ürün (premiumun yanında, daha uygun), Fiyat alternatifi.",
+  "viski": [
+    { "ad": "Chivas Regal 13 Year Old", "stok_no": "2007006163", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Chivas Regal 18", "neden": "Yaşı yazan, aynı aileden bir blend; litresi Chivas 18'in yaklaşık %60'ı.", "tedarikci": "Pernod Ricard" },
+    { "ad": "Glen Moray Classic", "stok_no": "2007006158", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Aberlour 12", "neden": "Speyside single malt; ev viskisi fiyatına 'single malt' isteyen misafiri karşılar.", "tedarikci": "La Martiniquaise" },
+    { "ad": "Dewar's 15 Year Old", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Chivas Regal 18", "neden": "15 yıllık blend; 18 yıllık arayan misafire yaşı yazan daha uygun bir seçenek.", "tedarikci": "Bacardi" },
+    { "ad": "Ballantine's 12 Year Old", "stok_no": "2007006004", "boyut": "70 cl", "rol": "Ev markası", "yanina": "Highland Queen", "neden": "12 yıllık blend; düşük hacimli alımlarda Highland Queen'den ucuza gelmiş, yüksek hacim fiyatı teyit edilmeli.", "tedarikci": "Pernod Ricard" }
+  ],
+  "tekila": [
+    { "ad": "el Jimador Blanco", "stok_no": "2007007051", "boyut": "70 cl", "rol": "Ev markası", "yanina": "Olmeca Blanco", "neden": "%100 agave; litresi Olmeca Blanco'dan yaklaşık %26 ucuz. Marka söylenmeyen shot ve kokteyller için.", "tedarikci": "Brown-Forman (Jack Daniel's ile aynı)" },
+    { "ad": "el Jimador Reposado", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Olmeca Gold", "neden": "Gold shot isteyen misafir için; Olmeca Gold 2026'da %23 pahalandı.", "tedarikci": "Brown-Forman" },
+    { "ad": "Jose Cuervo Especial Silver", "boyut": "70 cl", "rol": "Ev markası", "yanina": "Olmeca Blanco", "neden": "Tanınmış marka; ev tekilası için ikinci teklif.", "tedarikci": "Becle" },
+    { "ad": "Espolòn Blanco", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Olmeca Altos Plata", "neden": "%100 agave; Aperol ve Campari hacmiyle birlikte pazarlık edilebilir.", "tedarikci": "Campari Group" }
+  ],
+  "votka": [
+    { "ad": "Ketel One", "stok_no": "2007002057", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Belvedere", "neden": "Premium görünümlü votka; son alışta Belvedere'den yaklaşık %30 ucuz. 20–41 € arasındaki boşluğu doldurur.", "tedarikci": "Diageo" },
+    { "ad": "Finlandia", "stok_no": "2007002053", "boyut": "100 cl", "rol": "Fiyat alternatifi", "yanina": "Absolut · Smirnoff", "neden": "Tanınmış Fin markası; son alışta Absolut'tan yaklaşık %25 ucuz.", "tedarikci": "Coca-Cola HBC" },
+    { "ad": "Russian Standard Original", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Absolut", "neden": "Premium algılı Rus votkası; Platinum serisinden belirgin ucuz olmalı, teklif alınmalı.", "tedarikci": "Roust" }
+  ],
+  "cin": [
+    { "ad": "Stamford London Dry", "stok_no": "2007003067", "boyut": "70 cl", "rol": "Ev markası", "yanina": "Gilbey's", "neden": "2024'te ev cini olarak 603 L kullanıldı; litresi Gilbey's'ten yaklaşık %18 ucuzdu.", "tedarikci": null },
+    { "ad": "Tanqueray Flor de Sevilla", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Gin Mare · Malfy", "neden": "Portakallı, Akdeniz tarzı cin; Gin Mare'i seçen misafire.", "tedarikci": "Diageo" },
+    { "ad": "Bombay Bramble", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Gin Mare · Pink cinler", "neden": "Böğürtlenli, renkli cin; pembe cin ve Gin Mare talebini karşılar.", "tedarikci": "Bacardi" },
+    { "ad": "Bulldog London Dry", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Bombay Sapphire", "neden": "Premium şişe görünümü; Bombay'ın yanında daha uygun bir seçenek olmalı, teklif alınmalı.", "tedarikci": "Campari Group" }
+  ],
+  "rom": [
+    { "ad": "Captain Morgan White Rum", "stok_no": "2007008008", "boyut": "100 cl", "rol": "Fiyat alternatifi", "yanina": "Bacardí Carta Blanca", "neden": "Litresi Bacardí'nin yaklaşık %45 altında; Mojito ve kokteyllerde beyaz rom.", "tedarikci": "Diageo" },
+    { "ad": "Havana Club Especial", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Havana Club Selección de Maestros", "neden": "30–60 € arasındaki boşluk için yıllanmış görünümlü Havana.", "tedarikci": "Pernod Ricard" },
+    { "ad": "Havana Club Añejo 7 Años", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Havana Club Selección de Maestros", "neden": "Yaşı yazan koyu rom; Selección'ı isteyen misafire.", "tedarikci": "Pernod Ricard" },
+    { "ad": "Captain Morgan Original Spiced Gold", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Bacardí Spiced", "neden": "Baharatlı rom; Bacardí Spiced'ın (32 €/L) yanında ikinci seçenek.", "tedarikci": "Diageo" }
+  ],
+  "konyak": [
+    { "ad": "Metaxa", "stok_no": "2007004029", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Martell VS", "neden": "Litresi Martell VS'nin yaklaşık %30 altında.", "tedarikci": "Rémy Cointreau" },
+    { "ad": "Courvoisier VS", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Martell VS · Hennessy", "neden": "Tanınmış VS konyak; Martell VS'nin yüksek alış fiyatına karşı ikinci teklif.", "tedarikci": "Campari Group" },
+    { "ad": "Torres 10 Gran Reserva", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "St-Rémy · Cemiyet", "neden": "İspanyol brendi; konyak ile ev brendisi arasında yaşı yazan seçenek.", "tedarikci": "Torres" }
+  ],
+  "raki": [
+    { "ad": "Kulüp Rakısı", "stok_no": "2007001017", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Beylerbeyi Göbek", "neden": "Klasik marka; son alışta Beylerbeyi Göbek'ten yaklaşık %20 ucuz.", "tedarikci": "Mey Diageo" },
+    { "ad": "Efe Göbek", "stok_no": "2007001072", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Beylerbeyi Göbek · Sarı Zeybek 3 Meşe", "neden": "Göbek rakısı isteyen misafire; son alışta Beylerbeyi Göbek'ten yaklaşık %28 ucuz.", "tedarikci": null },
+    { "ad": "Yeni Ala", "stok_no": "2007001036", "boyut": "70 cl", "rol": "Ara ürün", "yanina": "Sarı Zeybek 3 Meşe", "neden": "Tanınmış premium seri; son alışta Sarı Zeybek 3 Meşe'den yaklaşık %33 ucuz.", "tedarikci": "Mey Diageo" }
+  ],
+  "aperatif": [
+    { "ad": "Garrone Bianco", "stok_no": "2007007053", "boyut": "100 cl", "rol": "Fiyat alternatifi", "yanina": "Martini Bianco", "neden": "Vermut; kokteyllerde Martini Bianco'nun yerine menüde ayrı satır olarak.", "tedarikci": null },
+    { "ad": "Garrone Rosso", "stok_no": "2007007039", "boyut": "100 cl", "rol": "Fiyat alternatifi", "yanina": "Martini Rosso", "neden": "Litresi Martini Rosso'nun yaklaşık yarısı.", "tedarikci": null },
+    { "ad": "Cinzano Bianco · Rosso", "boyut": "100 cl", "rol": "Ara ürün", "yanina": "Martini", "neden": "Tanınmış İtalyan vermut; Campari ile birlikte pazarlık edilebilir.", "tedarikci": "Campari Group" },
+    { "ad": "Select Aperitivo", "boyut": "100 cl", "rol": "Ara ürün", "yanina": "Aperol", "neden": "Venedik usulü spritz biteri; menüde 'Aperol Spritz' yanında ikinci spritz.", "tedarikci": "Gruppo Montenegro" }
+  ],
+  "likor": [
+    { "ad": "Ramazzotti Amaro", "stok_no": "2007005204", "boyut": "100 cl", "rol": "Ara ürün", "yanina": "Jägermeister", "neden": "Bitkisel likör; litresi Jägermeister'in yaklaşık %20 altında.", "tedarikci": "Pernod Ricard" },
+    { "ad": "Carolans Irish Cream", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Baileys", "neden": "İrlanda kremalı likör; Baileys 2026'da 2.153 L ile en çok içilen likör.", "tedarikci": null },
+    { "ad": "Triple Sec", "stok_no": "2007005248", "boyut": "70 cl", "rol": "Fiyat alternatifi", "yanina": "Cointreau", "neden": "Kokteyllerde portakal likörü; litresi Cointreau'nun yaklaşık yarısı.", "tedarikci": null }
+  ],
+  "bira": [
+    { "ad": "Carlsberg (fıçı)", "boyut": "fıçı", "rol": "Ara ürün", "yanina": "Corona · Heineken", "neden": "Efes fıçının yanına ikinci musluk; 'premium bira' isteyen misafiri şişe yerine fıçıyla karşılar.", "tedarikci": "Türk Tuborg", "tag": "Fıçı" },
+    { "ad": "Bomonti Filtresiz (fıçı)", "boyut": "fıçı", "rol": "Ara ürün", "yanina": "Corona · Blanc 1664", "neden": "Şişesi 2026'da 6.035 L içildi; fıçısı şişeden ucuz olmalı, teklif alınmalı.", "tedarikci": "Anadolu Efes", "tag": "Fıçı" },
+    { "ad": "Tuborg Gold", "boyut": "33 cl", "rol": "Fiyat alternatifi", "yanina": "Heineken · Miller", "neden": "Tanınmış şişe lager; Carlsberg ile aynı tedarikçiden paket pazarlık.", "tedarikci": "Türk Tuborg", "tag": "Şişe" }
+  ]
+}

@@ -193,6 +193,7 @@
   .sps-noimg { width: 56px; height: 56px; color: var(--text-xdim); stroke-width: 1.2; }
   .sps-old summary { cursor: pointer; margin: 18px 0 14px 2px; font-size: 12px; color: var(--text-dim); }
   .sps-old .hws-card { opacity: .72; }
+  .sps-alt .hws-card { opacity: 1; border-style: dashed; }
   #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
   #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
   #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
@@ -3746,6 +3747,7 @@ function hwsBiraHtml(no) {
       </div>
       ${aktif.length ? `<div class="sps-row">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
       ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="sps-row">${eski.map(kart).join('')}</div></details>` : ''}
+      ${spsAltHtml(sec)}
     </div>`;
 }
 
@@ -3962,6 +3964,29 @@ function spsAd(raw, display) {
   return { ad, boyut };
 }
 
+/** 2027'de eklenebilecek alternatif adayı kartı */
+function spsAltCard(a, sec) {
+  spsIndex[a.key] = { it: a, sec, ad: a.ad, q: [a.ad, a.boyut, sec.key === 'bira' ? 'bira' : 'şişe'].filter(Boolean).join(' ') };
+  const lp = a.last_purchase;
+  const box = lp?.eur != null
+    ? `<div class="hws-2027"><div><div class="hws-2027-lbl">Son alış · litre · katalogda</div><div class="hws-2027-val">${fmtTL(lp.tl)}<small>${fmtEUR(lp.eur)}</small></div><div class="hws-lp">${escapeHtml(hwsPeriodLabel(lp.period))}</div></div></div>`
+    : '<div class="hws-2027"><div><div class="hws-2027-lbl">Fiyat</div><div class="hws-lp">Tedarikçiden teklif alınacak</div></div></div>';
+  return `<div class="card hws-card" data-sps-stok="${escapeHtml(a.key)}">
+    <div class="hws-photo">${spsFotoHtml(a, a.ad)}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(a.key)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
+    <div class="hws-info">
+      <div class="hws-name">${escapeHtml(a.ad)}</div>
+      <div class="hws-badges"><span class="badge badge-gold">2027 adayı</span><span class="badge badge-gray">${escapeHtml(a.rol)}</span>${a.boyut ? `<span class="badge badge-gray">${escapeHtml(a.boyut)}</span>` : ''}</div>
+      <div class="hws-desc"><b>Yanına:</b> ${escapeHtml(a.yanina)}<br>${escapeHtml(a.neden)}${a.tedarikci ? `<span class="hws-note" style="color:var(--text-dim)">Tedarikçi: ${escapeHtml(a.tedarikci)}</span>` : ''}</div>
+      ${box}
+    </div>
+  </div>`;
+}
+
+function spsAltHtml(sec) {
+  const l = sec.alternatives || [];
+  return l.length ? `<details class="sps-old sps-alt"><summary>2027'de eklenebilecek alternatifler · ${l.length} ürün</summary><div class="sps-row">${l.map(a => spsAltCard(a, sec)).join('')}</div></details>` : '';
+}
+
 function spsCard(it, sec, years, latest) {
   const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
   const { ad, boyut } = spsAd(it.name, it.display);
@@ -4023,6 +4048,7 @@ function renderSpirits() {
       </div>
       ${aktif.length ? `<div class="sps-row">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
       ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="sps-row">${eski.map(kart).join('')}</div></details>` : ''}
+      ${spsAltHtml(sec)}
     </div>`;
   }).join('');
   document.querySelectorAll('[data-sps-jump]').forEach(a => a.addEventListener('click', () =>
