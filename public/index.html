@@ -3561,9 +3561,11 @@ let hwsData = null;
 function hwsCard(w) {
   const years = ['2024', '2025', '2026'];
   const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
-  const vivino = w.vivino
-    ? `<a class="badge badge-yellow" href="${escapeHtml(w.vivino.url)}" target="_blank" rel="noopener noreferrer" title="Vivino · tüm yıllar ortalaması">★ ${fmtN(w.vivino.rating, 1)} Vivino</a>`
-    : '<span class="badge badge-gray">Vivino: doğrulanmadı</span>';
+  const vivino = !w.vivino
+    ? '<span class="badge badge-gray">Vivino: doğrulanmadı</span>'
+    : w.vivino.rating == null
+      ? `<a class="badge badge-gray" href="${escapeHtml(w.vivino.url)}" target="_blank" rel="noopener noreferrer" title="Vivino sayfası · henüz ortalama puan yok">Vivino · yeterli puan yok</a>`
+      : `<a class="badge badge-yellow" href="${escapeHtml(w.vivino.url)}" target="_blank" rel="noopener noreferrer" title="Vivino · tüm yıllar ortalaması">★ ${fmtN(w.vivino.rating, 1)} Vivino</a>`;
   let p27 = '';
   if (w.price_2027) {
     const p = w.price_2027;
