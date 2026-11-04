@@ -248,7 +248,7 @@ async function callOllamaOnce(stok_mali, kategori, attempt = 1) {
       top_p: 0.9,
       repeat_penalty: 1.15,
       num_predict: 400,
-      num_ctx: 4096
+      num_ctx: 32768
     }
   };
   const res = await postJson(cfg.url, payload);
