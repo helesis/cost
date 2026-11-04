@@ -163,6 +163,13 @@
   .hws-2027-val { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
   .hws-2027-val small { font-family: 'Mulish', sans-serif; font-size: 12px; color: var(--text-dim); margin-left: 4px; }
   .hws-lp { margin-top: 3px; font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  /* Spirits Selection */
+  .sps-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+  .sps-jump a.badge { text-decoration: none; cursor: pointer; }
+  .sps-section { margin-bottom: 36px; scroll-margin-top: 16px; }
+  .sps-noimg { width: 56px; height: 56px; color: var(--text-xdim); stroke-width: 1.2; }
+  .sps-old summary { cursor: pointer; margin: 18px 0 14px 2px; font-size: 12px; color: var(--text-dim); }
+  .sps-old .hws-card { opacity: .72; }
   #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
   #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
   #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
@@ -960,6 +967,9 @@
     </a>
     <a class="nav-item" data-page="housewine" href="#">
       <i class="nav-icon" data-lucide="wine"></i> Housewine Selection
+    </a>
+    <a class="nav-item" data-page="spirits" href="#">
+      <i class="nav-icon" data-lucide="martini"></i> Spirits Selection
     </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
@@ -1769,6 +1779,20 @@
       <div id="hws-header-meta" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
     <div class="page-body" id="hws-body">
+      <div class="hws-empty">Yükleniyor…</div>
+    </div>
+  </div>
+
+  <!-- ── SPIRITS SELECTION ──────────────────────────────────────────────── -->
+  <div id="page-spirits" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Spirits Selection</div>
+        <div class="page-sub">Sert alkoller · türe göre, en pahalıdan ucuza (son alış € / L)</div>
+      </div>
+      <div id="sps-header-meta" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+    <div class="page-body" id="sps-body">
       <div class="hws-empty">Yükleniyor…</div>
     </div>
   </div>
@@ -3645,6 +3669,103 @@ async function loadHousewinePage() {
   }
 }
 
+// ── Spirits Selection ─────────────────────────────────────────────────────────
+let spsData = null;
+
+const SPS_KISA = new Set(['YO', 'VS', 'VSOP', 'XO', 'XR', 'IPA', 'NO', 'II', 'III', 'JW', 'DOC', 'IGT', 'USA', 'UK']);
+const SPS_TUR = /\b(WHISKY|WHISKEY|VOTKA|VODKA|CIN|GIN|RAKI|RAKISI|LIKOR|LİKÖR|KANYAK|VERMUT|TEKILA|ROM|SARAP)\b/g;
+function spsAd(raw) {
+  const m = String(raw).match(/(\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?)\s*cl\b/i);
+  const boyut = m ? m[1].replace(/\s+/g, '') + ' cl' : null;
+  let ad = String(raw).replace(/\(.*?\)/g, ' ').replace(/\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*cl\b/i, ' ')
+    .replace(SPS_TUR, ' ').replace(/[,\s]+$/, '').replace(/\s+/g, ' ').trim() || String(raw).trim();
+  ad = ad.split(' ').map(w => (SPS_KISA.has(w) || /\d/.test(w) ? w : w.charAt(0) + w.slice(1).toLocaleLowerCase('tr-TR'))).join(' ');
+  return { ad, boyut };
+}
+
+function spsCard(it, sec, years, latest) {
+  const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
+  const { ad, boyut } = spsAd(it.name);
+  const lp = it.last_purchase;
+  const prev = years[years.length - 2];
+  let box = '';
+  if (lp?.eur != null) {
+    const ref = it.years[prev]?.eur_l;
+    let chip = '';
+    if (ref) {
+      const pct = (lp.eur / ref - 1) * 100;
+      const cls = pct > 0 ? 'kat-pp-mom-up' : pct < 0 ? 'kat-pp-mom-down' : 'kat-pp-mom-flat';
+      const ic = pct > 0 ? 'arrow-up' : pct < 0 ? 'arrow-down' : 'minus';
+      chip = `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(`Son alış € / L, ${prev} tüketim ağırlıklı ortalamasına (${fmtEUR(ref)}) göre`)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(pct), 1)}% <span style="font-weight:600;opacity:.75;margin-left:3px">vs ${prev}</span></span>`;
+    }
+    box = `<div class="hws-2027">
+        <div><div class="hws-2027-lbl">Son alış · litre</div><div class="hws-2027-val">${fmtTL(lp.tl)}<small>${fmtEUR(lp.eur)}</small></div><div class="hws-lp">${escapeHtml(hwsPeriodLabel(lp.period))}</div></div>
+        ${chip}
+      </div>`;
+  }
+  const foto = it.image
+    ? `<img src="${escapeHtml(it.image)}" alt="${escapeHtml(ad)}" loading="lazy">`
+    : '<i data-lucide="martini" class="sps-noimg"></i>';
+  return `<div class="card hws-card">
+    <div class="hws-photo">${foto}</div>
+    <div class="hws-info">
+      <div class="hws-name" title="${escapeHtml(it.name)}">${escapeHtml(ad)}</div>
+      <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(sec.title)}</span>${boyut ? `<span class="badge badge-gray">${escapeHtml(boyut)}</span>` : ''}</div>
+      <table class="hws-table" title="Stok no: ${escapeHtml(it.stok_no || '')}">
+        <thead><tr><th></th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead>
+        <tbody>
+          <tr><td>Tüketim · L</td>${years.map(y => `<td>${cell(it.years[y]?.litre, v => fmtN(v, 1))}</td>`).join('')}</tr>
+          <tr><td>Ort. € / L</td>${years.map(y => `<td>${cell(it.years[y]?.eur_l, fmtEUR)}</td>`).join('')}</tr>
+        </tbody>
+      </table>
+      ${box}
+    </div>
+  </div>`;
+}
+
+function renderSpirits() {
+  const { years, periods, sections } = spsData;
+  const latest = years[years.length - 1];
+  const perLbl = y => (periods[y] ? `${HWS_AYLAR[periods[y][0] - 1]}–${HWS_AYLAR[periods[y][1] - 1]}` : '');
+  const toplam = sections.reduce((t, s) => t + (s.total[latest] || 0), 0);
+  document.getElementById('sps-header-meta').innerHTML =
+    `<span class="badge badge-gray" title="Tüketim dönemleri">${years.map(y => `${y} ${perLbl(y)}`).join(' · ')}</span>` +
+    `<span class="badge badge-gold">${latest}: ${fmtN(toplam, 0)} L</span>`;
+  const jump = sections.map(s => `<a class="badge badge-gray" data-sps-jump="${escapeHtml(s.key)}">${escapeHtml(s.title)} · ${fmtN(s.total[latest] || 0, 0)} L</a>`).join('');
+  document.getElementById('sps-body').innerHTML = `<div class="sps-jump">${jump}</div>` + sections.map((sec, i) => {
+    const aktif = sec.items.filter(it => it.years[latest]);
+    const eski = sec.items.filter(it => !it.years[latest]);
+    const kart = it => spsCard(it, sec, years, latest);
+    return `<div class="hws-section sps-section" id="sps-${escapeHtml(sec.key)}">
+      <div class="hws-section-head">
+        <span class="hws-section-num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="hws-section-title">${escapeHtml(sec.title)}</span>
+        <span class="badge badge-gold">${latest}: ${fmtN(sec.total[latest] || 0, 0)} L</span>
+        <span class="badge badge-gray">${aktif.length} ürün</span>
+      </div>
+      ${aktif.length ? `<div class="hws-grid">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
+      ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="hws-grid">${eski.map(kart).join('')}</div></details>` : ''}
+    </div>`;
+  }).join('');
+  document.querySelectorAll('[data-sps-jump]').forEach(a => a.addEventListener('click', () =>
+    document.getElementById('sps-' + a.dataset.spsJump)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
+  vcLucide();
+}
+
+async function loadSpiritsPage() {
+  if (spsData) return renderSpirits();
+  const body = document.getElementById('sps-body');
+  try {
+    const res = await fetch('/api/spirits');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    spsData = await res.json();
+    renderSpirits();
+  } catch (e) {
+    body.innerHTML = '<div class="hws-empty">Spirits verisi yüklenemedi.</div>';
+    toast('Spirits Selection yüklenemedi', 'error');
+  }
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item[data-page]').forEach(el => {
   el.addEventListener('click', e => {
@@ -3668,6 +3789,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     else { nnStopPolling(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
     if (page === 'housewine') loadHousewinePage();
+    if (page === 'spirits') loadSpiritsPage();
     if (page === 'kullanicilar') loadKullanicilar();
   });
 });
