@@ -189,7 +189,22 @@ app.get('/login', (req, res) => res.redirect(302, '/login.html'));
 /** Housewine Selection sekmesi verisi — maliyet verisi içerdiği için public/ dışında; /api/ oturum kontrolünden geçer */
 app.get('/api/housewine', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  return res.sendFile(path.join(__dirname, '../pages/housewine.json'));
+  let veri;
+  try {
+    veri = JSON.parse(fs.readFileSync(path.join(__dirname, '../pages/housewine.json'), 'utf8'));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+  // Her şarap için görsel anahtarı (repodaki görselin dosya adı); uygulamadan seçilen görsel öne geçer
+  for (const sec of veri.sections || []) {
+    for (const w of sec.wines || []) {
+      const ad = path.basename(String(w.image || w.name || ''), path.extname(String(w.image || '')));
+      w.img_key = 'hw-' + ad.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      w.image_default = w.image || null;
+      w.image = spiritsImagePath(w.img_key, w.image_default);
+    }
+  }
+  res.json(veri);
 });
 
 /** Spirits Selection — sert alkol (ERP 2007xxx) ürünleri; tür bölümleri, son 3 yıl litre tüketimi ve €/L */
@@ -212,13 +227,16 @@ const SPIRITS_UPLOAD_DIR = path.join(__dirname, '../data/spirits-img');
 const SPIRITS_IMG_EXT = ['jpg', 'png', 'webp', 'gif'];
 const SPIRITS_IMG_MAX = 10 * 1024 * 1024;
 
-function spiritsImagePath(stokNo) {
+/** Görsel anahtarı: sert alkol/bira için stok no, şarap için "hw-<dosya adı>" */
+const SECKI_ANAHTAR_RE = /^(\d{6,14}|hw-[a-z0-9-]{1,80})$/;
+
+function spiritsImagePath(stokNo, varsayilan = null) {
   for (const e of SPIRITS_IMG_EXT) {
     const f = path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${e}`);
     if (fs.existsSync(f)) return `/api/spirits/img/${stokNo}.${e}?v=${Math.round(fs.statSync(f).mtimeMs)}`;
   }
   const yerel = ['jpg', 'png'].map(e => `${stokNo}.${e}`).find(f => fs.existsSync(path.join(SPIRITS_IMG_DIR, f)));
-  return yerel ? `/img/spirits/${yerel}` : null;
+  return yerel ? `/img/spirits/${yerel}` : varsayilan;
 }
 
 /** Dosya imzasından görsel türü; SVG vb. kabul edilmez */
@@ -278,75 +296,101 @@ async function spiritsImageIndir(adres) {
 
 const spiritsImgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: SPIRITS_IMG_MAX, files: 1 } });
 
+/** Ürün kalemleri (ERP kategori kodunun ilk 4 hanesi): son 3 yıl litre tüketimi, €/L ve son alış */
+async function seckiKalemleri(kod) {
+  const { rows } = await pool.query(`
+    WITH base AS (
+      SELECT stok_no, LEFT(kategori, 7) AS kod, stok_mali, yil, ay_no, tarih_str,
+             tuk_miktar, birim_fiyat, kur, tutar_eur
+      FROM fb_cost.tuketim
+      WHERE LEFT(kategori, 4) = $1 AND tip = 'icenek' AND ${SQL_EXC_FINANS_PP}
+        AND yil >= (SELECT MAX(yil) - 2 FROM fb_cost.tuketim WHERE LEFT(kategori, 4) = $1)
+    ),
+    son AS (
+      SELECT DISTINCT ON (stok_no) stok_no, kod, stok_mali
+      FROM base ORDER BY stok_no, yil DESC, ay_no DESC
+    ),
+    alis AS (
+      SELECT DISTINCT ON (stok_no) stok_no, tarih_str AS period, birim_fiyat AS tl,
+             birim_fiyat / NULLIF(kur, 0) AS eur
+      FROM base WHERE birim_fiyat > 0 ORDER BY stok_no, yil DESC, ay_no DESC
+    ),
+    yillik AS (
+      SELECT stok_no, yil, SUM(tuk_miktar) AS litre,
+             SUM(tutar_eur) FILTER (WHERE birim_fiyat > 0)
+               / NULLIF(SUM(tuk_miktar) FILTER (WHERE birim_fiyat > 0), 0) AS eur_l
+      FROM base GROUP BY stok_no, yil
+    )
+    SELECT s.stok_no, s.kod, regexp_replace(trim(both ' ,' from s.stok_mali), '\\s+', ' ', 'g') AS name,
+           json_object_agg(y.yil, json_build_object('litre', y.litre, 'eur_l', y.eur_l)) AS years,
+           a.period AS lp_period, a.tl AS lp_tl, a.eur AS lp_eur
+    FROM son s
+    JOIN yillik y USING (stok_no)
+    LEFT JOIN alis a USING (stok_no)
+    GROUP BY s.stok_no, s.kod, s.stok_mali, a.period, a.tl, a.eur
+  `, [kod]);
+  const { rows: per } = await pool.query(`
+    SELECT yil, MIN(ay_no) AS ilk, MAX(ay_no) AS son FROM fb_cost.tuketim
+    WHERE LEFT(kategori, 4) = $1 AND tip = 'icenek' GROUP BY yil ORDER BY yil DESC LIMIT 3
+  `, [kod]);
+  const years = per.map(p => String(p.yil)).reverse();
+  const periods = Object.fromEntries(per.map(p => [String(p.yil), [p.ilk, p.son]]));
+  const latest = years[years.length - 1];
+  let adlar = {};
+  try { adlar = JSON.parse(fs.readFileSync(SPIRITS_NAMES_FILE, 'utf8')); } catch (_) { /* ad listesi yoksa ERP adı kullanılır */ }
+  const items = rows.map(r => {
+    const yrs = {};
+    for (const y of years) {
+      const v = r.years[y];
+      yrs[y] = v && Number(v.litre) !== 0 ? { litre: Number(v.litre), eur_l: v.eur_l == null ? null : Number(v.eur_l) } : null;
+    }
+    return {
+      stok_no: r.stok_no,
+      kod: r.kod,
+      name: r.name,
+      display: adlar[r.stok_no] || null,
+      image: spiritsImagePath(r.stok_no),
+      years: yrs,
+      last_purchase: r.lp_period ? { period: r.lp_period, tl: Number(r.lp_tl), eur: r.lp_eur == null ? null : Number(r.lp_eur) } : null,
+    };
+  });
+  return { years, periods, latest, items };
+}
+
+/** En pahalıdan ucuza (son alış €/L, yoksa son yıl ortalaması); eşitlikte çok tüketilen önde */
+function seckiSirala(items, years, latest) {
+  const lit = (it, y) => it.years[y]?.litre || 0;
+  const fiyat = it => it.last_purchase?.eur ?? it.years[latest]?.eur_l ?? 0;
+  items.sort((a, b) => fiyat(b) - fiyat(a) || lit(b, latest) - lit(a, latest));
+  return Object.fromEntries(years.map(y => [y, items.reduce((t, it) => t + lit(it, y), 0)]));
+}
+
 app.get('/api/spirits', async (req, res) => {
   try {
-    const { rows } = await pool.query(`
-      WITH base AS (
-        SELECT stok_no, LEFT(kategori, 7) AS kod, stok_mali, yil, ay_no, tarih_str,
-               tuk_miktar, birim_fiyat, kur, tutar_eur
-        FROM fb_cost.tuketim
-        WHERE LEFT(kategori, 4) = '2007' AND tip = 'icenek' AND ${SQL_EXC_FINANS_PP}
-          AND yil >= (SELECT MAX(yil) - 2 FROM fb_cost.tuketim WHERE LEFT(kategori, 4) = '2007')
-      ),
-      son AS (
-        SELECT DISTINCT ON (stok_no) stok_no, kod, stok_mali
-        FROM base ORDER BY stok_no, yil DESC, ay_no DESC
-      ),
-      alis AS (
-        SELECT DISTINCT ON (stok_no) stok_no, tarih_str AS period, birim_fiyat AS tl,
-               birim_fiyat / NULLIF(kur, 0) AS eur
-        FROM base WHERE birim_fiyat > 0 ORDER BY stok_no, yil DESC, ay_no DESC
-      ),
-      yillik AS (
-        SELECT stok_no, yil, SUM(tuk_miktar) AS litre,
-               SUM(tutar_eur) FILTER (WHERE birim_fiyat > 0)
-                 / NULLIF(SUM(tuk_miktar) FILTER (WHERE birim_fiyat > 0), 0) AS eur_l
-        FROM base GROUP BY stok_no, yil
-      )
-      SELECT s.stok_no, s.kod, regexp_replace(trim(both ' ,' from s.stok_mali), '\\s+', ' ', 'g') AS name,
-             json_object_agg(y.yil, json_build_object('litre', y.litre, 'eur_l', y.eur_l)) AS years,
-             a.period AS lp_period, a.tl AS lp_tl, a.eur AS lp_eur
-      FROM son s
-      JOIN yillik y USING (stok_no)
-      LEFT JOIN alis a USING (stok_no)
-      GROUP BY s.stok_no, s.kod, s.stok_mali, a.period, a.tl, a.eur
-    `);
-    const { rows: per } = await pool.query(`
-      SELECT yil, MIN(ay_no) AS ilk, MAX(ay_no) AS son FROM fb_cost.tuketim
-      WHERE LEFT(kategori, 4) = '2007' AND tip = 'icenek' GROUP BY yil ORDER BY yil DESC LIMIT 3
-    `);
-    const years = per.map(p => String(p.yil)).reverse();
-    const periods = Object.fromEntries(per.map(p => [String(p.yil), [p.ilk, p.son]]));
-    const latest = years[years.length - 1];
-    let adlar = {};
-    try { adlar = JSON.parse(fs.readFileSync(SPIRITS_NAMES_FILE, 'utf8')); } catch (_) { /* ad listesi yoksa ERP adı kullanılır */ }
+    const { years, periods, latest, items } = await seckiKalemleri('2007');
     const sections = SPIRITS_BOLUMLER.map(b => ({ key: b.key, title: b.title, items: [] }));
     const byKey = Object.fromEntries(sections.map(s => [s.key, s]));
-    for (const r of rows) {
-      const b = SPIRITS_TEKILA_RE.test(r.name)
+    for (const it of items) {
+      const b = SPIRITS_TEKILA_RE.test(it.name)
         ? 'tekila'
-        : (SPIRITS_BOLUMLER.find(x => x.kod === r.kod) || SPIRITS_BOLUMLER[SPIRITS_BOLUMLER.length - 1]).key;
-      const yrs = {};
-      for (const y of years) {
-        const v = r.years[y];
-        yrs[y] = v && Number(v.litre) !== 0 ? { litre: Number(v.litre), eur_l: v.eur_l == null ? null : Number(v.eur_l) } : null;
-      }
-      byKey[b].items.push({
-        stok_no: r.stok_no,
-        name: r.name,
-        display: adlar[r.stok_no] || null,
-        image: spiritsImagePath(r.stok_no),
-        years: yrs,
-        last_purchase: r.lp_period ? { period: r.lp_period, tl: Number(r.lp_tl), eur: r.lp_eur == null ? null : Number(r.lp_eur) } : null,
-      });
+        : (SPIRITS_BOLUMLER.find(x => x.kod === it.kod) || SPIRITS_BOLUMLER[SPIRITS_BOLUMLER.length - 1]).key;
+      byKey[b].items.push(it);
     }
-    const lit = (it, y) => it.years[y]?.litre || 0;
-    const fiyat = it => it.last_purchase?.eur ?? it.years[latest]?.eur_l ?? 0;
-    for (const s of sections) {
-      s.items.sort((a, b) => fiyat(b) - fiyat(a) || lit(b, latest) - lit(a, latest));
-      s.total = Object.fromEntries(years.map(y => [y, s.items.reduce((t, it) => t + lit(it, y), 0)]));
-    }
+    for (const s of sections) s.total = seckiSirala(s.items, years, latest);
     res.json({ years, periods, sections: sections.filter(s => s.items.length) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Biralar (ERP 2006xxx) — Housewine & Beers sekmesinde şarapların altında tek satır */
+const BIRA_TUR = { '2006001': 'Fıçı', '2006002': 'Şişe', '2006003': 'Kutu' };
+app.get('/api/beers', async (req, res) => {
+  try {
+    const { years, periods, latest, items } = await seckiKalemleri('2006');
+    for (const it of items) it.tag = /ALKOLS[UÜ]Z/i.test(it.name) ? 'Alkolsüz' : BIRA_TUR[it.kod] || 'Bira';
+    const total = seckiSirala(items, years, latest);
+    res.json({ years, periods, sections: [{ key: 'bira', title: 'Biralar', items, total }] });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -358,7 +402,7 @@ app.post('/api/spirits/:stokNo/image', (req, res, next) => spiritsImgUpload.sing
   next();
 }), async (req, res) => {
   const { stokNo } = req.params;
-  if (!/^\d{6,14}$/.test(stokNo)) return res.status(400).json({ error: 'Geçersiz stok no' });
+  if (!SECKI_ANAHTAR_RE.test(stokNo)) return res.status(400).json({ error: 'Geçersiz ürün anahtarı' });
   try {
     let buf;
     if (req.file) buf = req.file.buffer;
@@ -433,13 +477,13 @@ app.get('/api/spirits/image-search', async (req, res) => {
 /** Seçilen görseli kaldırır; varsa repodaki görsele, yoksa ikona döner */
 app.delete('/api/spirits/:stokNo/image', (req, res) => {
   const { stokNo } = req.params;
-  if (!/^\d{6,14}$/.test(stokNo)) return res.status(400).json({ error: 'Geçersiz stok no' });
+  if (!SECKI_ANAHTAR_RE.test(stokNo)) return res.status(400).json({ error: 'Geçersiz ürün anahtarı' });
   for (const e of SPIRITS_IMG_EXT) fs.rmSync(path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${e}`), { force: true });
   res.json({ image: spiritsImagePath(stokNo) });
 });
 
 app.get('/api/spirits/img/:file', (req, res) => {
-  if (!/^\d{6,14}\.(jpg|png|webp|gif)$/.test(req.params.file)) return res.status(404).end();
+  if (!/^(\d{6,14}|hw-[a-z0-9-]{1,80})\.(jpg|png|webp|gif)$/.test(req.params.file)) return res.status(404).end();
   res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.sendFile(path.join(SPIRITS_UPLOAD_DIR, req.params.file), err => { if (err && !res.headersSent) res.status(404).end(); });

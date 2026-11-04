@@ -167,12 +167,12 @@
   .sps-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
   .sps-jump a.badge { text-decoration: none; cursor: pointer; }
   .sps-section { margin-bottom: 36px; scroll-margin-top: 16px; }
-  #main:has(#page-spirits.active), #page-spirits { min-width: 0; }
+  #main:has(#page-spirits.active), #page-spirits, #main:has(#page-housewine.active), #page-housewine { min-width: 0; }
   .sps-row { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 2px 12px; overscroll-behavior-x: contain; }
   .sps-row > .hws-card { flex: 0 0 280px; scroll-snap-align: start; }
   .sps-row::-webkit-scrollbar { height: 8px; }
   .sps-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  .sps-row .hws-photo { position: relative; }
+  .sps-row .hws-photo, .hws-grid .hws-photo { position: relative; }
   .sps-imgbtn { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; font: inherit; font-size: 11px; font-weight: 600; color: var(--text-dim); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; opacity: .85; }
   .sps-imgbtn:hover { opacity: 1; color: var(--gold); border-color: var(--gold); }
   .sps-imgbtn svg { width: 13px; height: 13px; }
@@ -989,7 +989,7 @@
       <i class="nav-icon" data-lucide="layout-grid"></i> Menu Engineering
     </a>
     <a class="nav-item" data-page="housewine" href="#">
-      <i class="nav-icon" data-lucide="wine"></i> Housewine Selection
+      <i class="nav-icon" data-lucide="wine"></i> Housewine &amp; Beers Selection
     </a>
     <a class="nav-item" data-page="spirits" href="#">
       <i class="nav-icon" data-lucide="martini"></i> Spirits Selection
@@ -1796,7 +1796,7 @@
   <div id="page-housewine" class="tab-content">
     <div class="page-header">
       <div>
-        <div class="page-title">Housewine Selection</div>
+        <div class="page-title">Housewine &amp; Beers Selection</div>
         <div class="page-sub">2026 – 2027</div>
       </div>
       <div id="hws-header-meta" style="display:flex;gap:8px;flex-wrap:wrap"></div>
@@ -3638,6 +3638,8 @@ async function loadMeKumulatif(resetPage) {
 
 // ── Housewine Selection ────────────────────────────────────────────────────────
 let hwsData = null;
+let hwbData = null;
+let hwbHata = false;
 
 const HWS_AYLAR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 function hwsPeriodLabel(p) {
@@ -3674,8 +3676,8 @@ function hwsCard(w) {
         ${chip}
       </div>`;
   }
-  return `<div class="card hws-card">
-    <div class="hws-photo"><img src="${escapeHtml(w.image)}" alt="${escapeHtml(w.image_alt || w.name)}" loading="lazy"></div>
+  return `<div class="card hws-card" data-sps-stok="${escapeHtml(w.img_key)}">
+    <div class="hws-photo">${spsFotoHtml(w, w.image_alt || w.name)}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(w.img_key)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
     <div class="hws-info">
       <div class="hws-name">${escapeHtml(w.name)}</div>
       <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(w.type)}</span>${vivino}</div>
@@ -3700,6 +3702,9 @@ function renderHousewine() {
   document.getElementById('hws-header-meta').innerHTML =
     `<span class="badge badge-gray" title="Tüketim dönemleri">${escapeHtml(periods)}</span>` +
     `<span class="badge badge-gold" title="2027 € karşılığı için kullanılan kur">2027 €: ${escapeHtml(r.source)} ${escapeHtml(r.date.split('-').reverse().join('.'))} · ${fmtN(r.value, 4)}</span>`;
+  sections.forEach(sec => sec.wines.forEach(w => {
+    spsIndex[w.img_key] = { it: w, sec, ad: w.name, q: `${sec.title} ${w.name} ${HWS_TUR_ARAMA[w.type] || 'şarap'} şişe`, varsayilan: w.image_default };
+  }));
   body.innerHTML = sections.map((sec, i) => `<div class="hws-section">
       <div class="hws-section-head">
         <span class="hws-section-num">${String(i + 1).padStart(2, '0')}</span>
@@ -3707,11 +3712,47 @@ function renderHousewine() {
         <span class="badge badge-gray">${escapeHtml(sec.country)}</span>
       </div>
       <div class="hws-grid">${sec.wines.map(hwsCard).join('')}</div>
-    </div>`).join('');
+    </div>`).join('') + hwsBiraHtml(sections.length + 1);
   vcLucide();
 }
 
+const HWS_TUR_ARAMA = { Kırmızı: 'kırmızı şarap', Beyaz: 'beyaz şarap', Rosé: 'roze şarap', Roze: 'roze şarap' };
+
+function hwsBiraHtml(no) {
+  if (!hwbData) return `<div class="hws-section"><div class="hws-empty">${hwbHata ? 'Bira verisi yüklenemedi.' : 'Biralar yükleniyor…'}</div></div>`;
+  const { years } = hwbData;
+  const latest = years[years.length - 1];
+  const sec = hwbData.sections[0];
+  if (!sec) return '';
+  sec.items.forEach(it => {
+    const { ad, boyut } = spsAd(it.name, it.display);
+    const kap = it.tag === 'Kutu' ? 'kutu' : it.tag === 'Fıçı' ? 'fıçı' : 'şişe';
+    spsIndex[it.stok_no] = { it, sec, ad, q: [ad, boyut, 'bira', kap].filter(Boolean).join(' ') };
+  });
+  const aktif = sec.items.filter(it => it.years[latest]);
+  const eski = sec.items.filter(it => !it.years[latest]);
+  const kart = it => spsCard(it, sec, years, latest);
+  return `<div class="hws-section sps-section" id="hws-biralar">
+      <div class="hws-section-head">
+        <span class="hws-section-num">${String(no).padStart(2, '0')}</span>
+        <span class="hws-section-title">${escapeHtml(sec.title)}</span>
+        <span class="badge badge-gold">${latest}: ${fmtN(sec.total[latest] || 0, 0)} L</span>
+        <span class="badge badge-gray">${aktif.length} ürün</span>
+      </div>
+      ${aktif.length ? `<div class="sps-row">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
+      ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="sps-row">${eski.map(kart).join('')}</div></details>` : ''}
+    </div>`;
+}
+
 async function loadHousewinePage() {
+  if (!hwbData) {
+    // Biralar şaraplardan bağımsız yüklenir; gelince sayfa yeniden çizilir
+    fetch('/api/beers')
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status))))
+      .then(j => { hwbData = j; })
+      .catch(() => { hwbHata = true; toast('Biralar yüklenemedi', 'error'); })
+      .finally(() => { if (hwsData) renderHousewine(); });
+  }
   if (hwsData) return renderHousewine();
   const body = document.getElementById('hws-body');
   try {
@@ -3733,16 +3774,16 @@ let spsPick = null;
 function spsFotoHtml(it, ad) {
   return it.image
     ? `<img src="${escapeHtml(it.image)}" alt="${escapeHtml(ad)}" loading="lazy">`
-    : '<i data-lucide="martini" class="sps-noimg"></i>';
+    : `<i data-lucide="${it.tag ? 'beer' : it.img_key ? 'wine' : 'martini'}" class="sps-noimg"></i>`;
 }
 
 function spsPickOpen(stokNo) {
   const ref = spsIndex[stokNo];
   if (!ref) return;
-  const { ad, boyut } = spsAd(ref.it.name, ref.it.display);
+  const { ad, boyut } = ref.ad ? { ad: ref.ad } : spsAd(ref.it.name, ref.it.display);
   spsPick = { stokNo, ad, file: null, url: '' };
   document.getElementById('sps-pick-title').textContent = ad;
-  const q = [ad, boyut, ref.sec.title === 'Rakı' || ref.sec.title === 'Likör' ? ref.sec.title.toLocaleLowerCase('tr-TR') : '', 'şişe'].filter(Boolean).join(' ');
+  const q = ref.q || [ad, boyut, ref.sec.title === 'Rakı' || ref.sec.title === 'Likör' ? ref.sec.title.toLocaleLowerCase('tr-TR') : '', 'şişe'].filter(Boolean).join(' ');
   document.getElementById('sps-pick-q').value = q;
   document.getElementById('sps-manual').open = false;
   document.getElementById('sps-pick-url').value = '';
@@ -3832,8 +3873,8 @@ function spsPickSetUrl(v) {
 function spsKartGuncelle(stokNo, image) {
   const ref = spsIndex[stokNo];
   if (!ref) return;
-  ref.it.image = image;
-  const { ad } = spsAd(ref.it.name, ref.it.display);
+  ref.it.image = image || ref.varsayilan || null;
+  const ad = ref.ad || spsAd(ref.it.name, ref.it.display).ad;
   document.querySelectorAll(`[data-sps-stok="${stokNo}"] .hws-photo`).forEach(ph => {
     ph.querySelector('img, .sps-noimg')?.remove();
     ph.insertAdjacentHTML('afterbegin', spsFotoHtml(ref.it, ad));
@@ -3907,9 +3948,9 @@ document.addEventListener('paste', e => {
 const SPS_KISA = new Set(['YO', 'VS', 'VSOP', 'XO', 'XR', 'IPA', 'NO', 'II', 'III', 'JW', 'DOC', 'IGT', 'USA', 'UK']);
 const SPS_TUR = /\b(WHISKY|WHISKEY|VOTKA|VODKA|CIN|GIN|RAKI|RAKISI|LIKOR|LİKÖR|KANYAK|VERMUT|TEKILA|ROM|SARAP)\b/g;
 function spsAd(raw, display) {
-  const m = String(raw).match(/(\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?)\s*cl\b/i);
-  const boyut = m ? m[1].replace(/\s+/g, '') + ' cl' : null;
-  let ad = String(raw).replace(/\(.*?\)/g, ' ').replace(/\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*cl\b/i, ' ')
+  const m = String(raw).match(/(\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?)\s*(cl|lt)\b/i);
+  const boyut = m ? m[1].replace(/\s+/g, '') + (m[2].toLowerCase() === 'lt' ? ' L' : ' cl') : null;
+  let ad = String(raw).replace(/\(.*?\)/g, ' ').replace(/\d+(?:[.,]\d+)?(?:\s*-\s*\d+)?\s*(cl|lt)\b/i, ' ')
     .replace(SPS_TUR, ' ').replace(/[,\s]+$/, '').replace(/\s+/g, ' ').trim() || String(raw).trim();
   if (display) return { ad: display, boyut };
   ad = ad.split(' ').map(w => (SPS_KISA.has(w) || /\d/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join(' ');
@@ -3941,7 +3982,7 @@ function spsCard(it, sec, years, latest) {
     <div class="hws-photo">${foto}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(it.stok_no)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
     <div class="hws-info">
       <div class="hws-name" title="${escapeHtml(it.name)}">${escapeHtml(ad)}</div>
-      <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(sec.title)}</span>${boyut ? `<span class="badge badge-gray">${escapeHtml(boyut)}</span>` : ''}</div>
+      <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(it.tag || sec.title)}</span>${boyut ? `<span class="badge badge-gray">${escapeHtml(boyut)}</span>` : ''}</div>
       <table class="hws-table" title="Stok no: ${escapeHtml(it.stok_no || '')}">
         <thead><tr><th></th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead>
         <tbody>
@@ -3962,7 +4003,6 @@ function renderSpirits() {
   document.getElementById('sps-header-meta').innerHTML =
     `<span class="badge badge-gray" title="Tüketim dönemleri">${years.map(y => `${y} ${perLbl(y)}`).join(' · ')}</span>` +
     `<span class="badge badge-gold">${latest}: ${fmtN(toplam, 0)} L</span>`;
-  spsIndex = {};
   sections.forEach(sec => sec.items.forEach(it => { spsIndex[it.stok_no] = { it, sec }; }));
   const jump = sections.map(s => `<a class="badge badge-gray" data-sps-jump="${escapeHtml(s.key)}">${escapeHtml(s.title)} · ${fmtN(s.total[latest] || 0, 0)} L</a>`).join('');
   document.getElementById('sps-body').innerHTML = `<div class="sps-jump">${jump}</div>` + sections.map((sec, i) => {

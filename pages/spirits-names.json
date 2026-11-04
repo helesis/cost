@@ -1,5 +1,5 @@
 {
-  "_not": "Spirits Selection kart başlıkları — stok_no → markanın gerçek yazılışı. ERP adındaki boyut (cl) kartta ayrı rozet olarak gösterilir.",
+  "_not": "Spirits ve bira kart başlıkları — stok_no → markanın gerçek yazılışı. ERP adındaki boyut (cl/lt) kartta ayrı rozet olarak gösterilir.",
   "2007006012": "Chivas Regal 18 Year Old",
   "2007006106": "Aberlour 12 Year Old Double Cask",
   "2007006156": "Glenfiddich 12 Year Old",
@@ -54,7 +54,6 @@
   "2007006148": "Passport Scotch",
   "2007006192": "Aberfeldy 12 Year Old",
   "2007006193": "Dewar's 12 Year Old",
-
   "2007007086": "Herradura Plata",
   "2007007100": "Volcán De Mi Tierra Blanco",
   "2007007054": "Olmeca Altos Reposado",
@@ -65,7 +64,6 @@
   "2007007051": "el Jimador Blanco",
   "2007007026": "Patrón Añejo",
   "2007007140": "Patrón El Cielo",
-
   "2007002064": "Russian Standard Platinum",
   "2007002078": "Absolut Vodka",
   "2007002017": "Belvedere",
@@ -106,7 +104,6 @@
   "2007002070": "Keglevich Orman Meyveleri",
   "2007002105": "Nemiroff Honey Pepper",
   "2007002028": "Grey Goose",
-
   "2007003034": "Gin Mare",
   "2007003052": "Malfy Originale",
   "2007003054": "Malfy Gin Rosa",
@@ -124,7 +121,6 @@
   "2007003067": "Stamford London Dry",
   "2007003035": "Beefeater Pink",
   "2007003055": "Greenall's London Dry",
-
   "2007008029": "Havana Club Selección de Maestros",
   "2007008042": "Bacardí Spiced",
   "2007008001": "Bacardí Carta Blanca",
@@ -132,7 +128,6 @@
   "2007008014": "Janeiro Cachaça",
   "2007008008": "Captain Morgan White Rum",
   "2007008034": "Bacardí Carta Oro",
-
   "2007004026": "Martell VS",
   "2007004062": "Hennessy V.S.O.P",
   "2007004029": "Metaxa",
@@ -141,7 +136,6 @@
   "2007004057": "St-Rémy Authentic VSOP",
   "2007004035": "Rémy Martin",
   "2007004055": "Sorau Brendi",
-
   "2007001030": "Yeni Rakı",
   "2007001048": "Tekirdağ No.10",
   "2007001066": "Ouzo 12",
@@ -179,7 +173,6 @@
   "2007001062": "Efe Geleneksel",
   "2007001008": "Efe Rakı",
   "2007001014": "İzmir Rakı",
-
   "2007007055": "Campari Bitter",
   "2007007073": "Aperol",
   "2007007083": "Martini Fiero",
@@ -196,7 +189,6 @@
   "2007007035": "Garrone Bitter",
   "2007007037": "Garrone Dry",
   "2007007053": "Garrone Bianco",
-
   "2007005166": "Grappa Classico",
   "2007005318": "Volare Blue Curaçao",
   "2007005325": "Amaretto Marcati",
@@ -259,5 +251,26 @@
   "2007005251": "Bols Ginger",
   "2007005227": "Holidays Şeftali",
   "2007005194": "Svarovsky Kayısı",
-  "2007005059": "Joie de France Muz"
+  "2007005059": "Joie de France Muz",
+  "2006001002": "Efes Pilsen",
+  "2006002010": "Carlsberg",
+  "2006002014": "Beck's",
+  "2006002017": "Corona Extra",
+  "2006002018": "Bud",
+  "2006002021": "Heineken",
+  "2006002025": "Miller Genuine Draft",
+  "2006002026": "Sol",
+  "2006002033": "Bomonti Filtresiz",
+  "2006002034": "Efes Malt",
+  "2006002036": "Bomonti",
+  "2006002039": "Beck's",
+  "2006002060": "Efes Glutensiz",
+  "2006002061": "Kronenbourg 1664 Blanc",
+  "2006002070": "Stella Artois",
+  "2006002075": "Frederic Wheat IPA",
+  "2006002076": "Frederic India Pale Ale",
+  "2006002077": "Frederic Märzen Lager",
+  "2006002078": "Frederic Yakima Ale",
+  "2006003002": "Efes Pilsen",
+  "2006008006": "Peja Alkolsüz"
 }
