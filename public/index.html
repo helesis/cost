@@ -931,6 +931,9 @@
     <a class="nav-item" data-page="menu-engineering" href="#">
       <i class="nav-icon" data-lucide="layout-grid"></i> Menu Engineering
     </a>
+    <a class="nav-item" data-page="housewine" href="#">
+      <i class="nav-icon" data-lucide="wine"></i> Housewine Selection
+    </a>
     <div class="nav-section">Sistem</div>
     <a class="nav-item" data-page="alarmlar" href="#">
       <i class="nav-icon" data-lucide="bell"></i> Alarmlar
@@ -1726,6 +1729,22 @@
           Seçilen başlangıç için kümülatif veri yok.
         </div>
       </div><!-- /me-panel-kumulatif -->
+    </div>
+  </div>
+
+  <!-- ── HOUSEWINE SELECTION ─────────────────────────────────────────────── -->
+  <div id="page-housewine" class="tab-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Housewine Selection</div>
+        <div class="page-sub">House wine kataloğu — tüketim (şişe), ortalama € fiyat, 2027 fiyatları</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a class="btn btn-secondary btn-sm" href="/housewine-selection.html" target="_blank" rel="noopener">Yeni sekmede aç</a>
+      </div>
+    </div>
+    <div class="page-body" style="padding:0">
+      <iframe id="hws-frame" title="Housewine Selection" style="display:block;width:100%;height:calc(100vh - 110px);border:0;background:#fff"></iframe>
     </div>
   </div>
 
@@ -3534,6 +3553,10 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'besin-eslesmesi') { nnReload(); }
     else { nnStopPolling(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
+    if (page === 'housewine') {
+      const f = document.getElementById('hws-frame');
+      if (!f.getAttribute('src')) f.setAttribute('src', '/housewine-selection.html');
+    }
     if (page === 'kullanicilar') loadKullanicilar();
   });
 });
