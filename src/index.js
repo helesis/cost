@@ -6,6 +6,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const net = require('net');
+const dns = require('dns');
 const { Pool } = require('pg');
 const multer = require('multer');
 const { parse: parseCsvSync } = require('csv-parse/sync');
@@ -205,6 +207,76 @@ const SPIRITS_BOLUMLER = [
 const SPIRITS_TEKILA_RE = /TEK[Iİ]LA|TEQUILA|MEZCAL/i;
 const SPIRITS_IMG_DIR = path.join(PUBLIC_DIR, 'img/spirits');
 const SPIRITS_NAMES_FILE = path.join(__dirname, '../pages/spirits-names.json');
+/** Kullanıcının uygulamadan seçtiği şişe görselleri — repoda değil, sunucuda kalır; repodaki görselin önüne geçer */
+const SPIRITS_UPLOAD_DIR = path.join(__dirname, '../data/spirits-img');
+const SPIRITS_IMG_EXT = ['jpg', 'png', 'webp', 'gif'];
+const SPIRITS_IMG_MAX = 10 * 1024 * 1024;
+
+function spiritsImagePath(stokNo) {
+  for (const e of SPIRITS_IMG_EXT) {
+    const f = path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${e}`);
+    if (fs.existsSync(f)) return `/api/spirits/img/${stokNo}.${e}?v=${Math.round(fs.statSync(f).mtimeMs)}`;
+  }
+  const yerel = ['jpg', 'png'].map(e => `${stokNo}.${e}`).find(f => fs.existsSync(path.join(SPIRITS_IMG_DIR, f)));
+  return yerel ? `/img/spirits/${yerel}` : null;
+}
+
+/** Dosya imzasından görsel türü; SVG vb. kabul edilmez */
+function spiritsImageExt(buf) {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  if (buf.toString('ascii', 0, 4) === 'GIF8') return 'gif';
+  return null;
+}
+
+function ozelAdresMi(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  const v = ip.toLowerCase();
+  if (v.startsWith('::ffff:')) return ozelAdresMi(v.slice(7));
+  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe8') || v.startsWith('fe9')
+    || v.startsWith('fea') || v.startsWith('feb') || v.startsWith('ff');
+}
+
+/** Kullanıcının yapıştırdığı görsel adresini indirir; iç ağ adreslerine ve büyük dosyalara izin vermez */
+async function spiritsImageIndir(adres) {
+  let url = new URL(adres);
+  for (let hop = 0; hop < 4; hop++) {
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Yalnız http/https adresleri');
+    const ipler = await dns.promises.lookup(url.hostname, { all: true });
+    if (!ipler.length || ipler.some(x => ozelAdresMi(x.address))) throw new Error('Bu adrese erişilemez');
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 15000);
+    let r;
+    try {
+      r = await fetch(url, { redirect: 'manual', signal: ac.signal, headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36', Accept: 'image/avif,image/webp,image/*,*/*;q=0.8' } });
+    } finally {
+      clearTimeout(to);
+    }
+    if (r.status >= 300 && r.status < 400 && r.headers.get('location')) {
+      url = new URL(r.headers.get('location'), url);
+      continue;
+    }
+    if (!r.ok) throw new Error(`Görsel indirilemedi (HTTP ${r.status})`);
+    if (Number(r.headers.get('content-length') || 0) > SPIRITS_IMG_MAX) throw new Error('Görsel 10 MB sınırını aşıyor');
+    const parcalar = [];
+    let boyut = 0;
+    for await (const p of r.body) {
+      boyut += p.length;
+      if (boyut > SPIRITS_IMG_MAX) throw new Error('Görsel 10 MB sınırını aşıyor');
+      parcalar.push(p);
+    }
+    return Buffer.concat(parcalar);
+  }
+  throw new Error('Çok fazla yönlendirme');
+}
+
+const spiritsImgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: SPIRITS_IMG_MAX, files: 1 } });
 
 app.get('/api/spirits', async (req, res) => {
   try {
@@ -263,8 +335,7 @@ app.get('/api/spirits', async (req, res) => {
         stok_no: r.stok_no,
         name: r.name,
         display: adlar[r.stok_no] || null,
-        image: ['jpg', 'png'].map(e => `${r.stok_no}.${e}`).find(f => fs.existsSync(path.join(SPIRITS_IMG_DIR, f)))
-          ?.replace(/^/, '/img/spirits/') || null,
+        image: spiritsImagePath(r.stok_no),
         years: yrs,
         last_purchase: r.lp_period ? { period: r.lp_period, tl: Number(r.lp_tl), eur: r.lp_eur == null ? null : Number(r.lp_eur) } : null,
       });
@@ -279,6 +350,44 @@ app.get('/api/spirits', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/** Uygulamadan seçilen şişe görseli: { url } (JSON) ya da multipart "file" */
+app.post('/api/spirits/:stokNo/image', (req, res, next) => spiritsImgUpload.single('file')(req, res, err => {
+  if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'Görsel 10 MB sınırını aşıyor' : err.message });
+  next();
+}), async (req, res) => {
+  const { stokNo } = req.params;
+  if (!/^\d{6,14}$/.test(stokNo)) return res.status(400).json({ error: 'Geçersiz stok no' });
+  try {
+    let buf;
+    if (req.file) buf = req.file.buffer;
+    else if (req.body?.url) buf = await spiritsImageIndir(String(req.body.url));
+    else return res.status(400).json({ error: 'Görsel adresi ya da dosyası gerekli' });
+    const ext = spiritsImageExt(buf);
+    if (!ext) return res.status(400).json({ error: 'Bu bir JPG, PNG, WEBP ya da GIF görseli değil' });
+    fs.mkdirSync(SPIRITS_UPLOAD_DIR, { recursive: true });
+    for (const e of SPIRITS_IMG_EXT) fs.rmSync(path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${e}`), { force: true });
+    fs.writeFileSync(path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${ext}`), buf);
+    res.json({ image: spiritsImagePath(stokNo) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** Seçilen görseli kaldırır; varsa repodaki görsele, yoksa ikona döner */
+app.delete('/api/spirits/:stokNo/image', (req, res) => {
+  const { stokNo } = req.params;
+  if (!/^\d{6,14}$/.test(stokNo)) return res.status(400).json({ error: 'Geçersiz stok no' });
+  for (const e of SPIRITS_IMG_EXT) fs.rmSync(path.join(SPIRITS_UPLOAD_DIR, `${stokNo}.${e}`), { force: true });
+  res.json({ image: spiritsImagePath(stokNo) });
+});
+
+app.get('/api/spirits/img/:file', (req, res) => {
+  if (!/^\d{6,14}\.(jpg|png|webp|gif)$/.test(req.params.file)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.sendFile(path.join(SPIRITS_UPLOAD_DIR, req.params.file), err => { if (err && !res.headersSent) res.status(404).end(); });
 });
 
 app.use(

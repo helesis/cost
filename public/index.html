@@ -167,6 +167,19 @@
   .sps-jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
   .sps-jump a.badge { text-decoration: none; cursor: pointer; }
   .sps-section { margin-bottom: 36px; scroll-margin-top: 16px; }
+  #main:has(#page-spirits.active), #page-spirits { min-width: 0; }
+  .sps-row { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 2px 12px; overscroll-behavior-x: contain; }
+  .sps-row > .hws-card { flex: 0 0 280px; scroll-snap-align: start; }
+  .sps-row::-webkit-scrollbar { height: 8px; }
+  .sps-row::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .sps-row .hws-photo { position: relative; }
+  .sps-imgbtn { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; font: inherit; font-size: 11px; font-weight: 600; color: var(--text-dim); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; opacity: .85; }
+  .sps-imgbtn:hover { opacity: 1; color: var(--gold); border-color: var(--gold); }
+  .sps-imgbtn svg { width: 13px; height: 13px; }
+  .sps-pick-drop { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 240px; padding: 14px; border: 1.5px dashed var(--border); border-radius: var(--radius); background: var(--surface2); text-align: center; color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+  .sps-pick-drop.over { border-color: var(--gold); background: var(--gold-bg); }
+  .sps-pick-drop img { max-height: 220px; max-width: 45%; object-fit: contain; mix-blend-mode: multiply; }
+  .sps-pick-err { min-height: 18px; margin-top: 8px; font-size: 12px; color: var(--red); }
   .sps-noimg { width: 56px; height: 56px; color: var(--text-xdim); stroke-width: 1.2; }
   .sps-old summary { cursor: pointer; margin: 18px 0 14px 2px; font-size: 12px; color: var(--text-dim); }
   .sps-old .hws-card { opacity: .72; }
@@ -2110,6 +2123,35 @@
 </div>
 
 <!-- ── MODAL: Eşik Ekle ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-sps-img">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div class="modal-title">Şişe görseli · <span id="sps-pick-title"></span></div>
+      <button class="modal-close" onclick="spsPickClose()"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <a class="btn btn-primary btn-sm" id="sps-pick-google" target="_blank" rel="noopener noreferrer" href="#"><i data-lucide="search" style="width:14px;height:14px"></i> Google Görseller'de ara</a>
+        <span style="font-size:12px;color:var(--text-dim)">Beğendiğin görsele sağ tıkla → “Görsel adresini kopyala”, sonra aşağıya yapıştır.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Görsel adresi</label>
+        <input class="form-input" id="sps-pick-url" placeholder="https://…/sise.jpg" oninput="spsPickSetUrl(this.value)">
+      </div>
+      <div class="sps-pick-drop" id="sps-pick-drop"
+        ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+        ondrop="event.preventDefault();this.classList.remove('over');spsPickSetFile(event.dataTransfer.files[0])"></div>
+      <input type="file" id="sps-pick-file" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="spsPickSetFile(this.files[0])">
+      <div class="sps-pick-err" id="sps-pick-err"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" id="sps-pick-del" onclick="spsPickDelete()" style="margin-right:auto">Seçilen görseli kaldır</button>
+      <button class="btn btn-ghost btn-sm" onclick="spsPickClose()">Vazgeç</button>
+      <button class="btn btn-primary btn-sm" id="sps-pick-save" onclick="spsPickSave()" disabled>Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-esik">
   <div class="modal">
     <div class="modal-header">
@@ -3671,6 +3713,124 @@ async function loadHousewinePage() {
 
 // ── Spirits Selection ─────────────────────────────────────────────────────────
 let spsData = null;
+let spsIndex = {};
+let spsPick = null;
+
+function spsFotoHtml(it, ad) {
+  return it.image
+    ? `<img src="${escapeHtml(it.image)}" alt="${escapeHtml(ad)}" loading="lazy">`
+    : '<i data-lucide="martini" class="sps-noimg"></i>';
+}
+
+function spsPickOpen(stokNo) {
+  const ref = spsIndex[stokNo];
+  if (!ref) return;
+  const { ad, boyut } = spsAd(ref.it.name, ref.it.display);
+  spsPick = { stokNo, ad, file: null, url: '' };
+  document.getElementById('sps-pick-title').textContent = ad;
+  document.getElementById('sps-pick-google').href = 'https://www.google.com/search?tbm=isch&q=' +
+    encodeURIComponent([ad, boyut, ref.sec.title, 'şişe'].filter(Boolean).join(' '));
+  document.getElementById('sps-pick-url').value = '';
+  document.getElementById('sps-pick-file').value = '';
+  document.getElementById('sps-pick-err').textContent = '';
+  document.getElementById('sps-pick-del').style.display = ref.it.image?.startsWith('/api/') ? '' : 'none';
+  spsPickPreview(null);
+  document.getElementById('modal-sps-img').classList.add('open');
+  vcLucide();
+}
+
+function spsPickClose() {
+  document.getElementById('modal-sps-img').classList.remove('open');
+  if (spsPick?.objUrl) URL.revokeObjectURL(spsPick.objUrl);
+  spsPick = null;
+}
+
+function spsPickPreview(src) {
+  const ref = spsPick && spsIndex[spsPick.stokNo];
+  const mevcut = ref?.it.image ? `<div><img src="${escapeHtml(ref.it.image)}" alt=""><div>Şu anki</div></div>` : '';
+  document.getElementById('sps-pick-drop').innerHTML = src
+    ? `${mevcut}<div><img src="${escapeHtml(src)}" alt="" onerror="document.getElementById('sps-pick-err').textContent='Önizleme yüklenemedi; adres doğrudan bir görsel olmayabilir. Yine de kaydetmeyi deneyebilirsin.'"><div>Yeni</div></div>`
+    : `${mevcut}<div>Görseli buraya sürükle, panodan yapıştır (⌘V)<br>ya da <a href="#" onclick="document.getElementById('sps-pick-file').click();return false">dosya seç</a></div>`;
+  document.getElementById('sps-pick-save').disabled = !src;
+}
+
+function spsPickSetFile(file) {
+  if (!spsPick || !file) return;
+  if (!/^image\//.test(file.type)) { document.getElementById('sps-pick-err').textContent = 'Bu bir görsel dosyası değil.'; return; }
+  if (spsPick.objUrl) URL.revokeObjectURL(spsPick.objUrl);
+  spsPick.file = file;
+  spsPick.url = '';
+  spsPick.objUrl = URL.createObjectURL(file);
+  document.getElementById('sps-pick-url').value = '';
+  document.getElementById('sps-pick-err').textContent = '';
+  spsPickPreview(spsPick.objUrl);
+}
+
+function spsPickSetUrl(v) {
+  if (!spsPick) return;
+  v = v.trim();
+  spsPick.file = null;
+  spsPick.url = /^https?:\/\//i.test(v) ? v : '';
+  document.getElementById('sps-pick-err').textContent = v && !spsPick.url ? 'Adres http:// ya da https:// ile başlamalı.' : '';
+  spsPickPreview(spsPick.url || null);
+}
+
+function spsKartGuncelle(stokNo, image) {
+  const ref = spsIndex[stokNo];
+  if (!ref) return;
+  ref.it.image = image;
+  const { ad } = spsAd(ref.it.name, ref.it.display);
+  document.querySelectorAll(`[data-sps-stok="${stokNo}"] .hws-photo`).forEach(ph => {
+    ph.querySelector('img, .sps-noimg')?.remove();
+    ph.insertAdjacentHTML('afterbegin', spsFotoHtml(ref.it, ad));
+  });
+  vcLucide();
+}
+
+async function spsPickSave() {
+  if (!spsPick || (!spsPick.file && !spsPick.url)) return;
+  const btn = document.getElementById('sps-pick-save');
+  const err = document.getElementById('sps-pick-err');
+  btn.disabled = true;
+  err.textContent = '';
+  try {
+    let body, headers;
+    if (spsPick.file) { body = new FormData(); body.append('file', spsPick.file); }
+    else { body = JSON.stringify({ url: spsPick.url }); headers = { 'Content-Type': 'application/json' }; }
+    const res = await fetch(`/api/spirits/${encodeURIComponent(spsPick.stokNo)}/image`, { method: 'POST', body, headers });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    spsKartGuncelle(spsPick.stokNo, j.image);
+    toast('Görsel kaydedildi', 'success');
+    spsPickClose();
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false;
+  }
+}
+
+async function spsPickDelete() {
+  if (!spsPick) return;
+  try {
+    const res = await fetch(`/api/spirits/${encodeURIComponent(spsPick.stokNo)}/image`, { method: 'DELETE' });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error || 'HTTP ' + res.status);
+    spsKartGuncelle(spsPick.stokNo, j.image);
+    spsPickClose();
+  } catch (e) {
+    document.getElementById('sps-pick-err').textContent = e.message;
+  }
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-sps-img]');
+  if (b) spsPickOpen(b.dataset.spsImg);
+});
+document.addEventListener('paste', e => {
+  if (!spsPick) return;
+  const f = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'))?.getAsFile();
+  if (f) { e.preventDefault(); spsPickSetFile(f); }
+});
 
 const SPS_KISA = new Set(['YO', 'VS', 'VSOP', 'XO', 'XR', 'IPA', 'NO', 'II', 'III', 'JW', 'DOC', 'IGT', 'USA', 'UK']);
 const SPS_TUR = /\b(WHISKY|WHISKEY|VOTKA|VODKA|CIN|GIN|RAKI|RAKISI|LIKOR|LİKÖR|KANYAK|VERMUT|TEKILA|ROM|SARAP)\b/g;
@@ -3704,11 +3864,9 @@ function spsCard(it, sec, years, latest) {
         ${chip}
       </div>`;
   }
-  const foto = it.image
-    ? `<img src="${escapeHtml(it.image)}" alt="${escapeHtml(ad)}" loading="lazy">`
-    : '<i data-lucide="martini" class="sps-noimg"></i>';
-  return `<div class="card hws-card">
-    <div class="hws-photo">${foto}</div>
+  const foto = spsFotoHtml(it, ad);
+  return `<div class="card hws-card" data-sps-stok="${escapeHtml(it.stok_no)}">
+    <div class="hws-photo">${foto}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(it.stok_no)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
     <div class="hws-info">
       <div class="hws-name" title="${escapeHtml(it.name)}">${escapeHtml(ad)}</div>
       <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(sec.title)}</span>${boyut ? `<span class="badge badge-gray">${escapeHtml(boyut)}</span>` : ''}</div>
@@ -3732,6 +3890,8 @@ function renderSpirits() {
   document.getElementById('sps-header-meta').innerHTML =
     `<span class="badge badge-gray" title="Tüketim dönemleri">${years.map(y => `${y} ${perLbl(y)}`).join(' · ')}</span>` +
     `<span class="badge badge-gold">${latest}: ${fmtN(toplam, 0)} L</span>`;
+  spsIndex = {};
+  sections.forEach(sec => sec.items.forEach(it => { spsIndex[it.stok_no] = { it, sec }; }));
   const jump = sections.map(s => `<a class="badge badge-gray" data-sps-jump="${escapeHtml(s.key)}">${escapeHtml(s.title)} · ${fmtN(s.total[latest] || 0, 0)} L</a>`).join('');
   document.getElementById('sps-body').innerHTML = `<div class="sps-jump">${jump}</div>` + sections.map((sec, i) => {
     const aktif = sec.items.filter(it => it.years[latest]);
@@ -3744,8 +3904,8 @@ function renderSpirits() {
         <span class="badge badge-gold">${latest}: ${fmtN(sec.total[latest] || 0, 0)} L</span>
         <span class="badge badge-gray">${aktif.length} ürün</span>
       </div>
-      ${aktif.length ? `<div class="hws-grid">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
-      ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="hws-grid">${eski.map(kart).join('')}</div></details>` : ''}
+      ${aktif.length ? `<div class="sps-row">${aktif.map(kart).join('')}</div>` : `<div class="hws-empty">${latest} yılında tüketim yok.</div>`}
+      ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="sps-row">${eski.map(kart).join('')}</div></details>` : ''}
     </div>`;
   }).join('');
   document.querySelectorAll('[data-sps-jump]').forEach(a => a.addEventListener('click', () =>
