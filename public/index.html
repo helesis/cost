@@ -136,6 +136,32 @@
     vertical-align: middle;
   }
   .kat-pp-mom-chip .delta-icon { width: 10px; height: 10px; }
+  /* Housewine Selection */
+  #hws-body .hws-empty { color: var(--text-dim); font-size: 13px; }
+  .hws-section { margin-bottom: 36px; }
+  .hws-section-head { display: flex; align-items: center; gap: 10px; margin: 0 0 14px 2px; flex-wrap: wrap; }
+  .hws-section-num { font-size: 11px; font-weight: 600; letter-spacing: .12em; color: var(--gold); }
+  .hws-section-title { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; color: var(--text); }
+  .hws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .hws-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .hws-photo { height: 220px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+  .hws-photo img { height: 100%; max-width: 100%; object-fit: contain; mix-blend-mode: multiply; padding: 12px; }
+  .hws-info { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .hws-name { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 500; line-height: 1.25; }
+  .hws-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .hws-badges a.badge { text-decoration: none; }
+  .hws-desc { font-size: 12px; color: var(--text-dim); line-height: 1.55; }
+  .hws-note { display: block; margin-top: 4px; font-size: 11px; color: var(--yellow); }
+  .hws-table { margin-top: auto; font-size: 12px; }
+  .hws-table thead th { padding: 6px 8px; font-size: 10px; text-align: right; }
+  .hws-table thead th:first-child { text-align: left; }
+  .hws-table tbody td { padding: 7px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  .hws-table tbody td:first-child { text-align: left; color: var(--text-dim); font-size: 11px; }
+  .hws-table tbody tr:hover td { background: transparent; }
+  .hws-2027 { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: var(--gold-bg); }
+  .hws-2027-lbl { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+  .hws-2027-val { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums; }
+  .hws-2027-val small { font-family: 'Mulish', sans-serif; font-size: 12px; color: var(--text-dim); margin-left: 4px; }
   #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
   #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
   #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
@@ -1737,14 +1763,12 @@
     <div class="page-header">
       <div>
         <div class="page-title">Housewine Selection</div>
-        <div class="page-sub">House wine kataloğu — tüketim (şişe), ortalama € fiyat, 2027 fiyatları</div>
+        <div class="page-sub">2026 – 2027</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <a class="btn btn-secondary btn-sm" href="/housewine-selection.html" target="_blank" rel="noopener">Yeni sekmede aç</a>
-      </div>
+      <div id="hws-header-meta" style="display:flex;gap:8px;flex-wrap:wrap"></div>
     </div>
-    <div class="page-body" style="padding:0">
-      <iframe id="hws-frame" title="Housewine Selection" style="display:block;width:100%;height:calc(100vh - 110px);border:0;background:#fff"></iframe>
+    <div class="page-body" id="hws-body">
+      <div class="hws-empty">Yükleniyor…</div>
     </div>
   </div>
 
@@ -3531,6 +3555,83 @@ async function loadMeKumulatif(resetPage) {
   }
 }
 
+// ── Housewine Selection ────────────────────────────────────────────────────────
+let hwsData = null;
+
+function hwsCard(w) {
+  const years = ['2024', '2025', '2026'];
+  const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
+  const vivino = w.vivino
+    ? `<a class="badge badge-yellow" href="${escapeHtml(w.vivino.url)}" target="_blank" rel="noopener noreferrer" title="Vivino · tüm yıllar ortalaması">★ ${fmtN(w.vivino.rating, 1)} Vivino</a>`
+    : '<span class="badge badge-gray">Vivino: doğrulanmadı</span>';
+  let p27 = '';
+  if (w.price_2027) {
+    const p = w.price_2027;
+    const base = w.avg_eur?.[p.base_year];
+    let chip = '';
+    if (base) {
+      const pct = (p.eur / base - 1) * 100;
+      const cls = pct > 0 ? 'kat-pp-mom-up' : pct < 0 ? 'kat-pp-mom-down' : 'kat-pp-mom-flat';
+      const ic = pct > 0 ? 'arrow-up' : pct < 0 ? 'arrow-down' : 'minus';
+      const tit = `2027 € fiyatı, ${p.base_year} cost ortalamasına (${fmtEUR(base)}) göre`;
+      chip = `<span class="kat-pp-mom-chip ${cls}" title="${escapeHtml(tit)}"><i data-lucide="${ic}" class="delta-icon"></i>${fmtN(Math.abs(pct), 1)}% <span style="font-weight:600;opacity:.75;margin-left:3px">vs ${p.base_year}</span></span>`;
+    }
+    p27 = `<div class="hws-2027">
+        <div><div class="hws-2027-lbl">2027 fiyatı · şişe</div><div class="hws-2027-val">${fmtTL(p.tl)}<small>${fmtEUR(p.eur)}</small></div></div>
+        ${chip}
+      </div>`;
+  }
+  return `<div class="card hws-card">
+    <div class="hws-photo"><img src="${escapeHtml(w.image)}" alt="${escapeHtml(w.image_alt || w.name)}" loading="lazy"></div>
+    <div class="hws-info">
+      <div class="hws-name">${escapeHtml(w.name)}</div>
+      <div class="hws-badges"><span class="badge badge-gold">${escapeHtml(w.type)}</span>${vivino}</div>
+      <div class="hws-desc">${escapeHtml(w.description)}${w.note ? `<span class="hws-note">${escapeHtml(w.note)}</span>` : ''}</div>
+      <table class="hws-table" title="Stok: ${escapeHtml((w.stock || []).join(' + '))}">
+        <thead><tr><th></th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead>
+        <tbody>
+          <tr><td>Tüketim · şişe</td>${years.map(y => `<td>${cell(w.bottles?.[y], v => fmtN(v, 0))}</td>`).join('')}</tr>
+          <tr><td>Ort. € / şişe</td>${years.map(y => `<td>${cell(w.avg_eur?.[y], fmtEUR)}</td>`).join('')}</tr>
+        </tbody>
+      </table>
+      ${p27}
+    </div>
+  </div>`;
+}
+
+function renderHousewine() {
+  const body = document.getElementById('hws-body');
+  const { meta, sections } = hwsData;
+  const r = meta.eur_rate;
+  const periods = Object.entries(meta.periods || {}).map(([y, p]) => `${y} ${p}`).join(' · ');
+  document.getElementById('hws-header-meta').innerHTML =
+    `<span class="badge badge-gray" title="Tüketim dönemleri">${escapeHtml(periods)}</span>` +
+    `<span class="badge badge-gold" title="2027 € karşılığı için kullanılan kur">2027 €: ${escapeHtml(r.source)} ${escapeHtml(r.date.split('-').reverse().join('.'))} · ${fmtN(r.value, 4)}</span>`;
+  body.innerHTML = sections.map((sec, i) => `<div class="hws-section">
+      <div class="hws-section-head">
+        <span class="hws-section-num">${String(i + 1).padStart(2, '0')}</span>
+        <span class="hws-section-title">${escapeHtml(sec.title)}</span>
+        <span class="badge badge-gray">${escapeHtml(sec.country)}</span>
+      </div>
+      <div class="hws-grid">${sec.wines.map(hwsCard).join('')}</div>
+    </div>`).join('');
+  vcLucide();
+}
+
+async function loadHousewinePage() {
+  if (hwsData) return renderHousewine();
+  const body = document.getElementById('hws-body');
+  try {
+    const res = await fetch('/api/housewine');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    hwsData = await res.json();
+    renderHousewine();
+  } catch (e) {
+    body.innerHTML = '<div class="hws-empty">Housewine verisi yüklenemedi.</div>';
+    toast('Housewine Selection yüklenemedi', 'error');
+  }
+}
+
 // ── Navigation ─────────────────────────────────────────────────────────────────
 document.querySelectorAll('.nav-item[data-page]').forEach(el => {
   el.addEventListener('click', e => {
@@ -3553,10 +3654,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
     if (page === 'besin-eslesmesi') { nnReload(); }
     else { nnStopPolling(); }
     if (page === 'menu-engineering') loadMenuEngineeringPage();
-    if (page === 'housewine') {
-      const f = document.getElementById('hws-frame');
-      if (!f.getAttribute('src')) f.setAttribute('src', '/housewine-selection.html');
-    }
+    if (page === 'housewine') loadHousewinePage();
     if (page === 'kullanicilar') loadKullanicilar();
   });
 });

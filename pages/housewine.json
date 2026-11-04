@@ -1,0 +1,791 @@
+{
+ "meta": {
+  "title": "Housewine Selection",
+  "eur_rate": {
+   "source": "TCMB",
+   "date": "2026-11-04",
+   "type": "Döviz satış",
+   "value": 56.2588
+  },
+  "periods": {
+   "2024": "Mar–Ara",
+   "2025": "Mar–Kas",
+   "2026": "Mar–Eki"
+  },
+  "bottle_cl": 75,
+  "notes": "Tüketim ve ortalama € fiyat: fb_cost.tuketim (ay sonu kayıtları, sıfır fiyatlı satırlar hariç, tüketime göre ağırlıklı). Sıralama: bölüm ortalama fiyatına göre, köpürenler en sonda."
+ },
+ "sections": [
+  {
+   "title": "Sartori",
+   "country": "İtalya",
+   "wines": [
+    {
+     "name": "Merlot",
+     "type": "Kırmızı",
+     "image": "/img/housewine/sartori--merlot.jpg",
+     "image_alt": "Merlot",
+     "vivino": {
+      "rating": 2.9,
+      "url": "https://www.vivino.com/en/sartori-di-verona-merlot-delle-venezie/w/75277"
+     },
+     "description": "Yumuşak içimli, kırmızı meyve karakterli Merlot.",
+     "note": null,
+     "stock": [
+      "SARTORI MERLOT KIRIMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": 2881
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": 5.01
+     },
+     "price_2027": {
+      "tl": 352,
+      "eur": 6.26,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Lamberti",
+   "country": "İtalya",
+   "wines": [
+    {
+     "name": "Lamberti Blush Pinot Grigio",
+     "type": "Roze / Blush",
+     "image": "/img/housewine/lamberti--lamberti-blush-pinot-grigio.jpg",
+     "image_alt": "Blush Pinot Grigio",
+     "vivino": {
+      "rating": 3.8,
+      "url": "https://www.vivino.com/en/lamberti-blush-pinot-grigio-delle-venezie/w/1525640"
+     },
+     "description": "Narin kırmızı meyve dokunuşları ve taze bitiş.",
+     "note": null,
+     "stock": [
+      "LAMBERTI BLASH PINOT GRIGO BEYAZ 75 cl",
+      "LAMBERTI BLASH PINOT GRIGO BEYAZ 75 cl",
+      "LAMBERTI PINOT GRIGIO BLUSH 75 CL (R)",
+      "LAMBERTI PINOT GRIGIO BLUSH 75 CL (R)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 6508,
+      "2026": 337
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 4.98,
+      "2026": 5.48
+     },
+     "price_2027": {
+      "tl": 420,
+      "eur": 7.47,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Lamberti Pinot Grigio",
+     "type": "Beyaz",
+     "image": "/img/housewine/lamberti--lamberti-pinot-grigio.jpg",
+     "image_alt": "Pinot Grigio",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/lamberti-pinot-grigio-h58b3b/w/6362790"
+     },
+     "description": "Yeşil elma, armut ve narenciye notalarıyla ferah bir beyaz.",
+     "note": null,
+     "stock": [
+      "LAMBERTI PINOT GRIGIO BEYAZ 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 3950,
+      "2026": 2760
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 4.68,
+      "2026": 5.44
+     },
+     "price_2027": {
+      "tl": 420,
+      "eur": 7.47,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Lamberti Merlot",
+     "type": "Kırmızı",
+     "image": "/img/housewine/lamberti--lamberti-merlot.jpg",
+     "image_alt": "Merlot",
+     "vivino": {
+      "rating": 3.1,
+      "url": "https://www.vivino.com/CH/en/lamberti-merlot/w/8132096"
+     },
+     "description": "Vişne ve kırmızı meyve aromaları, yumuşak tanenler.",
+     "note": null,
+     "stock": [
+      "LAMBERTI  MERLOT KIRIMIZI 75 cl",
+      "LAMBERTI MERLOT TREVENEZIE IGT KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 5950,
+      "2026": 282
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 4.89,
+      "2026": 5.77
+     },
+     "price_2027": {
+      "tl": 420,
+      "eur": 7.47,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Gato Negro",
+   "country": "Şili",
+   "wines": [
+    {
+     "name": "Rosé",
+     "type": "Roze",
+     "image": "/img/housewine/gato-negro--rose.jpg",
+     "image_alt": "Rosé",
+     "vivino": {
+      "rating": 3.0,
+      "url": "https://www.vivino.com/en/gato-negro-rose/w/5949"
+     },
+     "description": "Ferah ve meyvemsi roze.",
+     "note": null,
+     "stock": [
+      "GATO NEGRO ROSE 75 CL (R)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 1634,
+      "2026": 2811
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 4.67,
+      "2026": 4.99
+     },
+     "price_2027": {
+      "tl": 317,
+      "eur": 5.63,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Chardonnay",
+     "type": "Beyaz",
+     "image": "/img/housewine/gato-negro--chardonnay.jpg",
+     "image_alt": "Chardonnay",
+     "vivino": {
+      "rating": 3.2,
+      "url": "https://www.vivino.com/en/gato-negro-chardonnay/w/5956"
+     },
+     "description": "Sarı meyve ve narenciye karakteri.",
+     "note": null,
+     "stock": [
+      "GATO NEGRO CHARDONNAY 75 CL (B)",
+      "GATO NEGRO CHARDONNAY 75 CL (B)"
+     ],
+     "bottles": {
+      "2024": 6,
+      "2025": 4751,
+      "2026": 4751
+     },
+     "avg_eur": {
+      "2024": 5.83,
+      "2025": 4.65,
+      "2026": 5.02
+     },
+     "price_2027": {
+      "tl": 317,
+      "eur": 5.63,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Cabernet Sauvignon",
+     "type": "Kırmızı",
+     "image": "/img/housewine/gato-negro--cabernet-sauvignon.jpg",
+     "image_alt": "Cabernet Sauvignon",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/gato-negro-cabernet-sauvignon/w/3565573"
+     },
+     "description": "Kırmızı meyve karakterli kırmızı şarap.",
+     "note": null,
+     "stock": [
+      "GATO NEGRO CABERNET SAUVIGNON 75 CL (K)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 2899,
+      "2026": 3171
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 4.69,
+      "2026": 4.75
+     },
+     "price_2027": {
+      "tl": 317,
+      "eur": 5.63,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Room Service · Porta Diverti",
+   "country": "Türkiye",
+   "wines": [
+    {
+     "name": "Porta Diverti Kırmızı",
+     "type": "Room Service",
+     "image": "/img/housewine/room-service-porta-diverti--porta-diverti-kirmizi.jpg",
+     "image_alt": "Porta Diverti Kırmızı – Vinero Bağcılık",
+     "vivino": {
+      "rating": 3.7,
+      "url": "https://www.vivino.com/en/vinero-bagcilik-porta-diverti-red-tr-thrace/w/5433697"
+     },
+     "description": "Cabernet Sauvignon, Merlot, Cabernet Franc, Petit Verdot harmanı; Eceabat, Çanakkale (Vinero Bağcılık).",
+     "note": null,
+     "stock": [
+      "PORTO DIVERTI KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": 5247,
+      "2025": 5194,
+      "2026": 4954
+     },
+     "avg_eur": {
+      "2024": 4.95,
+      "2025": 3.99,
+      "2026": 4.37
+     },
+     "price_2027": {
+      "tl": 257,
+      "eur": 4.57,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Piccini Famiglia",
+   "country": "İtalya",
+   "wines": [
+    {
+     "name": "Mamma Piccini Bianco",
+     "type": "Beyaz",
+     "image": "/img/housewine/piccini-famiglia--mamma-piccini-bianco.jpg",
+     "image_alt": "Mamma Piccini Bianco Toscana",
+     "vivino": null,
+     "description": "Trebbiano %70, Malvasia Bianca Lunga %20, Chardonnay %10. %12,5, kuru; limon rengi, diri asidite, hafif tütün bitiş.",
+     "note": null,
+     "stock": [
+      "PICCINI FAMIGLIA (B) 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 3881,
+      "2026": 4169
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 3.85,
+      "2026": 5.11
+     },
+     "price_2027": {
+      "tl": 300,
+      "eur": 5.33,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Famiglia Rosato",
+     "type": "Roze",
+     "image": "/img/housewine/piccini-famiglia--famiglia-rosato.jpg",
+     "image_alt": "Famiglia Rosato",
+     "vivino": null,
+     "description": "Sangiovese. Taze, zarif ve meyvemsi roze.",
+     "note": null,
+     "stock": [
+      "PICCINI FAMIGLIA (R) 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 1635,
+      "2026": 1541
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 3.61,
+      "2026": 5.14
+     },
+     "price_2027": {
+      "tl": 300,
+      "eur": 5.33,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Mamma Piccini Rosso",
+     "type": "Kırmızı",
+     "image": "/img/housewine/piccini-famiglia--mamma-piccini-rosso.jpg",
+     "image_alt": "Mamma Piccini Rosso di Toscana",
+     "vivino": null,
+     "description": "Sangiovese, Cabernet Sauvignon ve Merlot. %13, orta gövde; vişne, erik, hafif topraksı, yumuşak tanen. Peynir ve kırmızı etle.",
+     "note": null,
+     "stock": [
+      "PICCINI FAMIGLIA (K) 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 1758,
+      "2026": 2384
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 3.37,
+      "2026": 4.52
+     },
+     "price_2027": {
+      "tl": 300,
+      "eur": 5.33,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Solopaca · Beneventano",
+   "country": "İtalya",
+   "wines": [
+    {
+     "name": "Solopaca Rosso",
+     "type": "Kırmızı",
+     "image": "/img/housewine/solopaca-beneventano--solopaca-rosso.jpg",
+     "image_alt": "Solopaca Rosso - Cantina di Solopaca",
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/cantina-di-solopaca-rosso-beneventano/w/6977582"
+     },
+     "description": "Beneventano tepelerinin kırmızı üzümlerinden. %12; yakut renk, olgun kırmızı meyve, kuru ve yumuşak. Makarna, soslu etler ve peynirle; 16–18 °C.",
+     "note": null,
+     "stock": [
+      "SOLOPACA BENEVENTANO (K) 75 cl"
+     ],
+     "bottles": {
+      "2024": 4845,
+      "2025": 9,
+      "2026": 1
+     },
+     "avg_eur": {
+      "2024": 3.4,
+      "2025": 3.96,
+      "2026": null
+     },
+     "price_2027": {
+      "tl": 330,
+      "eur": 5.87,
+      "base_year": "2025"
+     }
+    },
+    {
+     "name": "Solopaca Bianco",
+     "type": "Beyaz",
+     "image": "/img/housewine/solopaca-beneventano--solopaca-bianco.jpg",
+     "image_alt": "Solopaca Bianco - Cantina di Solopaca",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/cantina-di-solopaca-beneventano-bianco/w/1149242"
+     },
+     "description": "Beneventano tepelerinin beyaz üzümlerinden. %12; saman sarısı, meyvemsi ve hafif çiçeksi, kuru ve diri. Balık ve deniz ürünleriyle; 9–10 °C.",
+     "note": null,
+     "stock": [
+      "SOLOPACA BENEVENTANO (B) 75 cl"
+     ],
+     "bottles": {
+      "2024": 5979,
+      "2025": 21,
+      "2026": 332
+     },
+     "avg_eur": {
+      "2024": 3.19,
+      "2025": 2.72,
+      "2026": 5.3
+     },
+     "price_2027": {
+      "tl": 330,
+      "eur": 5.87,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Solopaca Rosato",
+     "type": "Roze",
+     "image": "/img/housewine/solopaca-beneventano--solopaca-rosato.jpg",
+     "image_alt": "Solopaca Rosato - Cantina di Solopaca",
+     "vivino": {
+      "rating": 3.3,
+      "url": "https://www.vivino.com/en/cantina-di-solopaca-rosato/w/1149234"
+     },
+     "description": "Sangiovese, Barbera ve Aglianico. %13; köpüksüz, taze ve meyvemsi roze. Kabuklu deniz ürünleri ve mezelerle.",
+     "note": null,
+     "stock": [
+      "SOLOPACA BIANCO BENEVENTANO ROSATO"
+     ],
+     "bottles": {
+      "2024": 2925,
+      "2025": 313,
+      "2026": 329
+     },
+     "avg_eur": {
+      "2024": 3.38,
+      "2025": 2.71,
+      "2026": 1.61
+     },
+     "price_2027": {
+      "tl": 330,
+      "eur": 5.87,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Myrina · Kavaklıdere",
+   "country": "Türkiye",
+   "wines": [
+    {
+     "name": "Myrina Roze",
+     "type": "Roze",
+     "image": "/img/housewine/myrina-kavaklidere--myrina-roze.jpg",
+     "image_alt": "Myrina Roze",
+     "vivino": {
+      "rating": 3.3,
+      "url": "https://www.vivino.com/en/kavaklidere-myrina-roze/w/4839568"
+     },
+     "description": "Çal Karası. Hafif ve meyvemsi roze.",
+     "note": null,
+     "stock": [
+      "MYRINA (R) 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 258,
+      "2026": 554
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 3.07,
+      "2026": 3.09
+     },
+     "price_2027": {
+      "tl": 240,
+      "eur": 4.27,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Myrina Beyaz",
+     "type": "Beyaz",
+     "image": "/img/housewine/myrina-kavaklidere--myrina-beyaz.jpg",
+     "image_alt": "Myrina Beyaz",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/kavaklidere-myrina-beyaz/w/4010393"
+     },
+     "description": "Sultaniye ve Narince. Ferah beyaz.",
+     "note": null,
+     "stock": [
+      "MYRINA BEYAZ 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 1488,
+      "2026": 1361
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 2.93,
+      "2026": 3.11
+     },
+     "price_2027": {
+      "tl": 240,
+      "eur": 4.27,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Myrina Kırmızı",
+     "type": "Kırmızı",
+     "image": "/img/housewine/myrina-kavaklidere--myrina-kirmizi.png",
+     "image_alt": "Myrina Kırmızı",
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/kavaklidere-myrina-kirmizi/w/2620041"
+     },
+     "description": "Cabernet Sauvignon ve Öküzgözü. Dengeli ve meyvemsi kırmızı.",
+     "note": null,
+     "stock": [
+      "MYRINA KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 973,
+      "2026": 577
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 2.93,
+      "2026": 2.99
+     },
+     "price_2027": {
+      "tl": 240,
+      "eur": 4.27,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Sevilen · İsabey",
+   "country": "Türkiye",
+   "wines": [
+    {
+     "name": "İsabey W Sauvignon Blanc & Sémillon",
+     "type": "Beyaz",
+     "image": "/img/housewine/sevilen-isabey--isabey-w-sauvignon-blanc-semillon.jpg",
+     "image_alt": "İsabey W Sauvignon Blanc - Sémillon",
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/sevilen-isabey-w-sauvignon-blanc-semillon/w/9133985"
+     },
+     "description": "Sauvignon Blanc & Sémillon; canlı, aromatik ve ferah.",
+     "note": null,
+     "stock": [
+      "SEVILEN ISABEY YENI BEYAZ 75 cl"
+     ],
+     "bottles": {
+      "2024": 5471,
+      "2025": 3606,
+      "2026": 2507
+     },
+     "avg_eur": {
+      "2024": 3.31,
+      "2025": 2.86,
+      "2026": 2.8
+     },
+     "price_2027": {
+      "tl": 220,
+      "eur": 3.91,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "İsabey R (Cabernet Franc & Merlot & Petit Verdot)",
+     "type": "Kırmızı",
+     "image": "/img/housewine/sevilen-isabey--isabey-r-cabernet-franc-merlot-petit-verdot.jpg",
+     "image_alt": "İsabey R Cabernet Franc Merlot Petit Verdot",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/sevilen-isabey-r-red-blend/w/8867482"
+     },
+     "description": "Cabernet Franc, Merlot & Petit Verdot; siyah meyveli, gövdeli ve pürüzsüz.",
+     "note": null,
+     "stock": [
+      "SEVILEN ISABEY YENI KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": 2532,
+      "2025": 1802,
+      "2026": 1132
+     },
+     "avg_eur": {
+      "2024": 3.16,
+      "2025": 2.83,
+      "2026": 2.76
+     },
+     "price_2027": {
+      "tl": 220,
+      "eur": 3.91,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "İsabey RSE (Syrah & Kalecik Karası)",
+     "type": "Roze",
+     "image": "/img/housewine/sevilen-isabey--isabey-rse-syrah-kalecik-karasi.jpg",
+     "image_alt": "İsabey RSE Syrah - Kalecik Karası Roze",
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/sevilen-isabey-rse-syrah-kalecik-karasi/w/8859354"
+     },
+     "description": "Syrah & Kalecik Karası kupajı; çilek, frambuaz ve narenciye notaları, canlı asidite.",
+     "note": null,
+     "stock": [
+      "SEVILEN ISABEY YENI ROSE 75 cl"
+     ],
+     "bottles": {
+      "2024": 1961,
+      "2025": 1192,
+      "2026": 1030
+     },
+     "avg_eur": {
+      "2024": 3.18,
+      "2025": 2.81,
+      "2026": 2.59
+     },
+     "price_2027": {
+      "tl": 220,
+      "eur": 3.91,
+      "base_year": "2026"
+     }
+    }
+   ]
+  },
+  {
+   "title": "Köpüren Şaraplar",
+   "country": "İtalya · Türkiye · Ukrayna",
+   "wines": [
+    {
+     "name": "Tallero Vino Frizzante Secco",
+     "type": "Hafif köpüren · İtalya",
+     "image": "/img/housewine/kopuren-saraplar--tallero-vino-frizzante-secco.jpg",
+     "image_alt": "Tallero Vino Frizzante Secco",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/wineries/tallero"
+     },
+     "description": "Ferah ve canlı bir frizzante.",
+     "note": null,
+     "stock": [
+      "TALLERO VINO FRIZZANTE SECCO CAPSUL SAMPANYA 75 cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": 6465,
+      "2026": 10110
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": 5.12,
+      "2026": 4.98
+     },
+     "price_2027": {
+      "tl": 320,
+      "eur": 5.69,
+      "base_year": "2026"
+     }
+    },
+    {
+     "name": "Marengo Rose",
+     "type": "Köpüren · Ukrayna",
+     "image": "/img/housewine/kopuren-saraplar--marengo-rose.jpg",
+     "image_alt": "Marengo Rose - Koblevo",
+     "vivino": null,
+     "description": "Karadeniz kıyısındaki Koblevo bağlarının üzümlerinden; pembe köpüren şarap.",
+     "note": "Tatlılık derecesi için etiket teyidi önerilir.",
+     "stock": [
+      "ARENGO ROSE SAMPANYA 75 cl"
+     ],
+     "bottles": {
+      "2024": 2892,
+      "2025": 1297,
+      "2026": 818
+     },
+     "avg_eur": {
+      "2024": 5.36,
+      "2025": 4.71,
+      "2026": 4.17
+     }
+    },
+    {
+     "name": "Rondini",
+     "type": "Köpüren · Tenuta Cocci Grifoni",
+     "image": "/img/housewine/kopuren-saraplar--rondini.jpg",
+     "image_alt": "Rondini Spumante Brut Passerina - Tenuta Cocci Grifoni",
+     "vivino": null,
+     "description": "İtalyan köpüren şarap; fotoğraf üreticinin resmî sitesinden alındı.",
+     "note": null,
+     "stock": [
+      "RONDINI FRIZZANTE BEYAZ MANTAR SAMPANYA 75cl"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": 2992
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": 3.55
+     }
+    },
+    {
+     "name": "Ritüel Yarı Köpüren",
+     "type": "Yarı köpüren · Türkiye",
+     "image": "/img/housewine/kopuren-saraplar--rituel-yari-kopuren.jpg",
+     "image_alt": "Ritüel Yarı Köpüren Beyaz",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/rituel-bekilli-sultaniye-suni-yari-kopuren/w/11992768"
+     },
+     "description": "Serinletici narenciye ve meyve notaları.",
+     "note": "Etiket / seri teyidi önerilir.",
+     "stock": [
+      "SAMPANYA SUNI YARI KOPUREN RITUEL"
+     ],
+     "bottles": {
+      "2024": 40,
+      "2025": 140,
+      "2026": 4365
+     },
+     "avg_eur": {
+      "2024": 3.69,
+      "2025": 3.14,
+      "2026": 3.07
+     }
+    },
+    {
+     "name": "Marengo Brut",
+     "type": "Köpüren · Ukrayna",
+     "image": "/img/housewine/kopuren-saraplar--marengo-brut.jpg",
+     "image_alt": "Marengo Brut - Koblevo",
+     "vivino": null,
+     "description": "Karadeniz kıyısındaki Koblevo bağlarının üzümlerinden; kuru (brut) beyaz köpüren şarap.",
+     "note": null,
+     "stock": [
+      "MARENGO BRUT BIANCO SAMPANYA 75 cl"
+     ],
+     "bottles": {
+      "2024": 2958,
+      "2025": 1312,
+      "2026": 803
+     },
+     "avg_eur": {
+      "2024": 3.07,
+      "2025": 2.54,
+      "2026": 2.22
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -183,11 +183,10 @@ app.get('/index.html', (req, res) => {
 /** Eski kısayol → oturumsuz ise giriş sayfası */
 app.get('/login', (req, res) => res.redirect(302, '/login.html'));
 
-/** House Wine Selection kataloğu — maliyet verisi içerdiği için public/ dışında, oturum gerekli */
-app.get('/housewine-selection.html', (req, res) => {
-  if (!isAuthed(req)) return res.redirect(302, '/login.html');
+/** Housewine Selection sekmesi verisi — maliyet verisi içerdiği için public/ dışında; /api/ oturum kontrolünden geçer */
+app.get('/api/housewine', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  return res.sendFile(path.join(__dirname, '../pages/housewine-selection.html'));
+  return res.sendFile(path.join(__dirname, '../pages/housewine.json'));
 });
 
 app.use(
