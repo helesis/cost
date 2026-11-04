@@ -445,7 +445,10 @@
      "type": "Kırmızı",
      "image": null,
      "image_alt": "Alpaca Cabernet Sauvignon",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.2,
+      "url": "https://www.vivino.com/en/alpaca-cabernet-sauvignon/w/1212728"
+     },
      "description": "Kırmızı meyve ve hafif baharat notalı, orta gövdeli Cabernet Sauvignon.",
      "note": "2026'da alım yok; son alış 2025.",
      "stock": [
@@ -474,7 +477,10 @@
      "type": "Beyaz",
      "image": null,
      "image_alt": "Alpaca Sauvignon Blanc",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.1,
+      "url": "https://www.vivino.com/en/alpaca-sauvignon-blanc-central-valley/w/1728060"
+     },
      "description": "Narenciye ve tropik meyve aromalı, canlı asiditeli Sauvignon Blanc.",
      "note": "2026'da alım yok; son alış 2025.",
      "stock": [
@@ -503,8 +509,11 @@
      "type": "Roze",
      "image": null,
      "image_alt": "Alpaca Rosé",
-     "vivino": null,
-     "description": "Çilek ve ahududu notalı, hafif ve ferah bir roze.",
+     "vivino": {
+      "rating": 3.0,
+      "url": "https://www.vivino.com/en/alpaca-rose-cabernet-sauvignon/w/1212727"
+     },
+     "description": "Cabernet Sauvignon'dan; çilek ve ahududu notalı, hafif ve ferah bir roze.",
      "note": "2026'da alım yok; son alış 2025.",
      "stock": [
       "ALPACA ROSE 75 cl"
@@ -538,7 +547,10 @@
      "type": "Kırmızı",
      "image": null,
      "image_alt": "Suvla Syrah",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/suvla-syrah-tr-thrace/w/2090847"
+     },
      "description": "Gelibolu Yarımadası bağlarından meyvemsi, yumuşak içimli Syrah.",
      "note": null,
      "stock": [
@@ -567,7 +579,10 @@
      "type": "Beyaz",
      "image": null,
      "image_alt": "Suvla Sauvignon Blanc & Sémillon",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.3,
+      "url": "https://www.vivino.com/en/suvla-sauvignon-blanc-semillon/w/2601303"
+     },
      "description": "Narenciye ve beyaz meyve notalarıyla ferah bir beyaz kupaj.",
      "note": null,
      "stock": [
@@ -596,7 +611,10 @@
      "type": "Roze",
      "image": null,
      "image_alt": "Suvla Blush Karasakız",
-     "vivino": null,
+     "vivino": {
+      "rating": 3.6,
+      "url": "https://www.vivino.com/en/suvla-blush-karasakiz/w/5184565"
+     },
      "description": "Yerel Karasakız üzümünden, kırmızı meyveli hafif bir blush.",
      "note": null,
      "stock": [
@@ -957,7 +975,7 @@
   },
   {
    "title": "Kumkale",
-   "country": "Türkiye",
+   "country": "Türkiye · Suvla",
    "wines": [
     {
      "name": "Kumkale Kırmızı",
@@ -1022,8 +1040,11 @@
      "type": "Roze",
      "image": null,
      "image_alt": "Kumkale Roze",
-     "vivino": null,
-     "description": "Hafif içimli, meyvemsi roze sofra şarabı.",
+     "vivino": {
+      "rating": 3.8,
+      "url": "https://www.vivino.com/en/suvla-kumkale-rose-syrah-kalecik-karasi/w/9872265"
+     },
+     "description": "Syrah ve Kalecik Karası kupajı, hafif içimli ve meyvemsi bir roze.",
      "note": null,
      "stock": [
       "KUMKALE ROSE 75 cl"
