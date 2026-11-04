@@ -196,10 +196,13 @@ app.get('/api/housewine', (req, res) => {
     return res.status(500).json({ error: err.message });
   }
   // Her şarap için görsel anahtarı (repodaki görselin dosya adı); uygulamadan seçilen görsel öne geçer
+  const TR = { ı: 'i', ğ: 'g', ü: 'u', ş: 's', ö: 'o', ç: 'c', é: 'e' };
   for (const sec of veri.sections || []) {
     for (const w of sec.wines || []) {
-      const ad = path.basename(String(w.image || w.name || ''), path.extname(String(w.image || '')));
-      w.img_key = 'hw-' + ad.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      // Görseli olmayan şarapta anahtar "üretici--şarap" adından türetilir
+      const ad = w.image ? path.basename(w.image, path.extname(w.image)) : `${sec.title}--${w.name}`;
+      w.img_key = 'hw-' + ad.toLocaleLowerCase('tr-TR').replace(/[ığüşöçé]/g, c => TR[c])
+        .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
       w.image_default = w.image || null;
       w.image = spiritsImagePath(w.img_key, w.image_default);
     }

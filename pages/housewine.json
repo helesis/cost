@@ -437,6 +437,192 @@
    ]
   },
   {
+   "title": "Alpaca",
+   "country": "Şili",
+   "wines": [
+    {
+     "name": "Alpaca Cabernet Sauvignon",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Alpaca Cabernet Sauvignon",
+     "vivino": null,
+     "description": "Kırmızı meyve ve hafif baharat notalı, orta gövdeli Cabernet Sauvignon.",
+     "note": "2026'da alım yok; son alış 2025.",
+     "stock": [
+      "ALPACA CABERNET SAUVGNON KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": 3292,
+      "2025": 510,
+      "2026": null
+     },
+     "avg_eur": {
+      "2024": 5.62,
+      "2025": 4.19,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2025-05",
+      "tl": 180.37,
+      "eur": 4.12,
+      "rate": 43.7288
+     }
+    },
+    {
+     "name": "Alpaca Sauvignon Blanc",
+     "type": "Beyaz",
+     "image": null,
+     "image_alt": "Alpaca Sauvignon Blanc",
+     "vivino": null,
+     "description": "Narenciye ve tropik meyve aromalı, canlı asiditeli Sauvignon Blanc.",
+     "note": "2026'da alım yok; son alış 2025.",
+     "stock": [
+      "ALPACA SAUVIGNON BLANC BEYAZ 75 cl"
+     ],
+     "bottles": {
+      "2024": 3268,
+      "2025": 927,
+      "2026": 3
+     },
+     "avg_eur": {
+      "2024": 6.14,
+      "2025": 5.47,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2025-05",
+      "tl": 235.86,
+      "eur": 5.39,
+      "rate": 43.7288
+     }
+    },
+    {
+     "name": "Alpaca Rosé",
+     "type": "Roze",
+     "image": null,
+     "image_alt": "Alpaca Rosé",
+     "vivino": null,
+     "description": "Çilek ve ahududu notalı, hafif ve ferah bir roze.",
+     "note": "2026'da alım yok; son alış 2025.",
+     "stock": [
+      "ALPACA ROSE 75 cl"
+     ],
+     "bottles": {
+      "2024": 2480,
+      "2025": 523,
+      "2026": 92
+     },
+     "avg_eur": {
+      "2024": 5.69,
+      "2025": 5.29,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2025-06",
+      "tl": 229.33,
+      "eur": 5.09,
+      "rate": 45.0324
+     }
+    }
+   ]
+  },
+  {
+   "title": "Suvla",
+   "country": "Türkiye",
+   "wines": [
+    {
+     "name": "Suvla Syrah",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Suvla Syrah",
+     "vivino": null,
+     "description": "Gelibolu Yarımadası bağlarından meyvemsi, yumuşak içimli Syrah.",
+     "note": null,
+     "stock": [
+      "SUVLA SYRAH 75 CL (K)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": 912
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": 3.74
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 199.0,
+      "eur": 3.6,
+      "rate": 55.2592
+     }
+    },
+    {
+     "name": "Suvla Sauvignon Blanc & Sémillon",
+     "type": "Beyaz",
+     "image": null,
+     "image_alt": "Suvla Sauvignon Blanc & Sémillon",
+     "vivino": null,
+     "description": "Narenciye ve beyaz meyve notalarıyla ferah bir beyaz kupaj.",
+     "note": null,
+     "stock": [
+      "SUVLA SAUVIGNON BLANC SEMILLION 75 CL (B)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": 1568
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": 3.68
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 199.0,
+      "eur": 3.6,
+      "rate": 55.2592
+     }
+    },
+    {
+     "name": "Suvla Blush Karasakız",
+     "type": "Roze",
+     "image": null,
+     "image_alt": "Suvla Blush Karasakız",
+     "vivino": null,
+     "description": "Yerel Karasakız üzümünden, kırmızı meyveli hafif bir blush.",
+     "note": null,
+     "stock": [
+      "SUVLA BLUSH KARASAKIZ 75 CL (R)"
+     ],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": 1641
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": 4.24
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 226.59,
+      "eur": 4.1,
+      "rate": 55.2592
+     }
+    }
+   ]
+  },
+  {
    "title": "Solopaca · Beneventano",
    "country": "İtalya",
    "wines": [
@@ -764,6 +950,99 @@
       "period": "2026-10",
       "tl": 149.95,
       "eur": 2.71,
+      "rate": 55.2592
+     }
+    }
+   ]
+  },
+  {
+   "title": "Kumkale",
+   "country": "Türkiye",
+   "wines": [
+    {
+     "name": "Kumkale Kırmızı",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Kumkale Kırmızı",
+     "vivino": null,
+     "description": "Günlük içime uygun, hafif gövdeli kırmızı sofra şarabı.",
+     "note": null,
+     "stock": [
+      "KUMKALE KIRMIZI 75 cl"
+     ],
+     "bottles": {
+      "2024": 1756,
+      "2025": 338,
+      "2026": 787
+     },
+     "avg_eur": {
+      "2024": 3.5,
+      "2025": 3.02,
+      "2026": 2.93
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 157.22,
+      "eur": 2.85,
+      "rate": 55.2592
+     }
+    },
+    {
+     "name": "Kumkale Beyaz",
+     "type": "Beyaz",
+     "image": null,
+     "image_alt": "Kumkale Beyaz",
+     "vivino": null,
+     "description": "Hafif ve ferah, günlük içimlik beyaz sofra şarabı.",
+     "note": null,
+     "stock": [
+      "KUMKALE BEYAZ 75 cl"
+     ],
+     "bottles": {
+      "2024": 1582,
+      "2025": 970,
+      "2026": 903
+     },
+     "avg_eur": {
+      "2024": 3.45,
+      "2025": 2.75,
+      "2026": 2.74
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 146.93,
+      "eur": 2.66,
+      "rate": 55.2592
+     }
+    },
+    {
+     "name": "Kumkale Roze",
+     "type": "Roze",
+     "image": null,
+     "image_alt": "Kumkale Roze",
+     "vivino": null,
+     "description": "Hafif içimli, meyvemsi roze sofra şarabı.",
+     "note": null,
+     "stock": [
+      "KUMKALE ROSE 75 cl"
+     ],
+     "bottles": {
+      "2024": 919,
+      "2025": 483,
+      "2026": 569
+     },
+     "avg_eur": {
+      "2024": 2.97,
+      "2025": 2.37,
+      "2026": 2.37
+     },
+     "price_2027": null,
+     "last_purchase": {
+      "period": "2026-10",
+      "tl": 124.68,
+      "eur": 2.26,
       "rate": 55.2592
      }
     }

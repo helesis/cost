@@ -3675,6 +3675,11 @@ function hwsCard(w) {
         <div><div class="hws-2027-lbl">2027 fiyatı · şişe</div><div class="hws-2027-val">${fmtTL(p.tl)}<small>${fmtEUR(p.eur)}</small></div>${lpLine}</div>
         ${chip}
       </div>`;
+  } else if (w.last_purchase?.eur) {
+    const lp = w.last_purchase;
+    p27 = `<div class="hws-2027">
+        <div><div class="hws-2027-lbl">Son alış · şişe</div><div class="hws-2027-val">${fmtTL(lp.tl)}<small>${fmtEUR(lp.eur)}</small></div><div class="hws-lp">${escapeHtml(hwsPeriodLabel(lp.period))}</div></div>
+      </div>`;
   }
   return `<div class="card hws-card" data-sps-stok="${escapeHtml(w.img_key)}">
     <div class="hws-photo">${spsFotoHtml(w, w.image_alt || w.name)}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(w.img_key)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
