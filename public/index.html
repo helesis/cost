@@ -4093,9 +4093,11 @@ async function katalogAc(tur) {
     const al = async u => { const r = await fetch(u); if (!r.ok) throw new Error(`${u} · HTTP ${r.status}`); return r.json(); };
     const [hw, br, sp] = await Promise.all([hwsData || al('/api/housewine'), hwbData || al('/api/beers'), spsData || al('/api/spirits')]);
     hwsData = hw; hwbData = br; spsData = sp;
-    w.document.open();
-    w.document.write(tur === 'konsept' ? katalogKonseptHtml(hw, br, sp) : katalogVaryasyonHtml(br, sp));
-    w.document.close();
+    // Boş pencereye document.write ile yazılan sayfa bazı tarayıcılarda boş yazdırılıyor; gerçek bir (blob) adres açılır
+    const html = tur === 'konsept' ? katalogKonseptHtml(hw, br, sp) : katalogVaryasyonHtml(br, sp);
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+    w.location.replace(url);
+    setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
   } catch (e) {
     w.document.body.innerHTML = `<p style="font-family:sans-serif;padding:24px;color:#7a2d2d">Katalog hazırlanamadı: ${escapeHtml(e.message)}</p>`;
   }
