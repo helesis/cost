@@ -197,6 +197,10 @@
   .sps-old summary { cursor: pointer; margin: 18px 0 14px 2px; font-size: 12px; color: var(--text-dim); }
   .sps-old .hws-card { opacity: .72; }
   .sps-alt .hws-card { opacity: 1; border-style: dashed; }
+  .katalog-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 24px; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+  .katalog-bar .katalog-bar-lbl { flex: 1 1 220px; font-size: 12px; color: var(--text-dim); }
+  .katalog-bar .btn { display: inline-flex; align-items: center; gap: 6px; }
+  .katalog-bar .btn svg { width: 15px; height: 15px; }
   #page-ozet .ozet-cmp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
   #page-ozet .ozet-cmp-item { display: inline-flex; align-items: center; gap: 5px; }
   #page-ozet .ozet-cmp-lbl { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; }
@@ -3721,7 +3725,7 @@ function renderHousewine() {
         <span class="badge badge-gray">${escapeHtml(sec.country)}</span>
       </div>
       <div class="hws-grid">${sec.wines.map(hwsCard).join('')}</div>
-    </div>`).join('') + hwsBiraHtml(sections.length + 1);
+    </div>`).join('') + hwsBiraHtml(sections.length + 1) + KATALOG_BAR;
   vcLucide();
 }
 
@@ -4053,7 +4057,7 @@ function renderSpirits() {
       ${eski.length ? `<details class="sps-old"><summary>${latest} yılında tüketilmeyen ${eski.length} ürün</summary><div class="sps-row">${eski.map(kart).join('')}</div></details>` : ''}
       ${spsAltHtml(sec)}
     </div>`;
-  }).join('');
+  }).join('') + KATALOG_BAR;
   document.querySelectorAll('[data-sps-jump]').forEach(a => a.addEventListener('click', () =>
     document.getElementById('sps-' + a.dataset.spsJump)?.scrollIntoView({ behavior: 'smooth', block: 'start' })));
   vcLucide();
@@ -4071,6 +4075,136 @@ async function loadSpiritsPage() {
     body.innerHTML = '<div class="hws-empty">Spirits verisi yüklenemedi.</div>';
     toast('Spirits Selection yüklenemedi', 'error');
   }
+}
+
+// ── Katalog PDF: Konsept (mevcut ürünler) ve Varyasyon (2027 adayları) ─────────
+const KATALOG_BAR = `<div class="katalog-bar">
+  <div class="katalog-bar-lbl"><b>Katalog PDF</b> · şaraplar, biralar ve sert alkoller birlikte</div>
+  <button type="button" class="btn btn-secondary" onclick="katalogAc('konsept')" title="Konseptteki ürünlerin görselli kataloğu"><i data-lucide="book-open"></i>Konsept</button>
+  <button type="button" class="btn btn-primary" onclick="katalogAc('varyasyon')" title="2027'de eklenebilecek ürünler; fiyat ve tedarikçi alanlarıyla"><i data-lucide="file-plus-2"></i>Varyasyon</button>
+</div>`;
+
+async function katalogAc(tur) {
+  // Pencere tıklama anında açılmalı; veri beklendikten sonra açılırsa tarayıcı engeller
+  const w = window.open('', '_blank');
+  if (!w) return toast('Açılır pencere engellendi; tarayıcıda bu siteye izin verin', 'error');
+  w.document.write('<p style="font-family:sans-serif;padding:24px">Katalog hazırlanıyor…</p>');
+  try {
+    const al = async u => { const r = await fetch(u); if (!r.ok) throw new Error(`${u} · HTTP ${r.status}`); return r.json(); };
+    const [hw, br, sp] = await Promise.all([hwsData || al('/api/housewine'), hwbData || al('/api/beers'), spsData || al('/api/spirits')]);
+    hwsData = hw; hwbData = br; spsData = sp;
+    w.document.open();
+    w.document.write(tur === 'konsept' ? katalogKonseptHtml(hw, br, sp) : katalogVaryasyonHtml(br, sp));
+    w.document.close();
+  } catch (e) {
+    w.document.body.innerHTML = `<p style="font-family:sans-serif;padding:24px;color:#7a2d2d">Katalog hazırlanamadı: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function katalogSayfa(baslik, alt, govde, ekCss = '') {
+  const tarih = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(baslik)}</title><base href="${location.origin}/">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Mulish:wght@400;600;700&display=swap">
+<style>
+  @page { size: A4; margin: 12mm 11mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Mulish', sans-serif; font-size: 10px; color: #2b2620; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; background: #f5f3ef; border-bottom: 1px solid #e5dfd3; font-size: 12px; }
+  .bar span { flex: 1 1 260px; color: #6b6355; }
+  .bar button { font: 600 13px 'Mulish', sans-serif; padding: 9px 16px; border: 0; border-radius: 8px; background: #8b6a2e; color: #fff; cursor: pointer; }
+  main { max-width: 190mm; margin: 0 auto; padding: 14px 4px 24px; }
+  .kapak { padding: 6px 0 12px; border-bottom: 2px solid #c9a96e; margin-bottom: 6px; }
+  .kapak h1 { font: 500 26px 'Playfair Display', serif; }
+  .kapak p { margin-top: 4px; color: #6b6355; font-size: 11px; }
+  h2 { font: 500 16px 'Playfair Display', serif; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5dfd3; break-after: avoid; page-break-after: avoid; }
+  h2 small { font: 600 9px 'Mulish', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8b6a2e; margin-right: 8px; }
+  h2 em { font: 400 10px 'Mulish', sans-serif; color: #8a8172; margin-left: 8px; font-style: normal; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+  .kart { border: 1px solid #e5dfd3; border-radius: 7px; padding: 7px; break-inside: avoid; page-break-inside: avoid; background: #fff; }
+  .foto { height: 105px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .foto img { max-height: 100%; max-width: 100%; object-fit: contain; }
+  .foto .yok { width: 46px; height: 92px; border: 1px dashed #d8d0c0; border-radius: 6px; }
+  .ad { font: 500 11.5px/1.25 'Playfair Display', serif; }
+  .alt { margin-top: 3px; color: #8a8172; font-size: 9px; }
+  .rozet { display: inline-block; margin: 4px 3px 0 0; padding: 1px 6px; border-radius: 99px; background: #f3ead8; color: #8b6a2e; font-size: 8.5px; font-weight: 700; }
+  .rozet.gri { background: #efece6; color: #6b6355; }
+  @media print { .bar { display: none; } main { padding-top: 0; } }
+  @media (max-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  ${ekCss}
+</style></head><body>
+<div class="bar"><span>Yazdır penceresinde hedef olarak <b>PDF olarak kaydet</b>'i seçin.</span><button type="button" onclick="print()">PDF olarak kaydet</button></div>
+<main><div class="kapak"><h1>${escapeHtml(baslik)}</h1><p>${escapeHtml(alt)} · ${escapeHtml(tarih)}</p></div>${govde}</main>
+</body></html>`;
+}
+
+function katalogFoto(src) {
+  return `<div class="foto">${src ? `<img src="${escapeHtml(src)}" alt="">` : '<div class="yok"></div>'}</div>`;
+}
+
+function katalogKonseptHtml(hw, br, sp) {
+  const bolumler = [];
+  for (const sec of hw.sections || []) {
+    bolumler.push({ ust: 'Şarap', baslik: sec.title, not: sec.country, items: sec.wines.map(w => ({ ad: w.name, alt: sec.title, rozet: [w.type, '75 cl'], image: w.image })) });
+  }
+  const aktif = (data, sec) => {
+    const latest = data.years[data.years.length - 1];
+    return sec.items.filter(it => it.years[latest]).map(it => {
+      const { ad, boyut } = spsAd(it.name, it.display);
+      return { ad, alt: sec.title, rozet: [it.tag, boyut].filter(Boolean), image: it.image };
+    });
+  };
+  for (const sec of br.sections || []) bolumler.push({ ust: 'Bira', baslik: sec.title, items: aktif(br, sec) });
+  for (const sec of sp.sections || []) bolumler.push({ ust: 'Sert alkol', baslik: sec.title, items: aktif(sp, sec) });
+  const dolu = bolumler.filter(b => b.items.length);
+  const toplam = dolu.reduce((t, b) => t + b.items.length, 0);
+  const govde = dolu.map(b => `<h2><small>${escapeHtml(b.ust)}</small>${escapeHtml(b.baslik)}<em>${b.not ? escapeHtml(b.not) + ' · ' : ''}${b.items.length} ürün</em></h2>
+    <div class="grid">${b.items.map(it => `<div class="kart">${katalogFoto(it.image)}<div class="ad">${escapeHtml(it.ad)}</div>${it.rozet.map((r, i) => `<span class="rozet${i ? ' gri' : ''}">${escapeHtml(r)}</span>`).join('')}</div>`).join('')}</div>`).join('');
+  const yil = sp.years[sp.years.length - 1];
+  return katalogSayfa('İçecek Konsepti', `Housewine seçkisi, ${yil} yılında tüketilen biralar ve sert alkoller · ${toplam} ürün`, govde);
+}
+
+function katalogVaryasyonHtml(br, sp) {
+  const css = `
+  .vgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .vkart { display: flex; gap: 9px; border: 1px solid #e5dfd3; border-radius: 7px; padding: 8px; break-inside: avoid; page-break-inside: avoid; }
+  .vkart .foto { flex: 0 0 62px; height: 118px; margin: 0; }
+  .vkart .foto .yok { width: 36px; height: 86px; }
+  .vbilgi { flex: 1; min-width: 0; }
+  .yanina { margin-top: 4px; font-size: 9px; } .yanina b { color: #8b6a2e; }
+  .neden { margin-top: 2px; color: #6b6355; font-size: 9px; line-height: 1.4; }
+  .ref { margin-top: 3px; font-size: 9px; color: #2d6a4f; font-weight: 600; }
+  .alanlar { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 6px; }
+  .alanlar label { display: block; font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a8172; }
+  .alanlar .genis { grid-column: 1 / -1; }
+  .alanlar input { width: 100%; height: 18px; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 10px 'Mulish', sans-serif; color: #2b2620; padding: 0 3px; }
+  .ust-alan { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 10px 0 2px; }
+  .ust-alan label { font-size: 9px; font-weight: 700; color: #8a8172; text-transform: uppercase; letter-spacing: .06em; }
+  .ust-alan input { display: block; width: 200px; height: 20px; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 11px 'Mulish', sans-serif; }
+  @media (max-width: 640px) { .vgrid { grid-template-columns: 1fr; } }`;
+  const bolumler = [...(sp.sections || []).map(s => ({ ust: 'Sert alkol', s })), ...(br.sections || []).map(s => ({ ust: 'Bira', s }))]
+    .filter(b => (b.s.alternatives || []).length);
+  const toplam = bolumler.reduce((t, b) => t + b.s.alternatives.length, 0);
+  const kart = a => {
+    const lp = a.last_purchase;
+    return `<div class="vkart">${katalogFoto(a.image)}<div class="vbilgi">
+      <div class="ad">${escapeHtml(a.ad)}</div>
+      <span class="rozet">${escapeHtml(a.rol)}</span>${a.boyut ? `<span class="rozet gri">${escapeHtml(a.boyut)}</span>` : ''}${a.rakip ? '<span class="rozet gri">Rakipte var</span>' : ''}
+      <div class="yanina"><b>Yanına:</b> ${escapeHtml(a.yanina)}</div>
+      <div class="neden">${escapeHtml(a.neden)}</div>
+      ${lp?.eur != null ? `<div class="ref">Son alışımız: ${fmtEUR(lp.eur)} / L · ${escapeHtml(hwsPeriodLabel(lp.period))}</div>` : ''}
+      <div class="alanlar">
+        <div class="genis"><label>Tedarikçi</label><input value="${escapeHtml(a.tedarikci || '')}"></div>
+        <div><label>Teklif · şişe (₺)</label><input></div>
+        <div><label>Teklif · şişe (€)</label><input></div>
+        <div class="genis"><label>Not</label><input></div>
+      </div>
+    </div></div>`;
+  };
+  const govde = `<div class="ust-alan"><div><label>Hazırlayan</label><input></div><div><label>Tedarikçi görüşme tarihi</label><input></div></div>` +
+    bolumler.map(b => `<h2><small>${escapeHtml(b.ust)}</small>${escapeHtml(b.s.title)}<em>${b.s.alternatives.length} aday</em></h2>
+      <div class="vgrid">${b.s.alternatives.map(kart).join('')}</div>`).join('');
+  return katalogSayfa('2027 Varyasyon Adayları', `Konsepte eklenebilecek ${toplam} ürün · fiyat ve tedarikçi alanları doldurulabilir`, govde, css);
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
