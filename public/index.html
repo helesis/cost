@@ -3978,7 +3978,7 @@ function spsAltCard(a, sec) {
     <div class="hws-photo">${spsFotoHtml(a, a.ad)}<button type="button" class="sps-imgbtn" data-sps-img="${escapeHtml(a.key)}" title="Görsel ara / değiştir"><i data-lucide="image-plus"></i>Görsel</button></div>
     <div class="hws-info">
       <div class="hws-name">${escapeHtml(a.ad)}</div>
-      <div class="hws-badges"><span class="badge badge-gold">2027 adayı</span><span class="badge badge-gray">${escapeHtml(a.rol)}</span>${a.boyut ? `<span class="badge badge-gray">${escapeHtml(a.boyut)}</span>` : ''}</div>
+      <div class="hws-badges"><span class="badge badge-gold">2027 adayı</span><span class="badge badge-gray">${escapeHtml(a.rol)}</span>${a.rakip ? '<span class="badge badge-gray" title="Rakip otelin içki listesinde var">Rakipte var</span>' : ''}${a.boyut ? `<span class="badge badge-gray">${escapeHtml(a.boyut)}</span>` : ''}</div>
       <div class="hws-desc"><b>Yanına:</b> ${escapeHtml(a.yanina)}<br>${escapeHtml(a.neden)}${a.tedarikci ? `<span class="hws-note" style="color:var(--text-dim)">Tedarikçi: ${escapeHtml(a.tedarikci)}</span>` : ''}</div>
       ${box}
     </div>
