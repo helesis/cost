@@ -136,6 +136,9 @@
     vertical-align: middle;
   }
   .kat-pp-mom-chip .delta-icon { width: 10px; height: 10px; }
+  /* Menü kendi içinde kayar; menüdeki sürükleme içerik sayfasına geçmez */
+  #sidebar { height: 100vh; height: 100dvh; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  #sidebar .sidebar-nav { flex: 1 0 auto; overflow: visible; }
   /* Housewine Selection */
   #hws-body .hws-empty { color: var(--text-dim); font-size: 13px; }
   .hws-section { margin-bottom: 36px; }
