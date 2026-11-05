@@ -149,11 +149,20 @@
       "rakip": true
     },
     {
-      "ad": "Sierra Silver · Gold",
+      "ad": "Sierra Silver",
       "boyut": "70 cl",
       "rol": "Ev markası",
-      "yanina": "Olmeca Blanco · Olmeca Gold",
-      "neden": "Uygun fiyatlı tekila; bizde hiç alınmamış.",
+      "yanina": "Olmeca Blanco",
+      "neden": "Uygun fiyatlı beyaz tekila; bizde hiç alınmamış.",
+      "tedarikci": null,
+      "rakip": true
+    },
+    {
+      "ad": "Sierra Gold",
+      "boyut": "70 cl",
+      "rol": "Ev markası",
+      "yanina": "Olmeca Gold",
+      "neden": "Uygun fiyatlı gold tekila; Olmeca Gold 2026'da %23 pahalandı. Bizde hiç alınmamış.",
       "tedarikci": null,
       "rakip": true
     },
