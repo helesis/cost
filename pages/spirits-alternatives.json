@@ -8,7 +8,8 @@
       "rol": "Ara ürün",
       "yanina": "Chivas Regal 18",
       "neden": "Yaşı yazan, aynı aileden bir blend; litresi Chivas 18'in yaklaşık %60'ı.",
-      "tedarikci": "Pernod Ricard"
+      "tedarikci": "Pernod Ricard",
+      "rakip": true
     },
     {
       "ad": "Glen Moray Classic",
@@ -83,6 +84,24 @@
       "neden": "Yaşı yazan bourbon; bizde hiç alınmamış.",
       "tedarikci": "Suntory Global Spirits",
       "rakip": true
+    },
+    {
+      "ad": "Monkey Shoulder",
+      "boyut": "70 cl",
+      "rol": "Ara ürün",
+      "yanina": "Aberlour 12 · Glenfiddich 12",
+      "neden": "Yalnız maltlardan yapılmış harman (blended malt); 'malt' isteyen misafiri tek malttan daha uygun karşılayabilir. Bizde hiç alınmamış.",
+      "tedarikci": "William Grant & Sons",
+      "rakip": true
+    },
+    {
+      "ad": "Famous Grouse",
+      "boyut": "100 cl",
+      "rol": "Ev markası",
+      "yanina": "Highland Queen",
+      "neden": "Tanınan ucuz blend; kayıttaki tek alımın fiyatı güvenilir değil, teklif gerekir.",
+      "tedarikci": "Edrington",
+      "rakip": true
     }
   ],
   "tekila": [
@@ -93,7 +112,8 @@
       "rol": "Ev markası",
       "yanina": "Olmeca Blanco",
       "neden": "%100 agave; litresi Olmeca Blanco'dan yaklaşık %26 ucuz. Marka söylenmeyen shot ve kokteyller için.",
-      "tedarikci": "Brown-Forman (Jack Daniel's ile aynı)"
+      "tedarikci": "Brown-Forman (Jack Daniel's ile aynı)",
+      "rakip": true
     },
     {
       "ad": "el Jimador Reposado",
@@ -175,6 +195,16 @@
       "yanina": "Absolut",
       "neden": "Premium algılı Rus votkası; Platinum serisinden belirgin ucuz olmalı, teklif alınmalı.",
       "tedarikci": "Roust",
+      "rakip": true
+    },
+    {
+      "ad": "Absolut Elyx",
+      "stok_no": "2007002050",
+      "boyut": "70 cl",
+      "rol": "Ara ürün",
+      "yanina": "Belvedere",
+      "neden": "Bakır şişeli lüks votka; son alışta Belvedere'den yaklaşık %10 ucuz.",
+      "tedarikci": "Pernod Ricard",
       "rakip": true
     }
   ],
@@ -315,6 +345,15 @@
       "yanina": "St-Rémy · Cemiyet",
       "neden": "İspanyol brendi; konyak ile ev brendisi arasında yaşı yazan seçenek.",
       "tedarikci": "Torres"
+    },
+    {
+      "ad": "Rémy Martin VS",
+      "boyut": "70 cl",
+      "rol": "Ara ürün",
+      "yanina": "Martell VS · Hennessy",
+      "neden": "Üçüncü bir VS konyak; Martell VS'nin yüksek alış fiyatına karşı teklif. Kayıttaki 2024 fiyatı güvenilir değil.",
+      "tedarikci": "Rémy Cointreau",
+      "rakip": true
     }
   ],
   "raki": [
