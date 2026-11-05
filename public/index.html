@@ -4272,7 +4272,7 @@ function katalogVaryasyonHtml(br, sp) {
       <div class="neden">${escapeHtml(a.neden)}</div>
       ${lp?.eur != null ? `<div class="ref">Son alışımız: ${fmtEUR(lp.eur)} / L · ${escapeHtml(hwsPeriodLabel(lp.period))}</div>` : ''}
       <div class="alanlar">
-        <div class="genis"><label>Tedarikçi</label><input value="${escapeHtml(a.tedarikci || '')}"></div>
+        <div class="genis"><label>Tedarikçi</label><input></div>
         <div><label>Teklif · şişe (₺)</label><input></div>
         <div><label>Teklif · şişe (€)</label><input></div>
         <div class="genis"><label>Not</label><input></div>
