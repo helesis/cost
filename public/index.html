@@ -4103,40 +4103,99 @@ async function katalogAc(tur) {
   }
 }
 
-function katalogSayfa(baslik, alt, govde, ekCss = '') {
+// A4 sayfa: 297 mm; üst/alt boşluk 12 mm → içerik 273 mm. Kart yükseklikleri sabit, böylece sayfalar önceden dizilir
+const KATALOG_SAYFA_MM = 273;
+
+/** Başlık ve kart satırlarını A4 sayfalara dizer; başlık bir sonraki satırıyla aynı sayfada kalır */
+function katalogPaketle(bloklar, ilkSayfaMm) {
+  const sayfalar = [[]];
+  let kalan = KATALOG_SAYFA_MM - ilkSayfaMm;
+  bloklar.forEach((b, i) => {
+    const ihtiyac = b.mm + (b.baslik && bloklar[i + 1] ? bloklar[i + 1].mm : 0);
+    if (ihtiyac > kalan && sayfalar[sayfalar.length - 1].length) {
+      sayfalar.push([]);
+      kalan = KATALOG_SAYFA_MM;
+    }
+    sayfalar[sayfalar.length - 1].push(b.html);
+    kalan -= b.mm;
+  });
+  return sayfalar.map(s => s.join(''));
+}
+
+function katalogSatirlar(kartlar, sutun, satirMm, sinif) {
+  const out = [];
+  for (let i = 0; i < kartlar.length; i += sutun) out.push({ mm: satirMm, html: `<div class="${sinif}">${kartlar.slice(i, i + sutun).join('')}</div>` });
+  return out;
+}
+
+function katalogSayfa(baslik, alt, ust, sayfalar, ekCss = '') {
   const tarih = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  const dosya = `${baslik} ${new Date().toISOString().slice(0, 10)}.pdf`;
+  const govde = sayfalar.map((s, i) => `<section class="sayfa">${i ? '' : `<div class="kapak"><h1>${escapeHtml(baslik)}</h1><p>${escapeHtml(alt)} · ${escapeHtml(tarih)}</p></div>${ust}`}${s}<div class="sayfa-no">${i + 1} / ${sayfalar.length}</div></section>`).join('');
+  // Telefonda A4 sayfa ekrana sığsın diye sabit genişlik
+  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=840">
 <title>${escapeHtml(baslik)}</title><base href="${location.origin}/">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&family=Mulish:wght@400;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>
 <style>
-  @page { size: A4; margin: 12mm 11mm; }
+  @page { size: A4; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Mulish', sans-serif; font-size: 10px; color: #2b2620; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; background: #f5f3ef; border-bottom: 1px solid #e5dfd3; font-size: 12px; }
-  .bar span { flex: 1 1 260px; color: #6b6355; }
-  .bar button { font: 600 13px 'Mulish', sans-serif; padding: 9px 16px; border: 0; border-radius: 8px; background: #8b6a2e; color: #fff; cursor: pointer; }
-  main { max-width: 190mm; margin: 0 auto; padding: 14px 4px 24px; }
-  .kapak { padding: 6px 0 12px; border-bottom: 2px solid #c9a96e; margin-bottom: 6px; }
-  .kapak h1 { font: 500 26px 'Playfair Display', serif; }
-  .kapak p { margin-top: 4px; color: #6b6355; font-size: 11px; }
-  h2 { font: 500 16px 'Playfair Display', serif; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e5dfd3; break-after: avoid; page-break-after: avoid; }
-  h2 small { font: 600 9px 'Mulish', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8b6a2e; margin-right: 8px; }
-  h2 em { font: 400 10px 'Mulish', sans-serif; color: #8a8172; margin-left: 8px; font-style: normal; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
-  .kart { border: 1px solid #e5dfd3; border-radius: 7px; padding: 7px; break-inside: avoid; page-break-inside: avoid; background: #fff; }
-  .foto { height: 105px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  html { background: #e9e5dd; }
+  body { font-family: 'Mulish', sans-serif; font-size: 10px; color: #2b2620; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; background: #f5f3ef; border-bottom: 1px solid #e5dfd3; font-size: 12px; }
+  .bar span { flex: 1 1 240px; color: #6b6355; }
+  .bar button { font: 600 13px 'Mulish', sans-serif; padding: 9px 16px; border: 1px solid #8b6a2e; border-radius: 8px; background: #8b6a2e; color: #fff; cursor: pointer; }
+  .bar button.ikincil { background: #fff; color: #8b6a2e; }
+  .bar button:disabled { opacity: .6; cursor: wait; }
+  .sayfa { position: relative; width: 210mm; height: 297mm; margin: 14px auto; padding: 12mm 11mm; overflow: hidden; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
+  .sayfa-no { position: absolute; right: 11mm; bottom: 6mm; font-size: 8px; color: #a39a8a; }
+  .kapak { height: 20mm; border-bottom: 2px solid #c9a96e; }
+  .kapak h1 { font: 500 24px/1.2 'Playfair Display', serif; }
+  .kapak p { margin-top: 3px; color: #6b6355; font-size: 10.5px; }
+  h2 { height: 11mm; padding-top: 4mm; font: 500 15px/1 'Playfair Display', serif; border-bottom: 1px solid #e5dfd3; }
+  h2 small { font: 600 8.5px 'Mulish', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #8b6a2e; margin-right: 8px; }
+  h2 em { font: 400 9.5px 'Mulish', sans-serif; color: #8a8172; margin-left: 8px; font-style: normal; }
+  .satir { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2mm; height: 52mm; padding-top: 2mm; }
+  .kart { height: 50mm; overflow: hidden; border: 1px solid #e5dfd3; border-radius: 6px; padding: 2mm; background: #fff; }
+  .foto { height: 30mm; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5mm; }
   .foto img { max-height: 100%; max-width: 100%; object-fit: contain; }
-  .foto .yok { width: 46px; height: 92px; border: 1px dashed #d8d0c0; border-radius: 6px; }
-  .ad { font: 500 11.5px/1.25 'Playfair Display', serif; }
-  .alt { margin-top: 3px; color: #8a8172; font-size: 9px; }
-  .rozet { display: inline-block; margin: 4px 3px 0 0; padding: 1px 6px; border-radius: 99px; background: #f3ead8; color: #8b6a2e; font-size: 8.5px; font-weight: 700; }
+  .foto .yok { width: 12mm; height: 26mm; border: 1px dashed #d8d0c0; border-radius: 5px; }
+  .ad { font: 500 10.5px/1.2 'Playfair Display', serif; max-height: 2.4em; overflow: hidden; }
+  .rozet { display: inline-block; margin: 3px 3px 0 0; padding: 1px 5px; border-radius: 99px; background: #f3ead8; color: #8b6a2e; font-size: 8px; font-weight: 700; }
   .rozet.gri { background: #efece6; color: #6b6355; }
-  @media print { .bar { display: none; } main { padding-top: 0; } }
-  @media (max-width: 640px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media print { html { background: #fff; } .bar { display: none; } .sayfa { margin: 0; box-shadow: none; break-after: page; page-break-after: always; } }
   ${ekCss}
 </style></head><body>
-<div class="bar"><span>Yazdır penceresinde hedef olarak <b>PDF olarak kaydet</b>'i seçin.</span><button type="button" onclick="print()">PDF olarak kaydet</button></div>
-<main><div class="kapak"><h1>${escapeHtml(baslik)}</h1><p>${escapeHtml(alt)} · ${escapeHtml(tarih)}</p></div>${govde}</main>
+<div class="bar"><span>PDF doğrudan iner. Varyasyon'da alanlara yazdıklarınız PDF'e geçer.</span>
+  <button type="button" id="pdf-btn" onclick="pdfIndir()">PDF indir</button>
+  <button type="button" class="ikincil" onclick="print()">Yazdır</button></div>
+${govde}
+<script>
+async function pdfIndir() {
+  const btn = document.getElementById('pdf-btn');
+  btn.disabled = true;
+  try {
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    await Promise.all([...document.images].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; })));
+    const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+    const sayfalar = [...document.querySelectorAll('.sayfa')];
+    for (let i = 0; i < sayfalar.length; i++) {
+      btn.textContent = 'Sayfa ' + (i + 1) + ' / ' + sayfalar.length + '…';
+      const s = sayfalar[i];
+      const tuval = await html2canvas(s, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
+      if (i) pdf.addPage();
+      pdf.addImage(tuval.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
+    }
+    pdf.save(${JSON.stringify(dosya)});
+    btn.textContent = 'PDF indir';
+  } catch (e) {
+    alert('PDF oluşturulamadı: ' + e.message);
+    btn.textContent = 'PDF indir';
+  }
+  btn.disabled = false;
+}
+<\/script>
 </body></html>`;
 }
 
@@ -4144,46 +4203,51 @@ function katalogFoto(src) {
   return `<div class="foto">${src ? `<img src="${escapeHtml(src)}" alt="">` : '<div class="yok"></div>'}</div>`;
 }
 
+function katalogBaslik(ust, baslik, not) {
+  return { baslik: true, mm: 11, html: `<h2><small>${escapeHtml(ust)}</small>${escapeHtml(baslik)}<em>${escapeHtml(not)}</em></h2>` };
+}
+
 function katalogKonseptHtml(hw, br, sp) {
   const bolumler = [];
   for (const sec of hw.sections || []) {
-    bolumler.push({ ust: 'Şarap', baslik: sec.title, not: sec.country, items: sec.wines.map(w => ({ ad: w.name, alt: sec.title, rozet: [w.type, '75 cl'], image: w.image })) });
+    bolumler.push({ ust: 'Şarap', baslik: sec.title, not: sec.country, items: sec.wines.map(w => ({ ad: w.name, rozet: [w.type, '75 cl'], image: w.image })) });
   }
   const aktif = (data, sec) => {
     const latest = data.years[data.years.length - 1];
     return sec.items.filter(it => it.years[latest]).map(it => {
       const { ad, boyut } = spsAd(it.name, it.display);
-      return { ad, alt: sec.title, rozet: [it.tag, boyut].filter(Boolean), image: it.image };
+      return { ad, rozet: [it.tag, boyut].filter(Boolean), image: it.image };
     });
   };
   for (const sec of br.sections || []) bolumler.push({ ust: 'Bira', baslik: sec.title, items: aktif(br, sec) });
   for (const sec of sp.sections || []) bolumler.push({ ust: 'Sert alkol', baslik: sec.title, items: aktif(sp, sec) });
   const dolu = bolumler.filter(b => b.items.length);
   const toplam = dolu.reduce((t, b) => t + b.items.length, 0);
-  const govde = dolu.map(b => `<h2><small>${escapeHtml(b.ust)}</small>${escapeHtml(b.baslik)}<em>${b.not ? escapeHtml(b.not) + ' · ' : ''}${b.items.length} ürün</em></h2>
-    <div class="grid">${b.items.map(it => `<div class="kart">${katalogFoto(it.image)}<div class="ad">${escapeHtml(it.ad)}</div>${it.rozet.map((r, i) => `<span class="rozet${i ? ' gri' : ''}">${escapeHtml(r)}</span>`).join('')}</div>`).join('')}</div>`).join('');
+  const bloklar = dolu.flatMap(b => [
+    katalogBaslik(b.ust, b.baslik, `${b.not ? b.not + ' · ' : ''}${b.items.length} ürün`),
+    ...katalogSatirlar(b.items.map(it => `<div class="kart">${katalogFoto(it.image)}<div class="ad">${escapeHtml(it.ad)}</div>${it.rozet.map((r, i) => `<span class="rozet${i ? ' gri' : ''}">${escapeHtml(r)}</span>`).join('')}</div>`), 4, 52, 'satir'),
+  ]);
   const yil = sp.years[sp.years.length - 1];
-  return katalogSayfa('İçecek Konsepti', `Housewine seçkisi, ${yil} yılında tüketilen biralar ve sert alkoller · ${toplam} ürün`, govde);
+  return katalogSayfa('İçecek Konsepti', `Housewine seçkisi, ${yil} yılında tüketilen biralar ve sert alkoller · ${toplam} ürün`, '', katalogPaketle(bloklar, 20));
 }
 
 function katalogVaryasyonHtml(br, sp) {
   const css = `
-  .vgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .vkart { display: flex; gap: 9px; border: 1px solid #e5dfd3; border-radius: 7px; padding: 8px; break-inside: avoid; page-break-inside: avoid; }
-  .vkart .foto { flex: 0 0 62px; height: 118px; margin: 0; }
-  .vkart .foto .yok { width: 36px; height: 86px; }
+  .vsatir { display: grid; grid-template-columns: 1fr 1fr; gap: 2mm; height: 63mm; padding-top: 2mm; }
+  .vkart { display: flex; gap: 2.5mm; height: 61mm; overflow: hidden; border: 1px solid #e5dfd3; border-radius: 6px; padding: 2.2mm; }
+  .vkart .foto { flex: 0 0 16mm; height: 34mm; margin: 0; }
+  .vkart .foto .yok { width: 9mm; height: 24mm; }
   .vbilgi { flex: 1; min-width: 0; }
-  .yanina { margin-top: 4px; font-size: 9px; } .yanina b { color: #8b6a2e; }
-  .neden { margin-top: 2px; color: #6b6355; font-size: 9px; line-height: 1.4; }
-  .ref { margin-top: 3px; font-size: 9px; color: #2d6a4f; font-weight: 600; }
-  .alanlar { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 6px; }
-  .alanlar label { display: block; font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a8172; }
+  .yanina { margin-top: 3px; font-size: 8.5px; } .yanina b { color: #8b6a2e; }
+  .neden { margin-top: 2px; color: #6b6355; font-size: 8.5px; line-height: 1.35; max-height: 4.05em; overflow: hidden; }
+  .ref { margin-top: 2px; font-size: 8.5px; color: #2d6a4f; font-weight: 600; }
+  .alanlar { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm 3mm; margin-top: 2mm; }
+  .alanlar label { display: block; font-size: 7px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8a8172; }
   .alanlar .genis { grid-column: 1 / -1; }
-  .alanlar input { width: 100%; height: 18px; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 10px 'Mulish', sans-serif; color: #2b2620; padding: 0 3px; }
-  .ust-alan { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 10px 0 2px; }
-  .ust-alan label { font-size: 9px; font-weight: 700; color: #8a8172; text-transform: uppercase; letter-spacing: .06em; }
-  .ust-alan input { display: block; width: 200px; height: 20px; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 11px 'Mulish', sans-serif; }
-  @media (max-width: 640px) { .vgrid { grid-template-columns: 1fr; } }`;
+  .alanlar input { display: block; width: 100%; height: 5mm; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 9.5px 'Mulish', sans-serif; color: #2b2620; padding: 0 3px; }
+  .ust-alan { display: flex; gap: 8mm; height: 14mm; padding-top: 3mm; }
+  .ust-alan label { font-size: 8px; font-weight: 700; color: #8a8172; text-transform: uppercase; letter-spacing: .06em; }
+  .ust-alan input { display: block; width: 60mm; height: 6mm; border: 0; border-bottom: 1px solid #b9b0a0; background: #fbfaf7; font: 600 10.5px 'Mulish', sans-serif; }`;
   const bolumler = [...(sp.sections || []).map(s => ({ ust: 'Sert alkol', s })), ...(br.sections || []).map(s => ({ ust: 'Bira', s }))]
     .filter(b => (b.s.alternatives || []).length);
   const toplam = bolumler.reduce((t, b) => t + b.s.alternatives.length, 0);
@@ -4203,10 +4267,12 @@ function katalogVaryasyonHtml(br, sp) {
       </div>
     </div></div>`;
   };
-  const govde = `<div class="ust-alan"><div><label>Hazırlayan</label><input></div><div><label>Tedarikçi görüşme tarihi</label><input></div></div>` +
-    bolumler.map(b => `<h2><small>${escapeHtml(b.ust)}</small>${escapeHtml(b.s.title)}<em>${b.s.alternatives.length} aday</em></h2>
-      <div class="vgrid">${b.s.alternatives.map(kart).join('')}</div>`).join('');
-  return katalogSayfa('2027 Varyasyon Adayları', `Konsepte eklenebilecek ${toplam} ürün · fiyat ve tedarikçi alanları doldurulabilir`, govde, css);
+  const bloklar = bolumler.flatMap(b => [
+    katalogBaslik(b.ust, b.s.title, `${b.s.alternatives.length} aday`),
+    ...katalogSatirlar(b.s.alternatives.map(kart), 2, 63, 'vsatir'),
+  ]);
+  const ust = '<div class="ust-alan"><div><label>Hazırlayan</label><input></div><div><label>Tedarikçi görüşme tarihi</label><input></div></div>';
+  return katalogSayfa('2027 Varyasyon Adayları', `Konsepte eklenebilecek ${toplam} ürün · fiyat ve tedarikçi alanları doldurulabilir`, ust, katalogPaketle(bloklar, 34), css);
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
