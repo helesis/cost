@@ -4172,6 +4172,16 @@ function katalogSayfa(baslik, alt, ust, sayfalar, ekCss = '') {
   <button type="button" class="ikincil" onclick="print()">Yazdır</button></div>
 ${govde}
 <script>
+async function gorselGom(im) {
+  if (!im.src || im.src.startsWith('data:')) return;
+  try {
+    const r = await fetch(im.src, { credentials: 'include' });
+    if (!r.ok) return;
+    const b = await r.blob();
+    const veri = await new Promise((ok, hata) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = hata; fr.readAsDataURL(b); });
+    await new Promise(ok => { im.onload = im.onerror = ok; im.src = veri; });
+  } catch (_) { /* görsel alınamazsa kutu boş kalır */ }
+}
 async function pdfIndir() {
   const btn = document.getElementById('pdf-btn');
   btn.disabled = true;
@@ -4183,6 +4193,8 @@ async function pdfIndir() {
     for (let i = 0; i < sayfalar.length; i++) {
       btn.textContent = 'Sayfa ' + (i + 1) + ' / ' + sayfalar.length + '…';
       const s = sayfalar[i];
+      // Görseller oturum çerezi isteyen adreslerden gelir; html2canvas kendi isteğinde çerez göndermez, önce data: adrese çevrilir
+      await Promise.all([...s.querySelectorAll('img')].map(gorselGom));
       const tuval = await html2canvas(s, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
       if (i) pdf.addPage();
       pdf.addImage(tuval.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, 210, 297);
