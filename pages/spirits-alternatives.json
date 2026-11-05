@@ -309,11 +309,20 @@
       "tedarikci": "Diageo"
     },
     {
-      "ad": "Captain Morgan Gold · Black",
+      "ad": "Captain Morgan Gold",
       "boyut": "70 cl",
       "rol": "Fiyat alternatifi",
       "yanina": "Bacardí · Bacardí Spiced",
-      "neden": "Koyu rom; son alış 2022'de (Gold 7,11 €/L), güncel teklif gerekir.",
+      "neden": "Altın rom; son alış 2022'de 7,11 €/L, güncel teklif gerekir.",
+      "tedarikci": "Diageo",
+      "rakip": true
+    },
+    {
+      "ad": "Captain Morgan Black",
+      "boyut": "70 cl",
+      "rol": "Fiyat alternatifi",
+      "yanina": "Bacardí · Bacardí Spiced",
+      "neden": "Koyu (black) rom; bizde hiç alınmamış, teklif gerekir.",
       "tedarikci": "Diageo",
       "rakip": true
     },
@@ -415,10 +424,18 @@
       "tedarikci": null
     },
     {
-      "ad": "Cinzano Bianco · Rosso",
+      "ad": "Cinzano Bianco",
       "boyut": "100 cl",
       "rol": "Ara ürün",
-      "yanina": "Martini",
+      "yanina": "Martini Bianco",
+      "neden": "Tanınmış İtalyan vermut; Campari ile birlikte pazarlık edilebilir.",
+      "tedarikci": "Campari Group"
+    },
+    {
+      "ad": "Cinzano Rosso",
+      "boyut": "100 cl",
+      "rol": "Ara ürün",
+      "yanina": "Martini Rosso",
       "neden": "Tanınmış İtalyan vermut; Campari ile birlikte pazarlık edilebilir.",
       "tedarikci": "Campari Group"
     },
