@@ -626,6 +626,20 @@
      "price_2027": null
     },
     {
+     "name": "Don Simón Nature Cabernet Sauvignon",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Don Simón Nature Cabernet Sauvignon",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/simon-18702-nature-cabernet-sauvignon/w/8833621"
+     },
+     "description": "Siyah frenk üzümü ve kırmızı meyve notalı, dengeli bir Cabernet Sauvignon.",
+     "note": "Yeni seri · henüz alış yok",
+     "stok_no": [],
+     "price_2027": null
+    },
+    {
      "name": "Don Simón Nature Sauvignon Blanc",
      "type": "Beyaz",
      "image": null,
