@@ -1076,6 +1076,87 @@
    ]
   },
   {
+   "title": "Don Simón Nature",
+   "country": "İspanya",
+   "wines": [
+    {
+     "name": "Don Simón Nature Merlot",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Don Simón Nature Merlot",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/simon-18702-nature-merlot/w/8691835"
+     },
+     "description": "Erik ve koyu kiraz notalı, yumuşak tanenli İspanyol Merlot.",
+     "note": "Yeni seri · henüz alış yok",
+     "stock": [],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": null
+    },
+    {
+     "name": "Don Simón Nature Sauvignon Blanc",
+     "type": "Beyaz",
+     "image": null,
+     "image_alt": "Don Simón Nature Sauvignon Blanc",
+     "vivino": {
+      "rating": 3.5,
+      "url": "https://www.vivino.com/en/simon-18702-nature-sauvignon-blanc/w/9387902"
+     },
+     "description": "Narenciye ve yeşil meyve notalarıyla ferah, hafif bir beyaz.",
+     "note": "Yeni seri · henüz alış yok",
+     "stock": [],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": null
+    },
+    {
+     "name": "Don Simón Nature Tempranillo",
+     "type": "Kırmızı",
+     "image": null,
+     "image_alt": "Don Simón Nature Tempranillo",
+     "vivino": {
+      "rating": 3.4,
+      "url": "https://www.vivino.com/en/simon-18702-nature-tempranillo/w/8707261"
+     },
+     "description": "Olgun koyu meyve, hafif karamel ve kakao notalı Tempranillo.",
+     "note": "Yeni seri · henüz alış yok",
+     "stock": [],
+     "bottles": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "avg_eur": {
+      "2024": null,
+      "2025": null,
+      "2026": null
+     },
+     "price_2027": null,
+     "last_purchase": null
+    }
+   ]
+  },
+  {
    "title": "Köpüren Şaraplar",
    "country": "İtalya · Türkiye · Ukrayna",
    "wines": [
