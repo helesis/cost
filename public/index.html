@@ -3656,7 +3656,7 @@ function hwsPeriodLabel(p) {
 }
 
 function hwsCard(w) {
-  const years = ['2024', '2025', '2026'];
+  const years = hwsData.years;
   const cell = (v, f) => (v == null ? '<span style="color:var(--text-xdim)">—</span>' : f(v));
   const vivino = !w.vivino
     ? '<span class="badge badge-gray">Vivino: doğrulanmadı</span>'

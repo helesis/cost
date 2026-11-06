@@ -186,15 +186,94 @@ app.get('/index.html', (req, res) => {
 /** Eski kısayol → oturumsuz ise giriş sayfası */
 app.get('/login', (req, res) => res.redirect(302, '/login.html'));
 
+/** Şarap stok kalemleri (ERP 2008/2009): son 3 yıl yıllık litre ve €/L, son alış, güncel ERP adı */
+async function sarapKalemleri() {
+  const filtre = `LEFT(kategori, 4) IN ('2008', '2009') AND tip = 'icenek'`;
+  const { rows } = await pool.query(`
+    WITH base AS (
+      SELECT stok_no, stok_mali, yil, ay_no, tarih_str, tuk_miktar, birim_fiyat, kur, tutar_eur
+      FROM fb_cost.tuketim
+      WHERE ${filtre} AND ${SQL_EXC_FINANS_PP}
+        AND yil >= (SELECT MAX(yil) - 2 FROM fb_cost.tuketim WHERE ${filtre})
+    ),
+    son AS (
+      SELECT DISTINCT ON (stok_no) stok_no, stok_mali FROM base ORDER BY stok_no, yil DESC, ay_no DESC
+    ),
+    alis AS (
+      SELECT DISTINCT ON (stok_no) stok_no, yil, ay_no, tarih_str AS period, birim_fiyat, kur
+      FROM base WHERE birim_fiyat > 0 ORDER BY stok_no, yil DESC, ay_no DESC
+    ),
+    yillik AS (
+      SELECT stok_no, yil, SUM(tuk_miktar) AS litre,
+             SUM(tuk_miktar) FILTER (WHERE birim_fiyat > 0) AS litre_fiyatli,
+             SUM(tutar_eur) FILTER (WHERE birim_fiyat > 0) AS eur
+      FROM base GROUP BY stok_no, yil
+    )
+    SELECT s.stok_no, regexp_replace(trim(both ' ,' from s.stok_mali), '\\s+', ' ', 'g') AS name,
+           json_object_agg(y.yil, json_build_object('litre', y.litre, 'litre_fiyatli', y.litre_fiyatli, 'eur', y.eur)) AS years,
+           a.yil AS lp_yil, a.ay_no AS lp_ay, a.period AS lp_period, a.birim_fiyat AS lp_tl_l, a.kur AS lp_kur
+    FROM son s
+    JOIN yillik y USING (stok_no)
+    LEFT JOIN alis a USING (stok_no)
+    GROUP BY s.stok_no, s.stok_mali, a.yil, a.ay_no, a.period, a.birim_fiyat, a.kur
+  `);
+  const { rows: per } = await pool.query(`
+    SELECT yil, MIN(ay_no) AS ilk, MAX(ay_no) AS son FROM fb_cost.tuketim
+    WHERE ${filtre} GROUP BY yil ORDER BY yil DESC LIMIT 3
+  `);
+  const years = per.map(p => String(p.yil)).reverse();
+  const periods = Object.fromEntries(per.map(p => [String(p.yil), [p.ilk, p.son]]));
+  return { years, periods, kalemler: Object.fromEntries(rows.map(r => [r.stok_no, r])) };
+}
+
+/** Bir şarabın stok numaralarını birleştirir: yıllık şişe, ağırlıklı €/şişe ve en son alış (şişe = 0,75 L) */
+function sarapIstatistik(stokNolar, kalemler, years) {
+  const SISE = 0.75;
+  const ks = (stokNolar || []).map(n => kalemler[n]).filter(Boolean);
+  const bottles = {};
+  const avgEur = {};
+  for (const y of years) {
+    let litre = 0, litreFiyatli = 0, eur = 0;
+    for (const k of ks) {
+      const v = k.years[y];
+      if (!v) continue;
+      litre += Number(v.litre) || 0;
+      litreFiyatli += Number(v.litre_fiyatli) || 0;
+      eur += Number(v.eur) || 0;
+    }
+    bottles[y] = litre ? Math.round(litre / SISE) : null;
+    avgEur[y] = litreFiyatli ? Math.round((eur / litreFiyatli) * SISE * 100) / 100 : null;
+  }
+  const son = ks.filter(k => k.lp_period)
+    .sort((a, b) => b.lp_yil - a.lp_yil || b.lp_ay - a.lp_ay)[0];
+  let lastPurchase = null;
+  if (son) {
+    const tl = Number(son.lp_tl_l) * SISE;
+    const kur = Number(son.lp_kur);
+    lastPurchase = {
+      period: son.lp_period,
+      tl: Math.round(tl * 100) / 100,
+      eur: kur ? Math.round((tl / kur) * 100) / 100 : null,
+      rate: kur || null,
+    };
+  }
+  return { stock: [...new Set(ks.map(k => k.name))], bottles, avg_eur: avgEur, last_purchase: lastPurchase };
+}
+
 /** Housewine Selection sekmesi verisi — maliyet verisi içerdiği için public/ dışında; /api/ oturum kontrolünden geçer */
-app.get('/api/housewine', (req, res) => {
+app.get('/api/housewine', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   let veri;
+  let db;
   try {
     veri = JSON.parse(fs.readFileSync(path.join(__dirname, '../pages/housewine.json'), 'utf8'));
+    db = await sarapKalemleri();
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
+  const AY = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  veri.years = db.years;
+  veri.meta.periods = Object.fromEntries(Object.entries(db.periods).map(([y, [a, b]]) => [y, `${AY[a - 1]}–${AY[b - 1]}`]));
   // Her şarap için görsel anahtarı (repodaki görselin dosya adı); uygulamadan seçilen görsel öne geçer
   const TR = { ı: 'i', ğ: 'g', ü: 'u', ş: 's', ö: 'o', ç: 'c', é: 'e', ó: 'o' };
   for (const sec of veri.sections || []) {
@@ -205,6 +284,7 @@ app.get('/api/housewine', (req, res) => {
         .replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
       w.image_default = w.image || null;
       w.image = spiritsImagePath(w.img_key, w.image_default);
+      Object.assign(w, sarapIstatistik(w.stok_no, db.kalemler, db.years));
     }
   }
   res.json(veri);

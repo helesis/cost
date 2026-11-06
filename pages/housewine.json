@@ -7,13 +7,8 @@
    "type": "Döviz satış",
    "value": 56.2588
   },
-  "periods": {
-   "2024": "Mar–Ara",
-   "2025": "Mar–Kas",
-   "2026": "Mar–Eki"
-  },
   "bottle_cl": 75,
-  "notes": "Tüketim ve ortalama € fiyat: fb_cost.tuketim (ay sonu kayıtları, sıfır fiyatlı satırlar hariç, tüketime göre ağırlıklı). Sıralama: bölüm ortalama fiyatına göre, köpürenler en sonda. Son alış: o ürünün sıfırdan büyük birim fiyatlı en son ay kaydı (birim_fiyat × 0,75; € için o ayın kuru)."
+  "notes": "Şarap listesi, açıklama, Vivino ve 2027 fiyatı bu dosyada; tüketim, ortalama € ve son alış her açılışta fb_cost.tuketim'den stok numarasıyla hesaplanır (son 3 yıl, sıfır fiyatlı satırlar ortalamaya girmez, tüketime göre ağırlıklı). Son alış: sıfırdan büyük birim fiyatlı en son ay kaydı (birim_fiyat × 0,75; € için o ayın kuru). Sıralama: bölüm ortalama fiyatına göre, köpürenler en sonda."
  },
  "sections": [
   {
@@ -31,28 +26,12 @@
      },
      "description": "Yumuşak içimli, kırmızı meyve karakterli Merlot.",
      "note": null,
-     "stock": [
-      "SARTORI MERLOT KIRIMIZI 75 cl"
+     "stok_no": [
+      "2008002090"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": 2881
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": 5.01
-     },
      "price_2027": {
       "tl": 352,
       "eur": 6.26
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 270.94,
-      "eur": 4.9,
-      "rate": 55.2592
      }
     }
    ]
@@ -72,29 +51,13 @@
      },
      "description": "Vişne ve kırmızı meyve aromaları, yumuşak tanenler.",
      "note": null,
-     "stock": [
-      "LAMBERTI  MERLOT KIRIMIZI 75 cl",
-      "LAMBERTI MERLOT TREVENEZIE IGT KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002081",
+      "2008002085"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 5950,
-      "2026": 282
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 4.89,
-      "2026": 5.77
-     },
      "price_2027": {
       "tl": 420,
       "eur": 7.47
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 320.0,
-      "eur": 5.79,
-      "rate": 55.2592
      }
     },
     {
@@ -108,28 +71,12 @@
      },
      "description": "Yeşil elma, armut ve narenciye notalarıyla ferah bir beyaz.",
      "note": null,
-     "stock": [
-      "LAMBERTI PINOT GRIGIO BEYAZ 75 cl"
+     "stok_no": [
+      "2008005033"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 3950,
-      "2026": 2760
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 4.68,
-      "2026": 5.44
-     },
      "price_2027": {
       "tl": 420,
       "eur": 7.47
-     },
-     "last_purchase": {
-      "period": "2026-06",
-      "tl": 285.0,
-      "eur": 5.35,
-      "rate": 53.247
      }
     },
     {
@@ -143,31 +90,15 @@
      },
      "description": "Narin kırmızı meyve dokunuşları ve taze bitiş.",
      "note": null,
-     "stock": [
-      "LAMBERTI BLASH PINOT GRIGO BEYAZ 75 cl",
-      "LAMBERTI BLASH PINOT GRIGO BEYAZ 75 cl",
-      "LAMBERTI PINOT GRIGIO BLUSH 75 CL (R)",
-      "LAMBERTI PINOT GRIGIO BLUSH 75 CL (R)"
+     "stok_no": [
+      "2008005082",
+      "2008006149",
+      "2008008061",
+      "2008009107"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 6508,
-      "2026": 337
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 4.98,
-      "2026": 5.48
-     },
      "price_2027": {
       "tl": 420,
       "eur": 7.47
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 320.0,
-      "eur": 5.79,
-      "rate": 55.2592
      }
     }
    ]
@@ -187,28 +118,12 @@
      },
      "description": "Kırmızı meyve karakterli kırmızı şarap.",
      "note": null,
-     "stock": [
-      "GATO NEGRO CABERNET SAUVIGNON 75 CL (K)"
+     "stok_no": [
+      "2008002054"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 2899,
-      "2026": 3171
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 4.69,
-      "2026": 4.75
-     },
      "price_2027": {
       "tl": 317,
       "eur": 5.63
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 290.66,
-      "eur": 5.26,
-      "rate": 55.2592
      }
     },
     {
@@ -222,29 +137,13 @@
      },
      "description": "Sarı meyve ve narenciye karakteri.",
      "note": null,
-     "stock": [
-      "GATO NEGRO CHARDONNAY 75 CL (B)",
-      "GATO NEGRO CHARDONNAY 75 CL (B)"
+     "stok_no": [
+      "2008005085",
+      "2008006438"
      ],
-     "bottles": {
-      "2024": 6,
-      "2025": 4751,
-      "2026": 4751
-     },
-     "avg_eur": {
-      "2024": 5.83,
-      "2025": 4.65,
-      "2026": 5.02
-     },
      "price_2027": {
       "tl": 317,
       "eur": 5.63
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 304.48,
-      "eur": 5.51,
-      "rate": 55.2592
      }
     },
     {
@@ -258,28 +157,12 @@
      },
      "description": "Ferah ve meyvemsi roze.",
      "note": null,
-     "stock": [
-      "GATO NEGRO ROSE 75 CL (R)"
+     "stok_no": [
+      "2008008059"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 1634,
-      "2026": 2811
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 4.67,
-      "2026": 4.99
-     },
      "price_2027": {
       "tl": 317,
       "eur": 5.63
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 301.8,
-      "eur": 5.46,
-      "rate": 55.2592
      }
     }
    ]
@@ -299,28 +182,12 @@
      },
      "description": "Cabernet Sauvignon, Merlot, Cabernet Franc, Petit Verdot harmanı; Eceabat, Çanakkale (Vinero Bağcılık).",
      "note": null,
-     "stock": [
-      "PORTO DIVERTI KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002076"
      ],
-     "bottles": {
-      "2024": 5247,
-      "2025": 5194,
-      "2026": 4954
-     },
-     "avg_eur": {
-      "2024": 4.95,
-      "2025": 3.99,
-      "2026": 4.37
-     },
      "price_2027": {
       "tl": 257,
       "eur": 4.57
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 250.29,
-      "eur": 4.53,
-      "rate": 55.2592
      }
     }
    ]
@@ -340,28 +207,12 @@
      },
      "description": "Sangiovese, Cabernet Sauvignon ve Merlot. %13, orta gövde; vişne, erik, hafif topraksı, yumuşak tanen. Peynir ve kırmızı etle.",
      "note": null,
-     "stock": [
-      "PICCINI FAMIGLIA (K) 75 cl"
+     "stok_no": [
+      "2008002096"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 1758,
-      "2026": 2384
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 3.37,
-      "2026": 4.52
-     },
      "price_2027": {
       "tl": 300,
       "eur": 5.33
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 283.61,
-      "eur": 5.13,
-      "rate": 55.2592
      }
     },
     {
@@ -375,28 +226,12 @@
      },
      "description": "Trebbiano %70, Malvasia Bianca Lunga %20, Chardonnay %10. %12,5, kuru; limon rengi, diri asidite, hafif tütün bitiş.",
      "note": null,
-     "stock": [
-      "PICCINI FAMIGLIA (B) 75 cl"
+     "stok_no": [
+      "2008005080"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 3881,
-      "2026": 4169
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 3.85,
-      "2026": 5.11
-     },
      "price_2027": {
       "tl": 300,
       "eur": 5.33
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 284.94,
-      "eur": 5.16,
-      "rate": 55.2592
      }
     },
     {
@@ -410,28 +245,12 @@
      },
      "description": "Sangiovese. Taze, zarif ve meyvemsi roze.",
      "note": null,
-     "stock": [
-      "PICCINI FAMIGLIA (R) 75 cl"
+     "stok_no": [
+      "2008008055"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 1635,
-      "2026": 1541
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 3.61,
-      "2026": 5.14
-     },
      "price_2027": {
       "tl": 300,
       "eur": 5.33
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 284.99,
-      "eur": 5.16,
-      "rate": 55.2592
      }
     }
    ]
@@ -451,26 +270,10 @@
      },
      "description": "Kırmızı meyve ve hafif baharat notalı, orta gövdeli Cabernet Sauvignon.",
      "note": "2026'da alım yok; son alış 2025.",
-     "stock": [
-      "ALPACA CABERNET SAUVGNON KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002084"
      ],
-     "bottles": {
-      "2024": 3292,
-      "2025": 510,
-      "2026": null
-     },
-     "avg_eur": {
-      "2024": 5.62,
-      "2025": 4.19,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2025-05",
-      "tl": 180.37,
-      "eur": 4.12,
-      "rate": 43.7288
-     }
+     "price_2027": null
     },
     {
      "name": "Alpaca Sauvignon Blanc",
@@ -483,26 +286,10 @@
      },
      "description": "Narenciye ve tropik meyve aromalı, canlı asiditeli Sauvignon Blanc.",
      "note": "2026'da alım yok; son alış 2025.",
-     "stock": [
-      "ALPACA SAUVIGNON BLANC BEYAZ 75 cl"
+     "stok_no": [
+      "2008005071"
      ],
-     "bottles": {
-      "2024": 3268,
-      "2025": 927,
-      "2026": 3
-     },
-     "avg_eur": {
-      "2024": 6.14,
-      "2025": 5.47,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2025-05",
-      "tl": 235.86,
-      "eur": 5.39,
-      "rate": 43.7288
-     }
+     "price_2027": null
     },
     {
      "name": "Alpaca Rosé",
@@ -515,26 +302,10 @@
      },
      "description": "Cabernet Sauvignon'dan; çilek ve ahududu notalı, hafif ve ferah bir roze.",
      "note": "2026'da alım yok; son alış 2025.",
-     "stock": [
-      "ALPACA ROSE 75 cl"
+     "stok_no": [
+      "2008009125"
      ],
-     "bottles": {
-      "2024": 2480,
-      "2025": 523,
-      "2026": 92
-     },
-     "avg_eur": {
-      "2024": 5.69,
-      "2025": 5.29,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2025-06",
-      "tl": 229.33,
-      "eur": 5.09,
-      "rate": 45.0324
-     }
+     "price_2027": null
     }
    ]
   },
@@ -553,26 +324,11 @@
      },
      "description": "Gelibolu Yarımadası bağlarından meyvemsi, yumuşak içimli Syrah.",
      "note": null,
-     "stock": [
-      "SUVLA SYRAH 75 CL (K)"
+     "stok_no": [
+      "2008002107",
+      "2008003766"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": 912
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": 3.74
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 199.0,
-      "eur": 3.6,
-      "rate": 55.2592
-     }
+     "price_2027": null
     },
     {
      "name": "Suvla Sauvignon Blanc & Sémillon",
@@ -585,26 +341,10 @@
      },
      "description": "Narenciye ve beyaz meyve notalarıyla ferah bir beyaz kupaj.",
      "note": null,
-     "stock": [
-      "SUVLA SAUVIGNON BLANC SEMILLION 75 CL (B)"
+     "stok_no": [
+      "2008006517"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": 1568
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": 3.68
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 199.0,
-      "eur": 3.6,
-      "rate": 55.2592
-     }
+     "price_2027": null
     },
     {
      "name": "Suvla Blush Karasakız",
@@ -617,26 +357,10 @@
      },
      "description": "Yerel Karasakız üzümünden, kırmızı meyveli hafif bir blush.",
      "note": null,
-     "stock": [
-      "SUVLA BLUSH KARASAKIZ 75 CL (R)"
+     "stok_no": [
+      "2008009113"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": 1641
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": 4.24
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 226.59,
-      "eur": 4.1,
-      "rate": 55.2592
-     }
+     "price_2027": null
     }
    ]
   },
@@ -655,28 +379,12 @@
      },
      "description": "Beneventano tepelerinin kırmızı üzümlerinden. %12; yakut renk, olgun kırmızı meyve, kuru ve yumuşak. Makarna, soslu etler ve peynirle; 16–18 °C.",
      "note": null,
-     "stock": [
-      "SOLOPACA BENEVENTANO (K) 75 cl"
+     "stok_no": [
+      "2008002092"
      ],
-     "bottles": {
-      "2024": 4845,
-      "2025": 9,
-      "2026": 1
-     },
-     "avg_eur": {
-      "2024": 3.4,
-      "2025": 3.96,
-      "2026": null
-     },
      "price_2027": {
       "tl": 330,
       "eur": 5.87
-     },
-     "last_purchase": {
-      "period": "2025-04",
-      "tl": 168.2,
-      "eur": 3.93,
-      "rate": 42.8114
      }
     },
     {
@@ -690,28 +398,12 @@
      },
      "description": "Beneventano tepelerinin beyaz üzümlerinden. %12; saman sarısı, meyvemsi ve hafif çiçeksi, kuru ve diri. Balık ve deniz ürünleriyle; 9–10 °C.",
      "note": null,
-     "stock": [
-      "SOLOPACA BENEVENTANO (B) 75 cl"
+     "stok_no": [
+      "2008005078"
      ],
-     "bottles": {
-      "2024": 5979,
-      "2025": 21,
-      "2026": 332
-     },
-     "avg_eur": {
-      "2024": 3.19,
-      "2025": 2.72,
-      "2026": 5.3
-     },
      "price_2027": {
       "tl": 330,
       "eur": 5.87
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 286.96,
-      "eur": 5.19,
-      "rate": 55.2592
      }
     },
     {
@@ -725,28 +417,12 @@
      },
      "description": "Sangiovese, Barbera ve Aglianico. %13; köpüksüz, taze ve meyvemsi roze. Kabuklu deniz ürünleri ve mezelerle.",
      "note": null,
-     "stock": [
-      "SOLOPACA BIANCO BENEVENTANO ROSATO"
+     "stok_no": [
+      "2008008054"
      ],
-     "bottles": {
-      "2024": 2925,
-      "2025": 313,
-      "2026": 329
-     },
-     "avg_eur": {
-      "2024": 3.38,
-      "2025": 2.71,
-      "2026": 1.61
-     },
      "price_2027": {
       "tl": 330,
       "eur": 5.87
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 85.37,
-      "eur": 1.54,
-      "rate": 55.2592
      }
     }
    ]
@@ -766,28 +442,12 @@
      },
      "description": "Cabernet Sauvignon ve Öküzgözü. Dengeli ve meyvemsi kırmızı.",
      "note": null,
-     "stock": [
-      "MYRINA KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002039"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 973,
-      "2026": 577
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 2.93,
-      "2026": 2.99
-     },
      "price_2027": {
       "tl": 240,
       "eur": 4.27
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 161.24,
-      "eur": 2.92,
-      "rate": 55.2592
      }
     },
     {
@@ -801,28 +461,12 @@
      },
      "description": "Sultaniye ve Narince. Ferah beyaz.",
      "note": null,
-     "stock": [
-      "MYRINA BEYAZ 75 cl"
+     "stok_no": [
+      "2008005030"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 1488,
-      "2026": 1361
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 2.93,
-      "2026": 3.11
-     },
      "price_2027": {
       "tl": 240,
       "eur": 4.27
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 167.81,
-      "eur": 3.04,
-      "rate": 55.2592
      }
     },
     {
@@ -836,28 +480,12 @@
      },
      "description": "Çal Karası. Hafif ve meyvemsi roze.",
      "note": null,
-     "stock": [
-      "MYRINA (R) 75 cl"
+     "stok_no": [
+      "2008008029"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 258,
-      "2026": 554
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 3.07,
-      "2026": 3.09
-     },
      "price_2027": {
       "tl": 240,
       "eur": 4.27
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 166.47,
-      "eur": 3.01,
-      "rate": 55.2592
      }
     }
    ]
@@ -877,28 +505,12 @@
      },
      "description": "Cabernet Franc, Merlot & Petit Verdot; siyah meyveli, gövdeli ve pürüzsüz.",
      "note": null,
-     "stock": [
-      "SEVILEN ISABEY YENI KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002077"
      ],
-     "bottles": {
-      "2024": 2532,
-      "2025": 1802,
-      "2026": 1132
-     },
-     "avg_eur": {
-      "2024": 3.16,
-      "2025": 2.83,
-      "2026": 2.76
-     },
      "price_2027": {
       "tl": 220,
       "eur": 3.91
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 149.58,
-      "eur": 2.71,
-      "rate": 55.2592
      }
     },
     {
@@ -912,28 +524,12 @@
      },
      "description": "Sauvignon Blanc & Sémillon; canlı, aromatik ve ferah.",
      "note": null,
-     "stock": [
-      "SEVILEN ISABEY YENI BEYAZ 75 cl"
+     "stok_no": [
+      "2008005063"
      ],
-     "bottles": {
-      "2024": 5471,
-      "2025": 3606,
-      "2026": 2507
-     },
-     "avg_eur": {
-      "2024": 3.31,
-      "2025": 2.86,
-      "2026": 2.8
-     },
      "price_2027": {
       "tl": 220,
       "eur": 3.91
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 150.0,
-      "eur": 2.71,
-      "rate": 55.2592
      }
     },
     {
@@ -947,28 +543,12 @@
      },
      "description": "Syrah & Kalecik Karası kupajı; çilek, frambuaz ve narenciye notaları, canlı asidite.",
      "note": null,
-     "stock": [
-      "SEVILEN ISABEY YENI ROSE 75 cl"
+     "stok_no": [
+      "2008008053"
      ],
-     "bottles": {
-      "2024": 1961,
-      "2025": 1192,
-      "2026": 1030
-     },
-     "avg_eur": {
-      "2024": 3.18,
-      "2025": 2.81,
-      "2026": 2.59
-     },
      "price_2027": {
       "tl": 220,
       "eur": 3.91
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 149.95,
-      "eur": 2.71,
-      "rate": 55.2592
      }
     }
    ]
@@ -988,26 +568,10 @@
      },
      "description": "Syrah ve Karasakız kupajı, meyvemsi ve yumuşak içimli bir kırmızı.",
      "note": null,
-     "stock": [
-      "KUMKALE KIRMIZI 75 cl"
+     "stok_no": [
+      "2008002086"
      ],
-     "bottles": {
-      "2024": 1756,
-      "2025": 338,
-      "2026": 787
-     },
-     "avg_eur": {
-      "2024": 3.5,
-      "2025": 3.02,
-      "2026": 2.93
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 157.22,
-      "eur": 2.85,
-      "rate": 55.2592
-     }
+     "price_2027": null
     },
     {
      "name": "Kumkale Beyaz",
@@ -1020,26 +584,10 @@
      },
      "description": "Sauvignon Blanc ve Narince kupajı, ferah ve narenciye notalı bir beyaz.",
      "note": null,
-     "stock": [
-      "KUMKALE BEYAZ 75 cl"
+     "stok_no": [
+      "2008005070"
      ],
-     "bottles": {
-      "2024": 1582,
-      "2025": 970,
-      "2026": 903
-     },
-     "avg_eur": {
-      "2024": 3.45,
-      "2025": 2.75,
-      "2026": 2.74
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 146.93,
-      "eur": 2.66,
-      "rate": 55.2592
-     }
+     "price_2027": null
     },
     {
      "name": "Kumkale Roze",
@@ -1052,26 +600,10 @@
      },
      "description": "Syrah ve Kalecik Karası kupajı, hafif içimli ve meyvemsi bir roze.",
      "note": null,
-     "stock": [
-      "KUMKALE ROSE 75 cl"
+     "stok_no": [
+      "2008008048"
      ],
-     "bottles": {
-      "2024": 919,
-      "2025": 483,
-      "2026": 569
-     },
-     "avg_eur": {
-      "2024": 2.97,
-      "2025": 2.37,
-      "2026": 2.37
-     },
-     "price_2027": null,
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 124.68,
-      "eur": 2.26,
-      "rate": 55.2592
-     }
+     "price_2027": null
     }
    ]
   },
@@ -1090,19 +622,8 @@
      },
      "description": "Erik ve koyu kiraz notalı, yumuşak tanenli İspanyol Merlot.",
      "note": "Yeni seri · henüz alış yok",
-     "stock": [],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": null
+     "stok_no": [],
+     "price_2027": null
     },
     {
      "name": "Don Simón Nature Sauvignon Blanc",
@@ -1115,19 +636,8 @@
      },
      "description": "Narenciye ve yeşil meyve notalarıyla ferah, hafif bir beyaz.",
      "note": "Yeni seri · henüz alış yok",
-     "stock": [],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": null
+     "stok_no": [],
+     "price_2027": null
     },
     {
      "name": "Don Simón Nature Tempranillo",
@@ -1140,19 +650,8 @@
      },
      "description": "Olgun koyu meyve, hafif karamel ve kakao notalı Tempranillo.",
      "note": "Yeni seri · henüz alış yok",
-     "stock": [],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": null
-     },
-     "price_2027": null,
-     "last_purchase": null
+     "stok_no": [],
+     "price_2027": null
     }
    ]
   },
@@ -1171,28 +670,12 @@
      },
      "description": "Ferah ve canlı bir frizzante.",
      "note": null,
-     "stock": [
-      "TALLERO VINO FRIZZANTE SECCO CAPSUL SAMPANYA 75 cl"
+     "stok_no": [
+      "2009001056"
      ],
-     "bottles": {
-      "2024": null,
-      "2025": 6465,
-      "2026": 10110
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": 5.12,
-      "2026": 4.98
-     },
      "price_2027": {
       "tl": 320,
       "eur": 5.69
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 319.26,
-      "eur": 5.78,
-      "rate": 55.2592
      }
     },
     {
@@ -1203,25 +686,9 @@
      "vivino": null,
      "description": "İtalyan köpüren şarap; fotoğraf üreticinin resmî sitesinden alındı.",
      "note": null,
-     "stock": [
-      "RONDINI FRIZZANTE BEYAZ MANTAR SAMPANYA 75cl"
-     ],
-     "bottles": {
-      "2024": null,
-      "2025": null,
-      "2026": 2992
-     },
-     "avg_eur": {
-      "2024": null,
-      "2025": null,
-      "2026": 3.55
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 195.0,
-      "eur": 3.53,
-      "rate": 55.2592
-     }
+     "stok_no": [
+      "2009001090"
+     ]
     },
     {
      "name": "Ritüel Yarı Köpüren",
@@ -1234,25 +701,9 @@
      },
      "description": "Serinletici narenciye ve meyve notaları.",
      "note": "Etiket / seri teyidi önerilir.",
-     "stock": [
-      "SAMPANYA SUNI YARI KOPUREN RITUEL"
-     ],
-     "bottles": {
-      "2024": 40,
-      "2025": 140,
-      "2026": 4365
-     },
-     "avg_eur": {
-      "2024": 3.69,
-      "2025": 3.14,
-      "2026": 3.07
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 165.0,
-      "eur": 2.99,
-      "rate": 55.2592
-     }
+     "stok_no": [
+      "2009001082"
+     ]
     },
     {
      "name": "Marengo Brut",
@@ -1262,25 +713,9 @@
      "vivino": null,
      "description": "Karadeniz kıyısındaki Koblevo bağlarının üzümlerinden; kuru (brut) beyaz köpüren şarap.",
      "note": null,
-     "stock": [
-      "MARENGO BRUT BIANCO SAMPANYA 75 cl"
-     ],
-     "bottles": {
-      "2024": 2958,
-      "2025": 1312,
-      "2026": 803
-     },
-     "avg_eur": {
-      "2024": 3.07,
-      "2025": 2.54,
-      "2026": 2.22
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 118.01,
-      "eur": 2.14,
-      "rate": 55.2592
-     }
+     "stok_no": [
+      "2009001069"
+     ]
     },
     {
      "name": "Marengo Rose",
@@ -1290,25 +725,9 @@
      "vivino": null,
      "description": "Karadeniz kıyısındaki Koblevo bağlarının üzümlerinden; pembe köpüren şarap.",
      "note": "Tatlılık derecesi için etiket teyidi önerilir.",
-     "stock": [
-      "ARENGO ROSE SAMPANYA 75 cl"
-     ],
-     "bottles": {
-      "2024": 2892,
-      "2025": 1297,
-      "2026": 818
-     },
-     "avg_eur": {
-      "2024": 5.36,
-      "2025": 4.71,
-      "2026": 4.17
-     },
-     "last_purchase": {
-      "period": "2026-10",
-      "tl": 224.37,
-      "eur": 4.06,
-      "rate": 55.2592
-     }
+     "stok_no": [
+      "2009001068"
+     ]
     }
    ]
   }
